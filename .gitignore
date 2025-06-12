@@ -1,0 +1,43 @@
+﻿# Ignore uploads and other generated content
+uploads/
+upgrade/
+backup-db/
+cache/
+backups/
+
+# Ignore dependency directories
+node_modules/
+vendor/
+dist/
+
+# Ignore environment and config files
+.env
+.env.*
+!.env.example
+.ssh-secret-key
+
+# Ignore IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Ignore build/package files
+*.zip
+*.tar.gz
+*.log
+
+# Ignore local dev files
+.wp-env/
+.wp-env.json
+
+# Ignore debug logs
+debug.log
+php-errors.log
+
+# Ignore temp/backup files
+*.tmp
+*.temp
+*.bak
+*~
