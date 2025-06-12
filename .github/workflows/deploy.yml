@@ -1,0 +1,102 @@
+name: Deploy to Flywheel
+
+on:
+  push:
+    branches:
+      - main    # Production
+      - staging # Staging environment
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      url: ${{ github.ref == 'refs/heads/main' && 'https://stomping-ground.com' || 'https://staging.stomping-ground.com' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add Flywheel to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: |
+          echo "Testing SSH connection to Flywheel..."
+          if ! ssh -o BatchMode=yes -o ConnectTimeout=5 stompingground+stomping-ground@ssh.getflywheel.com echo "SSH connection successful"; then
+            echo "SSH connection failed"
+            exit 1
+          fi
+
+      - name: Check Deployment Path
+        run: |
+          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/app/' || '/staging_site/app/' }}
+          echo "Checking deployment path: $DEPLOY_PATH"
+          if ! ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH ]"; then
+            echo "Deployment path does not exist: $DEPLOY_PATH"
+            exit 1
+          fi
+
+      - name: Create Backup
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/app/' || '/staging_site/app/' }}
+          BACKUP_PATH="/backups/backup_${TIMESTAMP}"
+          
+          echo "Creating backup at $BACKUP_PATH"
+          ssh stompingground+stomping-ground@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $DEPLOY_PATH/* $BACKUP_PATH/"
+
+      - name: Deploy to Flywheel
+        run: |
+          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/app/' || '/staging_site/app/' }}
+          echo "Deploying to $DEPLOY_PATH"
+          
+          # Deploy with dry-run first
+          if ! rsync -avzn --delete ./ stompingground+stomping-ground@ssh.getflywheel.com:$DEPLOY_PATH; then
+            echo "Dry run failed"
+            exit 1
+          fi
+          
+          # Actual deployment
+          if ! rsync -avz --delete ./ stompingground+stomping-ground@ssh.getflywheel.com:$DEPLOY_PATH; then
+            echo "Deployment failed"
+            exit 1
+          fi
+
+      - name: Verify Deployment
+        run: |
+          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/app/' || '/staging_site/app/' }}
+          echo "Verifying deployment..."
+          
+          # Check if critical files exist
+          ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -f $DEPLOY_PATH/wp-config.php ]" || (echo "wp-config.php not found" && exit 1)
+          ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/themes ]" || (echo "themes directory not found" && exit 1)
+          ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/plugins ]" || (echo "plugins directory not found" && exit 1) 

@@ -1,0 +1,40 @@
+# WordPress core files
+wp-admin/
+wp-includes/
+wp-content/uploads/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/cache/
+wp-content/backups/
+
+# Configuration files
+wp-config.php
+wp-config-sample.php
+.htaccess
+
+# Dependency directories
+node_modules/
+vendor/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+.ssh-secret-key
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Build and package files
+*.zip
+*.tar.gz
+*.log
+
+# Local development
+.wp-env/
+.wp-env.json 
