@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: 
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-      url: ${{ github.ref == 'refs/heads/main' && 'https://stomping-ground.com' || 'https://staging.stomping-ground.com' }}
+      url: ${{ github.ref == 'refs/heads/main' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com' }}
     
     steps:
       - name: Checkout code
@@ -25,10 +25,16 @@ jobs:
 
       - name: Install Composer dependencies
         run: |
-          composer install --no-dev --optimize-autoloader || {
-            echo "Composer install failed"
+          echo "Installing Composer dependencies..."
+          composer install --no-dev --optimize-autoloader --verbose || {
+            echo "::error::Composer install failed. Check composer.json and composer.lock for errors."
+            echo "::group::Composer Debug Info"
+            composer diagnose
+            composer show
+            echo "::endgroup::"
             exit 1
           }
+          echo "Composer dependencies installed successfully."
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -38,17 +44,28 @@ jobs:
 
       - name: Install NPM dependencies
         run: |
-          npm ci || {
-            echo "NPM install failed"
+          echo "Installing NPM dependencies..."
+          npm ci --verbose || {
+            echo "::error::NPM install failed. Check package.json and package-lock.json for errors."
+            echo "::group::NPM Debug Info"
+            npm list
+            npm config list
+            echo "::endgroup::"
             exit 1
           }
+          echo "NPM dependencies installed successfully."
 
       - name: Build assets
         run: |
-          npm run build || {
-            echo "Asset build failed"
+          echo "Building assets..."
+          npm run build --verbose || {
+            echo "::error::Asset build failed. Check webpack configuration and build scripts."
+            echo "::group::Build Debug Info"
+            npm run build --verbose
+            echo "::endgroup::"
             exit 1
           }
+          echo "Assets built successfully."
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
@@ -57,28 +74,41 @@ jobs:
 
       - name: Add Flywheel to known hosts
         run: |
+          echo "Setting up SSH known hosts..."
           mkdir -p ~/.ssh
           ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          echo "SSH known hosts configured."
 
       - name: Test SSH Connection
         run: |
           echo "Testing SSH connection to Flywheel..."
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
-          ssh -v -o BatchMode=yes -o ConnectTimeout=5 $SSH_USER@ssh.getflywheel.com echo "SSH connection successful" || {
-            echo "SSH connection failed"
+          echo "Using SSH user: $SSH_USER"
+          
+          if ! ssh -v -o BatchMode=yes -o ConnectTimeout=5 $SSH_USER@ssh.getflywheel.com echo "SSH connection successful"; then
+            echo "::error::SSH connection failed. Check SSH key and permissions."
+            echo "::group::SSH Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com
+            echo "::endgroup::"
             exit 1
-          }
+          fi
+          echo "SSH connection successful."
 
       - name: Check Deployment Path
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/stompingground/stomping-ground' || '/stompingground/stomping-ground_staging' }}
           echo "Checking deployment path: $DEPLOY_PATH"
-          ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH ]" || {
-            echo "Deployment path does not exist: $DEPLOY_PATH"
+          
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH ]"; then
+            echo "::error::Deployment path does not exist: $DEPLOY_PATH"
+            echo "::group::Path Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $(dirname $DEPLOY_PATH)"
+            echo "::endgroup::"
             exit 1
-          }
+          fi
+          echo "Deployment path exists and is accessible."
 
       - name: Create Backup
         run: |
@@ -88,10 +118,14 @@ jobs:
           BACKUP_PATH="/backups/backup_${TIMESTAMP}"
           
           echo "Creating backup at $BACKUP_PATH"
-          ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $DEPLOY_PATH/* $BACKUP_PATH/" || {
-            echo "Backup creation failed"
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $DEPLOY_PATH/* $BACKUP_PATH/"; then
+            echo "::error::Backup creation failed"
+            echo "::group::Backup Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /backups"
+            echo "::endgroup::"
             exit 1
-          }
+          fi
+          echo "Backup created successfully."
 
       - name: Deploy to Flywheel
         run: |
@@ -100,16 +134,26 @@ jobs:
           echo "Deploying to $DEPLOY_PATH"
           
           # Deploy with dry-run first
-          rsync -avzn --delete ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH || {
-            echo "Dry run failed"
+          echo "Performing dry run..."
+          if ! rsync -avzn --delete --stats ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH; then
+            echo "::error::Dry run failed"
+            echo "::group::Dry Run Debug Info"
+            rsync -avzn --delete --stats --verbose ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH
+            echo "::endgroup::"
             exit 1
-          }
+          fi
+          echo "Dry run successful."
           
           # Actual deployment
-          rsync -avz --delete ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH || {
-            echo "Deployment failed"
+          echo "Starting actual deployment..."
+          if ! rsync -avz --delete --stats ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH; then
+            echo "::error::Deployment failed"
+            echo "::group::Deployment Debug Info"
+            rsync -avz --delete --stats --verbose ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH
+            echo "::endgroup::"
             exit 1
-          }
+          fi
+          echo "Deployment completed successfully."
 
       - name: Verify Deployment
         run: |
@@ -118,15 +162,29 @@ jobs:
           echo "Verifying deployment..."
           
           # Check if critical files exist
-          ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $DEPLOY_PATH/wp-config.php ]" || {
-            echo "wp-config.php not found"
+          echo "Checking critical files..."
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $DEPLOY_PATH/wp-config.php ]"; then
+            echo "::error::wp-config.php not found"
+            echo "::group::File Check Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $DEPLOY_PATH"
+            echo "::endgroup::"
             exit 1
-          }
-          ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/themes ]" || {
-            echo "themes directory not found"
+          fi
+          
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/themes ]"; then
+            echo "::error::themes directory not found"
+            echo "::group::Directory Check Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $DEPLOY_PATH/wp-content"
+            echo "::endgroup::"
             exit 1
-          }
-          ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/plugins ]" || {
-            echo "plugins directory not found"
+          fi
+          
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/plugins ]"; then
+            echo "::error::plugins directory not found"
+            echo "::group::Directory Check Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $DEPLOY_PATH/wp-content"
+            echo "::endgroup::"
             exit 1
-          } 
+          fi
+          
+          echo "All critical files and directories verified successfully." 
