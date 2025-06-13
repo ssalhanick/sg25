@@ -24,7 +24,11 @@ jobs:
           tools: composer
 
       - name: Install Composer dependencies
-        run: composer install --no-dev --optimize-autoloader
+        run: |
+          composer install --no-dev --optimize-autoloader || {
+            echo "Composer install failed"
+            exit 1
+          }
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -33,10 +37,18 @@ jobs:
           cache: 'npm'
 
       - name: Install NPM dependencies
-        run: npm ci
+        run: |
+          npm ci || {
+            echo "NPM install failed"
+            exit 1
+          }
 
       - name: Build assets
-        run: npm run build
+        run: |
+          npm run build || {
+            echo "Asset build failed"
+            exit 1
+          }
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
@@ -47,23 +59,24 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Test SSH Connection
         run: |
           echo "Testing SSH connection to Flywheel..."
-          if ! ssh -o BatchMode=yes -o ConnectTimeout=5 stompingground+stomping-ground@ssh.getflywheel.com echo "SSH connection successful"; then
+          ssh -v -o BatchMode=yes -o ConnectTimeout=5 stompingground+stomping-ground@ssh.getflywheel.com echo "SSH connection successful" || {
             echo "SSH connection failed"
             exit 1
-          fi
+          }
 
       - name: Check Deployment Path
         run: |
           DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/app/' || '/staging_site/app/' }}
           echo "Checking deployment path: $DEPLOY_PATH"
-          if ! ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH ]"; then
+          ssh -v stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH ]" || {
             echo "Deployment path does not exist: $DEPLOY_PATH"
             exit 1
-          fi
+          }
 
       - name: Create Backup
         run: |
@@ -72,7 +85,10 @@ jobs:
           BACKUP_PATH="/backups/backup_${TIMESTAMP}"
           
           echo "Creating backup at $BACKUP_PATH"
-          ssh stompingground+stomping-ground@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $DEPLOY_PATH/* $BACKUP_PATH/"
+          ssh -v stompingground+stomping-ground@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $DEPLOY_PATH/* $BACKUP_PATH/" || {
+            echo "Backup creation failed"
+            exit 1
+          }
 
       - name: Deploy to Flywheel
         run: |
@@ -80,16 +96,16 @@ jobs:
           echo "Deploying to $DEPLOY_PATH"
           
           # Deploy with dry-run first
-          if ! rsync -avzn --delete ./ stompingground+stomping-ground@ssh.getflywheel.com:$DEPLOY_PATH; then
+          rsync -avzn --delete ./ stompingground+stomping-ground@ssh.getflywheel.com:$DEPLOY_PATH || {
             echo "Dry run failed"
             exit 1
-          fi
+          }
           
           # Actual deployment
-          if ! rsync -avz --delete ./ stompingground+stomping-ground@ssh.getflywheel.com:$DEPLOY_PATH; then
+          rsync -avz --delete ./ stompingground+stomping-ground@ssh.getflywheel.com:$DEPLOY_PATH || {
             echo "Deployment failed"
             exit 1
-          fi
+          }
 
       - name: Verify Deployment
         run: |
@@ -97,6 +113,15 @@ jobs:
           echo "Verifying deployment..."
           
           # Check if critical files exist
-          ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -f $DEPLOY_PATH/wp-config.php ]" || (echo "wp-config.php not found" && exit 1)
-          ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/themes ]" || (echo "themes directory not found" && exit 1)
-          ssh stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/plugins ]" || (echo "plugins directory not found" && exit 1) 
+          ssh -v stompingground+stomping-ground@ssh.getflywheel.com "[ -f $DEPLOY_PATH/wp-config.php ]" || {
+            echo "wp-config.php not found"
+            exit 1
+          }
+          ssh -v stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/themes ]" || {
+            echo "themes directory not found"
+            exit 1
+          }
+          ssh -v stompingground+stomping-ground@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/plugins ]" || {
+            echo "plugins directory not found"
+            exit 1
+          } 

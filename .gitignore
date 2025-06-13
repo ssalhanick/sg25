@@ -41,3 +41,5 @@ php-errors.log
 *.temp
 *.bak
 *~
+
+# here's a test comment for commit
