@@ -36,36 +36,37 @@ jobs:
           }
           echo "Composer dependencies installed successfully."
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-          cache: 'npm'
+      # Commenting out Node.js and build steps until frontend build process is set up
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: '18'
+      #     cache: 'npm'
 
-      - name: Install NPM dependencies
-        run: |
-          echo "Installing NPM dependencies..."
-          npm ci --verbose || {
-            echo "::error::NPM install failed. Check package.json and package-lock.json for errors."
-            echo "::group::NPM Debug Info"
-            npm list
-            npm config list
-            echo "::endgroup::"
-            exit 1
-          }
-          echo "NPM dependencies installed successfully."
+      # - name: Install NPM dependencies
+      #   run: |
+      #     echo "Installing NPM dependencies..."
+      #     npm ci --verbose || {
+      #       echo "::error::NPM install failed. Check package.json and package-lock.json for errors."
+      #       echo "::group::NPM Debug Info"
+      #       npm list
+      #       npm config list
+      #       echo "::endgroup::"
+      #       exit 1
+      #     }
+      #     echo "NPM dependencies installed successfully."
 
-      - name: Build assets
-        run: |
-          echo "Building assets..."
-          npm run build --verbose || {
-            echo "::error::Asset build failed. Check webpack configuration and build scripts."
-            echo "::group::Build Debug Info"
-            npm run build --verbose
-            echo "::endgroup::"
-            exit 1
-          }
-          echo "Assets built successfully."
+      # - name: Build assets
+      #   run: |
+      #     echo "Building assets..."
+      #     npm run build --verbose || {
+      #       echo "::error::Asset build failed. Check webpack configuration and build scripts."
+      #       echo "::group::Build Debug Info"
+      #       npm run build --verbose
+      #       echo "::endgroup::"
+      #       exit 1
+      #     }
+      #     echo "Assets built successfully."
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
