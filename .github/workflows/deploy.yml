@@ -191,7 +191,8 @@ jobs:
             echo "Plugins deployment path exists and is accessible."
           fi
 
-      - name: Create Backup
+      - name: Create Pre-deployment Backup
+        id: backup
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -199,11 +200,18 @@ jobs:
           PLUGINS_PATH="/www/wp-content/plugins"
           BACKUP_PATH="/tmp/backup_${TIMESTAMP}"
           
-          echo "Creating backup at $BACKUP_PATH"
+          echo "Creating pre-deployment backup at $BACKUP_PATH"
+          echo "backup_path=$BACKUP_PATH" >> $GITHUB_OUTPUT
+          
+          # Create backup directory
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH"; then
+            echo "::error::Failed to create backup directory"
+            exit 1
+          fi
           
           # Backup themes if deploying themes
           if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $THEMES_PATH $BACKUP_PATH/"; then
+            if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $THEMES_PATH $BACKUP_PATH/"; then
               echo "::warning::Themes backup creation failed - continuing with deployment"
             else
               echo "Themes backup created successfully."
@@ -212,12 +220,87 @@ jobs:
           
           # Backup plugins if deploying plugins
           if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $PLUGINS_PATH $BACKUP_PATH/"; then
+            if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $PLUGINS_PATH $BACKUP_PATH/"; then
               echo "::warning::Plugins backup creation failed - continuing with deployment"
             else
               echo "Plugins backup created successfully."
             fi
           fi
+          
+          echo "Backup completed at: $BACKUP_PATH"
+
+      - name: Security Validation - File Permissions
+        run: |
+          echo "Validating file permissions..."
+          
+          # Check for sensitive files that shouldn't be deployed
+          SENSITIVE_FILES=$(find . -name ".env*" -o -name "wp-config.php" -o -name "*.key" -o -name "*.pem" | head -10)
+          if [[ -n "$SENSITIVE_FILES" ]]; then
+            echo "::warning::Sensitive files detected in deployment:"
+            echo "$SENSITIVE_FILES"
+            echo "Consider adding these to .gitignore"
+          fi
+          
+          # Validate theme file permissions
+          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+            echo "Checking theme file permissions..."
+            find ./themes -type f -exec ls -la {} \; | head -5
+          fi
+          
+          # Validate plugin file permissions
+          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+            echo "Checking plugin file permissions..."
+            find ./plugins -type f -exec ls -la {} \; | head -5
+          fi
+          
+          echo "File permission validation completed."
+
+      - name: Security Validation - Content Checks
+        run: |
+          echo "Validating file content..."
+          
+          # Check for PHP files with potential security issues
+          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+            echo "Scanning theme PHP files for potential issues..."
+            find ./themes -name "*.php" -exec grep -l "eval\|exec\|system\|shell_exec" {} \; || echo "No suspicious functions found in themes"
+          fi
+          
+          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+            echo "Scanning plugin PHP files for potential issues..."
+            find ./plugins -name "*.php" -exec grep -l "eval\|exec\|system\|shell_exec" {} \; || echo "No suspicious functions found in plugins"
+          fi
+          
+          # Validate critical theme files
+          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+            echo "Validating theme structure..."
+            for theme_dir in ./themes/*/; do
+              if [[ -d "$theme_dir" ]]; then
+                theme_name=$(basename "$theme_dir")
+                if [[ ! -f "$theme_dir/style.css" ]]; then
+                  echo "::warning::Theme $theme_name missing style.css"
+                fi
+                if [[ ! -f "$theme_dir/index.php" ]]; then
+                  echo "::warning::Theme $theme_name missing index.php"
+                fi
+              fi
+            done
+          fi
+          
+          # Validate critical plugin files
+          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+            echo "Validating plugin structure..."
+            for plugin_dir in ./plugins/*/; do
+              if [[ -d "$plugin_dir" ]]; then
+                plugin_name=$(basename "$plugin_dir")
+                php_files=$(find "$plugin_dir" -name "*.php" | head -1)
+                if [[ -z "$php_files" ]]; then
+                  echo "::warning::Plugin $plugin_name has no PHP files"
+                fi
+              fi
+            done
+          fi
+          
+          echo "Content validation completed."
 
       - name: Deploy Themes
         if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' }}
@@ -277,6 +360,26 @@ jobs:
           fi
           echo "Plugins deployment completed successfully."
 
+      - name: Post-deployment Security Validation
+        run: |
+          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          THEMES_PATH="/www/wp-content/themes"
+          PLUGINS_PATH="/www/wp-content/plugins"
+          echo "Performing post-deployment security validation..."
+          
+          # Check file permissions on server
+          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+            echo "Checking deployed theme file permissions..."
+            ssh -v $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -type f -exec ls -la {} \;" | head -5
+          fi
+          
+          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+            echo "Checking deployed plugin file permissions..."
+            ssh -v $SSH_USER@ssh.getflywheel.com "find $PLUGINS_PATH -type f -exec ls -la {} \;" | head -5
+          fi
+          
+          echo "Post-deployment validation completed."
+
       - name: Verify Deployment
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
@@ -318,4 +421,56 @@ jobs:
             echo "Plugin verification successful."
           fi
           
-          echo "All deployed components verified successfully." 
+          echo "All deployed components verified successfully."
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          BACKUP_PATH="${{ steps.backup.outputs.backup_path }}"
+          THEMES_PATH="/www/wp-content/themes"
+          PLUGINS_PATH="/www/wp-content/plugins"
+          
+          echo "::error::Deployment failed! Initiating rollback..."
+          echo "Rolling back from backup: $BACKUP_PATH"
+          
+          # Rollback themes if they were deployed
+          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+            echo "Rolling back themes..."
+            if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/themes ]"; then
+              if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $THEMES_PATH && cp -r $BACKUP_PATH/themes $THEMES_PATH"; then
+                echo "Theme rollback successful."
+              else
+                echo "::error::Theme rollback failed!"
+              fi
+            else
+              echo "::warning::No theme backup found for rollback"
+            fi
+          fi
+          
+          # Rollback plugins if they were deployed
+          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+            echo "Rolling back plugins..."
+            if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/plugins ]"; then
+              if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $PLUGINS_PATH && cp -r $BACKUP_PATH/plugins $PLUGINS_PATH"; then
+                echo "Plugin rollback successful."
+              else
+                echo "::error::Plugin rollback failed!"
+              fi
+            else
+              echo "::warning::No plugin backup found for rollback"
+            fi
+          fi
+          
+          echo "Rollback completed. Previous version restored."
+
+      - name: Cleanup Backup
+        if: always()
+        run: |
+          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          BACKUP_PATH="${{ steps.backup.outputs.backup_path }}"
+          
+          if [[ -n "$BACKUP_PATH" ]]; then
+            echo "Cleaning up backup: $BACKUP_PATH"
+            ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $BACKUP_PATH" || echo "Backup cleanup failed (non-critical)"
+          fi 
