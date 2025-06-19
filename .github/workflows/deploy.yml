@@ -96,30 +96,42 @@ jobs:
           fi
           echo "SSH connection successful."
 
-      - name: Check Deployment Path
+      - name: Check Deployment Paths
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
-          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/stompingground/stomping-ground' || '/stompingground/stomping-ground_staging' }}
-          echo "Checking deployment path: $DEPLOY_PATH"
+          THEMES_PATH="/www/wp-content/themes"
+          # PLUGINS_PATH="/www/wp-content/plugins"
+          echo "Checking deployment paths..."
+          echo "Themes path: $THEMES_PATH"
+          # echo "Plugins path: $PLUGINS_PATH"
           
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH ]"; then
-            echo "::error::Deployment path does not exist: $DEPLOY_PATH"
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $THEMES_PATH ]"; then
+            echo "::error::Themes directory does not exist: $THEMES_PATH"
             echo "::group::Path Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $(dirname $DEPLOY_PATH)"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /www/wp-content"
             echo "::endgroup::"
             exit 1
           fi
-          echo "Deployment path exists and is accessible."
+          
+          # if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH ]"; then
+          #   echo "::error::Plugins directory does not exist: $PLUGINS_PATH"
+          #   echo "::group::Path Debug Info"
+          #   ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /www/wp-content"
+          #   echo "::endgroup::"
+          #   exit 1
+          # fi
+          echo "Themes deployment path exists and is accessible."
 
       - name: Create Backup
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/stompingground/stomping-ground' || '/stompingground/stomping-ground_staging' }}
+          THEMES_PATH="/www/wp-content/themes"
+          # PLUGINS_PATH="/www/wp-content/plugins"
           BACKUP_PATH="/backups/backup_${TIMESTAMP}"
           
           echo "Creating backup at $BACKUP_PATH"
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $DEPLOY_PATH/* $BACKUP_PATH/"; then
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $THEMES_PATH $BACKUP_PATH/"; then
             echo "::error::Backup creation failed"
             echo "::group::Backup Debug Info"
             ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /backups"
@@ -128,64 +140,105 @@ jobs:
           fi
           echo "Backup created successfully."
 
-      - name: Deploy to Flywheel
+      - name: Deploy Themes
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
-          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/stompingground/stomping-ground' || '/stompingground/stomping-ground_staging' }}
-          echo "Deploying to $DEPLOY_PATH"
+          THEMES_PATH="/www/wp-content/themes"
+          echo "Deploying themes to $THEMES_PATH"
           
-          # Deploy with dry-run first
-          echo "Performing dry run..."
-          if ! rsync -avzn --delete --stats ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH; then
-            echo "::error::Dry run failed"
-            echo "::group::Dry Run Debug Info"
-            rsync -avzn --delete --stats --verbose ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH
+          # Deploy themes with dry-run first
+          echo "Performing dry run for themes..."
+          if ! rsync -avzn --delete --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
+            echo "::error::Themes dry run failed"
+            echo "::group::Themes Dry Run Debug Info"
+            rsync -avzn --delete --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
             exit 1
           fi
-          echo "Dry run successful."
+          echo "Themes dry run successful."
           
-          # Actual deployment
-          echo "Starting actual deployment..."
-          if ! rsync -avz --delete --stats ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH; then
-            echo "::error::Deployment failed"
-            echo "::group::Deployment Debug Info"
-            rsync -avz --delete --stats --verbose ./ $SSH_USER@ssh.getflywheel.com:$DEPLOY_PATH
+          # Actual themes deployment
+          echo "Starting actual themes deployment..."
+          if ! rsync -avz --delete --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
+            echo "::error::Themes deployment failed"
+            echo "::group::Themes Deployment Debug Info"
+            rsync -avz --delete --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
             exit 1
           fi
-          echo "Deployment completed successfully."
+          echo "Themes deployment completed successfully."
+
+      # Commenting out plugin deployment for now
+      # - name: Deploy Plugins
+      #   run: |
+      #     SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+      #     PLUGINS_PATH="/www/wp-content/plugins"
+      #     echo "Deploying plugins to $PLUGINS_PATH"
+      #     
+      #     # Deploy plugins with dry-run first
+      #     echo "Performing dry run for plugins..."
+      #     if ! rsync -avzn --delete --stats ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
+      #       echo "::error::Plugins dry run failed"
+      #       echo "::group::Plugins Dry Run Debug Info"
+      #       rsync -avzn --delete --stats --verbose ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
+      #       echo "::endgroup::"
+      #       exit 1
+      #     fi
+      #     echo "Plugins dry run successful."
+      #     
+      #     # Actual plugins deployment
+      #     echo "Starting actual plugins deployment..."
+      #     if ! rsync -avz --delete --stats ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
+      #       echo "::error::Plugins deployment failed"
+      #       echo "::group::Plugins Deployment Debug Info"
+      #       rsync -avz --delete --stats --verbose ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
+      #       echo "::endgroup::"
+      #       exit 1
+      #     fi
+      #     echo "Plugins deployment completed successfully."
 
       - name: Verify Deployment
         run: |
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
-          DEPLOY_PATH=${{ github.ref == 'refs/heads/main' && '/stompingground/stomping-ground' || '/stompingground/stomping-ground_staging' }}
+          THEMES_PATH="/www/wp-content/themes"
+          # PLUGINS_PATH="/www/wp-content/plugins"
           echo "Verifying deployment..."
           
-          # Check if critical files exist
-          echo "Checking critical files..."
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $DEPLOY_PATH/wp-config.php ]"; then
-            echo "::error::wp-config.php not found"
-            echo "::group::File Check Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $DEPLOY_PATH"
+          # Check if critical theme files exist
+          echo "Checking theme files..."
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $THEMES_PATH/sg25 ]"; then
+            echo "::error::sg25 theme directory not found"
+            echo "::group::Theme Check Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $THEMES_PATH"
             echo "::endgroup::"
             exit 1
           fi
           
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/themes ]"; then
-            echo "::error::themes directory not found"
-            echo "::group::Directory Check Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $DEPLOY_PATH/wp-content"
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $THEMES_PATH/sg25/style.css ]"; then
+            echo "::error::sg25 theme style.css not found"
+            echo "::group::Theme File Check Debug Info"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $THEMES_PATH/sg25"
             echo "::endgroup::"
             exit 1
           fi
           
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $DEPLOY_PATH/wp-content/plugins ]"; then
-            echo "::error::plugins directory not found"
-            echo "::group::Directory Check Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $DEPLOY_PATH/wp-content"
-            echo "::endgroup::"
-            exit 1
-          fi
+          # Commenting out plugin verification for now
+          # # Check if critical plugin files exist
+          # echo "Checking plugin files..."
+          # if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/utd-shared-core ]"; then
+          #   echo "::error::utd-shared-core plugin directory not found"
+          #   echo "::group::Plugin Check Debug Info"
+          #   ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH"
+          #   echo "::endgroup::"
+          #   exit 1
+          # fi
+          # 
+          # if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $PLUGINS_PATH/utd-shared-core/utd-shared-core.php ]"; then
+          #   echo "::error::utd-shared-core plugin main file not found"
+          #   echo "::group::Plugin File Check Debug Info"
+          #   ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/utd-shared-core"
+          #   echo "::endgroup::"
+          #   exit 1
+          # fi
           
-          echo "All critical files and directories verified successfully." 
+          echo "All critical theme files verified successfully." 
