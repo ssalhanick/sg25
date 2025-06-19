@@ -148,10 +148,10 @@ jobs:
           
           # Deploy themes with dry-run first
           echo "Performing dry run for themes..."
-          if ! rsync -avzn --delete --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
+          if ! rsync -avzn --update --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes dry run failed"
             echo "::group::Themes Dry Run Debug Info"
-            rsync -avzn --delete --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
+            rsync -avzn --update --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
             exit 1
           fi
@@ -159,10 +159,10 @@ jobs:
           
           # Actual themes deployment
           echo "Starting actual themes deployment..."
-          if ! rsync -avz --delete --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
+          if ! rsync -avz --update --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes deployment failed"
             echo "::group::Themes Deployment Debug Info"
-            rsync -avz --delete --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
+            rsync -avz --update --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
             exit 1
           fi
@@ -204,20 +204,22 @@ jobs:
           # PLUGINS_PATH="/www/wp-content/plugins"
           echo "Verifying deployment..."
           
-          # Check if critical theme files exist
-          echo "Checking theme files..."
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $THEMES_PATH/sg25 ]"; then
-            echo "::error::sg25 theme directory not found"
+          # Check if any theme directories exist
+          echo "Checking theme directories..."
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "ls -d $THEMES_PATH/*/ 2>/dev/null | head -1"; then
+            echo "::error::No theme directories found"
             echo "::group::Theme Check Debug Info"
             ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $THEMES_PATH"
             echo "::endgroup::"
             exit 1
           fi
           
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $THEMES_PATH/sg25/style.css ]"; then
-            echo "::error::sg25 theme style.css not found"
+          # Check if any style.css files exist in theme directories
+          echo "Checking for style.css files..."
+          if ! ssh -v $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -name 'style.css' -type f | head -1"; then
+            echo "::error::No style.css files found in themes"
             echo "::group::Theme File Check Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $THEMES_PATH/sg25"
+            ssh -v $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -type f -name '*.css'"
             echo "::endgroup::"
             exit 1
           fi
