@@ -156,6 +156,8 @@ jobs:
                   echo "Theme $theme_name built with 'build:prod' script"
                 elif npm run build:production 2>/dev/null; then
                   echo "Theme $theme_name built with 'build:production' script"
+                elif npm run prod 2>/dev/null; then
+                  echo "Theme $theme_name built with 'prod' script"
                 elif npm run build 2>/dev/null; then
                   echo "Theme $theme_name built with 'build' script"
                 else
@@ -189,12 +191,12 @@ jobs:
                 
                 # Run production build using plugin's own scripts (permissive)
                 echo "Attempting build for plugin $plugin_name..."
-                if npm run build:prod 2>/dev/null; then
+                if npm run prod 2>/dev/null; then
+                  echo "Plugin $plugin_name built with 'prod' script"
+                elif npm run build:prod 2>/dev/null; then
                   echo "Plugin $plugin_name built with 'build:prod' script"
                 elif npm run build:production 2>/dev/null; then
                   echo "Plugin $plugin_name built with 'build:production' script"
-                elif npm run prod 2>/dev/null; then
-                  echo "Plugin $plugin_name built with 'prod' script"
                 elif npm run build 2>/dev/null; then
                   echo "Plugin $plugin_name built with 'build' script"
                 else
