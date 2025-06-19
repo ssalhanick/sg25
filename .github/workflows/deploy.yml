@@ -3,7 +3,7 @@ name: Deploy to Flywheel
 on:
   push:
     branches:
-      - main    # Production
+      - main    # Production env
       - staging # Staging environment
 
 jobs:
