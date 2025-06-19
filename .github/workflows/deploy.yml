@@ -108,37 +108,75 @@ jobs:
           }
           echo "Composer dependencies installed successfully."
 
-      # Commenting out Node.js and build steps until frontend build process is set up
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@v3
-      #   with:
-      #     node-version: '18'
-      #     cache: 'npm'
+      - name: Setup Node.js
+        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
 
-      # - name: Install NPM dependencies
-      #   run: |
-      #     echo "Installing NPM dependencies..."
-      #     npm ci --verbose || {
-      #       echo "::error::NPM install failed. Check package.json and package-lock.json for errors."
-      #       echo "::group::NPM Debug Info"
-      #       npm list
-      #       npm config list
-      #       echo "::endgroup::"
-      #       exit 1
-      #     }
-      #     echo "NPM dependencies installed successfully."
-
-      # - name: Build assets
-      #   run: |
-      #     echo "Building assets..."
-      #     npm run build --verbose || {
-      #       echo "::error::Asset build failed. Check webpack configuration and build scripts."
-      #       echo "::group::Build Debug Info"
-      #       npm run build --verbose
-      #       echo "::endgroup::"
-      #       exit 1
-      #     }
-      #     echo "Assets built successfully."
+      - name: Build components for production
+        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
+        run: |
+          echo "=== Production Build Process Started ==="
+          
+          # Build themes with build requirements
+          echo "Scanning themes for build requirements..."
+          for theme_dir in themes/*/; do
+            if [ -d "$theme_dir" ] && [ -f "$theme_dir/package.json" ]; then
+              theme_name=$(basename "$theme_dir")
+              echo "Building theme: $theme_name"
+              
+              cd "$theme_dir"
+              
+              # Install dependencies
+              npm ci --only=production || npm ci
+              
+              # Run production build using theme's own scripts
+              if npm run build:prod 2>/dev/null; then
+                echo "Theme $theme_name built with 'build:prod' script"
+              elif npm run build:production 2>/dev/null; then
+                echo "Theme $theme_name built with 'build:production' script"
+              elif npm run build 2>/dev/null; then
+                echo "Theme $theme_name built with 'build' script"
+              else
+                echo "::warning::No build script found for theme $theme_name"
+              fi
+              
+              cd ../..
+            fi
+          done
+          
+          # Build plugins with build requirements
+          echo "Scanning plugins for build requirements..."
+          for plugin_dir in plugins/*/; do
+            if [ -d "$plugin_dir" ] && [ -f "$plugin_dir/package.json" ]; then
+              plugin_name=$(basename "$plugin_dir")
+              echo "Building plugin: $plugin_name"
+              
+              cd "$plugin_dir"
+              
+              # Install dependencies
+              npm ci --only=production || npm ci
+              
+              # Run production build using plugin's own scripts
+              if npm run build:prod 2>/dev/null; then
+                echo "Plugin $plugin_name built with 'build:prod' script"
+              elif npm run build:production 2>/dev/null; then
+                echo "Plugin $plugin_name built with 'build:production' script"
+              elif npm run prod 2>/dev/null; then
+                echo "Plugin $plugin_name built with 'prod' script"
+              elif npm run build 2>/dev/null; then
+                echo "Plugin $plugin_name built with 'build' script"
+              else
+                echo "::warning::No build script found for plugin $plugin_name"
+              fi
+              
+              cd ../..
+            fi
+          done
+          
+          echo "=== Production Build Process Completed ==="
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
@@ -319,10 +357,74 @@ jobs:
           
           # Deploy themes with dry-run first
           echo "Performing dry run for themes..."
-          if ! rsync -avzn --update --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
+          if ! rsync -avzn --update --stats \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='.git' \
+            --exclude='*.log' \
+            --exclude='.env*' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='*.sublime-*' \
+            --exclude='.DS_Store' \
+            --exclude='Thumbs.db' \
+            --exclude='tests' \
+            --exclude='.phpunit.xml' \
+            --exclude='phpunit.xml.dist' \
+            --exclude='.cache' \
+            --exclude='.parcel-cache' \
+            --exclude='.webpack-cache' \
+            --exclude='.sass-cache' \
+            --exclude='package-lock.json' \
+            --exclude='composer.lock' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='README.md' \
+            --exclude='webpack.config.js' \
+            --exclude='postcss.config.js' \
+            --exclude='tailwind.config.js' \
+            --exclude='babel.config.js' \
+            --exclude='.eslintrc*' \
+            --exclude='.prettierrc*' \
+            --exclude='.stylelintrc*' \
+            --exclude='src' \
+            --exclude='assets/src' \
+            ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes dry run failed"
             echo "::group::Themes Dry Run Debug Info"
-            rsync -avzn --update --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
+            rsync -avzn --update --stats --verbose \
+              --exclude='node_modules' \
+              --exclude='vendor' \
+              --exclude='.git' \
+              --exclude='*.log' \
+              --exclude='.env*' \
+              --exclude='.vscode' \
+              --exclude='.idea' \
+              --exclude='*.sublime-*' \
+              --exclude='.DS_Store' \
+              --exclude='Thumbs.db' \
+              --exclude='tests' \
+              --exclude='.phpunit.xml' \
+              --exclude='phpunit.xml.dist' \
+              --exclude='.cache' \
+              --exclude='.parcel-cache' \
+              --exclude='.webpack-cache' \
+              --exclude='.sass-cache' \
+              --exclude='package-lock.json' \
+              --exclude='composer.lock' \
+              --exclude='.gitignore' \
+              --exclude='.gitattributes' \
+              --exclude='README.md' \
+              --exclude='webpack.config.js' \
+              --exclude='postcss.config.js' \
+              --exclude='tailwind.config.js' \
+              --exclude='babel.config.js' \
+              --exclude='.eslintrc*' \
+              --exclude='.prettierrc*' \
+              --exclude='.stylelintrc*' \
+              --exclude='src' \
+              --exclude='assets/src' \
+              ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
             exit 1
           fi
@@ -330,10 +432,74 @@ jobs:
           
           # Actual themes deployment
           echo "Starting actual themes deployment..."
-          if ! rsync -avz --update --stats ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
+          if ! rsync -avz --update --stats \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='.git' \
+            --exclude='*.log' \
+            --exclude='.env*' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='*.sublime-*' \
+            --exclude='.DS_Store' \
+            --exclude='Thumbs.db' \
+            --exclude='tests' \
+            --exclude='.phpunit.xml' \
+            --exclude='phpunit.xml.dist' \
+            --exclude='.cache' \
+            --exclude='.parcel-cache' \
+            --exclude='.webpack-cache' \
+            --exclude='.sass-cache' \
+            --exclude='package-lock.json' \
+            --exclude='composer.lock' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='README.md' \
+            --exclude='webpack.config.js' \
+            --exclude='postcss.config.js' \
+            --exclude='tailwind.config.js' \
+            --exclude='babel.config.js' \
+            --exclude='.eslintrc*' \
+            --exclude='.prettierrc*' \
+            --exclude='.stylelintrc*' \
+            --exclude='src' \
+            --exclude='assets/src' \
+            ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes deployment failed"
             echo "::group::Themes Deployment Debug Info"
-            rsync -avz --update --stats --verbose ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
+            rsync -avz --update --stats --verbose \
+              --exclude='node_modules' \
+              --exclude='vendor' \
+              --exclude='.git' \
+              --exclude='*.log' \
+              --exclude='.env*' \
+              --exclude='.vscode' \
+              --exclude='.idea' \
+              --exclude='*.sublime-*' \
+              --exclude='.DS_Store' \
+              --exclude='Thumbs.db' \
+              --exclude='tests' \
+              --exclude='.phpunit.xml' \
+              --exclude='phpunit.xml.dist' \
+              --exclude='.cache' \
+              --exclude='.parcel-cache' \
+              --exclude='.webpack-cache' \
+              --exclude='.sass-cache' \
+              --exclude='package-lock.json' \
+              --exclude='composer.lock' \
+              --exclude='.gitignore' \
+              --exclude='.gitattributes' \
+              --exclude='README.md' \
+              --exclude='webpack.config.js' \
+              --exclude='postcss.config.js' \
+              --exclude='tailwind.config.js' \
+              --exclude='babel.config.js' \
+              --exclude='.eslintrc*' \
+              --exclude='.prettierrc*' \
+              --exclude='.stylelintrc*' \
+              --exclude='src' \
+              --exclude='assets/src' \
+              ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
             exit 1
           fi
@@ -348,10 +514,74 @@ jobs:
           
           # Deploy plugins with dry-run first
           echo "Performing dry run for plugins..."
-          if ! rsync -avzn --update --stats ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
+          if ! rsync -avzn --update --stats \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='.git' \
+            --exclude='*.log' \
+            --exclude='.env*' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='*.sublime-*' \
+            --exclude='.DS_Store' \
+            --exclude='Thumbs.db' \
+            --exclude='tests' \
+            --exclude='.phpunit.xml' \
+            --exclude='phpunit.xml.dist' \
+            --exclude='.cache' \
+            --exclude='.parcel-cache' \
+            --exclude='.webpack-cache' \
+            --exclude='.sass-cache' \
+            --exclude='package-lock.json' \
+            --exclude='composer.lock' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='README.md' \
+            --exclude='webpack.config.js' \
+            --exclude='postcss.config.js' \
+            --exclude='tailwind.config.js' \
+            --exclude='babel.config.js' \
+            --exclude='.eslintrc*' \
+            --exclude='.prettierrc*' \
+            --exclude='.stylelintrc*' \
+            --exclude='src' \
+            --exclude='assets/src' \
+            ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins dry run failed"
             echo "::group::Plugins Dry Run Debug Info"
-            rsync -avzn --update --stats --verbose ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
+            rsync -avzn --update --stats --verbose \
+              --exclude='node_modules' \
+              --exclude='vendor' \
+              --exclude='.git' \
+              --exclude='*.log' \
+              --exclude='.env*' \
+              --exclude='.vscode' \
+              --exclude='.idea' \
+              --exclude='*.sublime-*' \
+              --exclude='.DS_Store' \
+              --exclude='Thumbs.db' \
+              --exclude='tests' \
+              --exclude='.phpunit.xml' \
+              --exclude='phpunit.xml.dist' \
+              --exclude='.cache' \
+              --exclude='.parcel-cache' \
+              --exclude='.webpack-cache' \
+              --exclude='.sass-cache' \
+              --exclude='package-lock.json' \
+              --exclude='composer.lock' \
+              --exclude='.gitignore' \
+              --exclude='.gitattributes' \
+              --exclude='README.md' \
+              --exclude='webpack.config.js' \
+              --exclude='postcss.config.js' \
+              --exclude='tailwind.config.js' \
+              --exclude='babel.config.js' \
+              --exclude='.eslintrc*' \
+              --exclude='.prettierrc*' \
+              --exclude='.stylelintrc*' \
+              --exclude='src' \
+              --exclude='assets/src' \
+              ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
             echo "::endgroup::"
             exit 1
           fi
@@ -359,10 +589,74 @@ jobs:
           
           # Actual plugins deployment
           echo "Starting actual plugins deployment..."
-          if ! rsync -avz --update --stats ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
+          if ! rsync -avz --update --stats \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='.git' \
+            --exclude='*.log' \
+            --exclude='.env*' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='*.sublime-*' \
+            --exclude='.DS_Store' \
+            --exclude='Thumbs.db' \
+            --exclude='tests' \
+            --exclude='.phpunit.xml' \
+            --exclude='phpunit.xml.dist' \
+            --exclude='.cache' \
+            --exclude='.parcel-cache' \
+            --exclude='.webpack-cache' \
+            --exclude='.sass-cache' \
+            --exclude='package-lock.json' \
+            --exclude='composer.lock' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='README.md' \
+            --exclude='webpack.config.js' \
+            --exclude='postcss.config.js' \
+            --exclude='tailwind.config.js' \
+            --exclude='babel.config.js' \
+            --exclude='.eslintrc*' \
+            --exclude='.prettierrc*' \
+            --exclude='.stylelintrc*' \
+            --exclude='src' \
+            --exclude='assets/src' \
+            ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins deployment failed"
             echo "::group::Plugins Deployment Debug Info"
-            rsync -avz --update --stats --verbose ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
+            rsync -avz --update --stats --verbose \
+              --exclude='node_modules' \
+              --exclude='vendor' \
+              --exclude='.git' \
+              --exclude='*.log' \
+              --exclude='.env*' \
+              --exclude='.vscode' \
+              --exclude='.idea' \
+              --exclude='*.sublime-*' \
+              --exclude='.DS_Store' \
+              --exclude='Thumbs.db' \
+              --exclude='tests' \
+              --exclude='.phpunit.xml' \
+              --exclude='phpunit.xml.dist' \
+              --exclude='.cache' \
+              --exclude='.parcel-cache' \
+              --exclude='.webpack-cache' \
+              --exclude='.sass-cache' \
+              --exclude='package-lock.json' \
+              --exclude='composer.lock' \
+              --exclude='.gitignore' \
+              --exclude='.gitattributes' \
+              --exclude='README.md' \
+              --exclude='webpack.config.js' \
+              --exclude='postcss.config.js' \
+              --exclude='tailwind.config.js' \
+              --exclude='babel.config.js' \
+              --exclude='.eslintrc*' \
+              --exclude='.prettierrc*' \
+              --exclude='.stylelintrc*' \
+              --exclude='src' \
+              --exclude='assets/src' \
+              ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
             echo "::endgroup::"
             exit 1
           fi
