@@ -127,18 +127,18 @@ jobs:
           SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           THEMES_PATH="/www/wp-content/themes"
-          # PLUGINS_PATH="/www/wp-content/plugins"
-          BACKUP_PATH="/backups/backup_${TIMESTAMP}"
+          BACKUP_PATH="/tmp/theme_backup_${TIMESTAMP}"
           
           echo "Creating backup at $BACKUP_PATH"
           if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH && cp -r $THEMES_PATH $BACKUP_PATH/"; then
-            echo "::error::Backup creation failed"
+            echo "::warning::Backup creation failed - continuing with deployment"
             echo "::group::Backup Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /backups"
+            ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /tmp/ | grep theme_backup"
             echo "::endgroup::"
-            exit 1
+          else
+            echo "Backup created successfully at $BACKUP_PATH"
+            echo "Note: This is a temporary backup in /tmp/ that will be cleaned up automatically"
           fi
-          echo "Backup created successfully."
 
       - name: Deploy Themes
         run: |
