@@ -43,3 +43,4 @@ php-errors.log
 *~
 
 # here's a test comment for commit
+plugins/plugin-scaffolding/
