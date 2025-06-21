@@ -162,6 +162,15 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
+      - name: Cache Composer dependencies
+        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
+        uses: actions/cache@v3
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
       - name: Build changed components
         if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
         run: |
@@ -196,10 +205,10 @@ jobs:
               echo "Package.json contents:"
               cat package.json | head -10
               
-              # Try multiple npm install approaches
-              if npm ci --silent; then
+              # Try multiple npm install approaches with optimizations
+              if npm ci --silent --prefer-offline --no-audit; then
                 echo "npm ci successful"
-              elif npm install --silent; then
+              elif npm install --silent --prefer-offline --no-audit --no-optional; then
                 echo "npm install successful"
               else
                 echo "::error::npm install failed for $component_name"
@@ -580,7 +589,7 @@ jobs:
           
           # Actual themes deployment
           echo "Starting actual themes deployment..."
-          if ! rsync -avz --update --stats \
+          if ! rsync -avz --update --stats --compress --partial \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -741,7 +750,7 @@ jobs:
           
           # Actual plugins deployment
           echo "Starting actual plugins deployment..."
-          if ! rsync -avz --update --stats \
+          if ! rsync -avz --update --stats --compress --partial \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
