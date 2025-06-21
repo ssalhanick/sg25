@@ -13,7 +13,6 @@ dist/
 # Composer-specific exclusions
 composer.phar
 composer.lock
-composer.json
 composer-setup.php
 composer-*.phar
 composer-*.json

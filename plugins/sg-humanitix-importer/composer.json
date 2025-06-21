@@ -1,0 +1,61 @@
+{
+	"name": "sg/sg-humanitix-importer",
+	"version": "1.0.0",
+	"description": "API management tool to import Humanitix Events into The Events Calendar.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=8.0"
+	},
+	"require-dev": {
+		"squizlabs/php_codesniffer": "^3.7",
+		"wp-coding-standards/wpcs": "^3.0",
+		"phpcompatibility/phpcompatibility-wp": "^2.1"
+	},
+	"autoload": {
+		"psr-4": {
+			"SG\\HumanitixImporter\\": "src/"
+		},
+		"files": [
+			"inc/custom-functions.php"
+		]
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"SG\\HumanitixImporter\\Tests\\": "tests/"
+		}
+	},
+	"scripts": {
+		"post-install-cmd": [
+			"@install-npm-safe",
+			"@build-safe"
+		],
+		"post-update-cmd": [
+			"@install-npm-safe", 
+			"@build-safe"
+		],
+		"install-npm-safe": "npm install --silent || echo 'npm install failed, continuing...'",
+		"build-safe": "npm run prod || echo 'npm build failed, continuing...'",
+		"deploy": [
+			"@composer install --no-dev --optimize-autoloader",
+			"npm ci --silent",
+			"npm run prod"
+		],
+		"build": "npm run prod",
+		"lint": [
+			"@lint:php", 
+			"npm run lint-css",
+			"npm run lint"
+		],
+		"lint:php": "vendor/bin/phpcs"
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"classmap-authoritative": true,
+		"apcu-autoloader": true,
+		"sort-packages": true,
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
+} 
