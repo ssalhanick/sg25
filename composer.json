@@ -3,7 +3,7 @@
     "description": "Stomping Ground WordPress theme and plugin development",
     "type": "project",
     "require": {
-        "php": ">=8.0",
+        "php": ">=7.4",
         "composer/installers": "^2.0"
     },
     "require-dev": {
