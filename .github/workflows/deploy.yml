@@ -386,22 +386,30 @@ jobs:
             exit 1
           fi
           
-          # Backup themes if deploying themes
+          # Backup only changed themes
           if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $THEMES_PATH $BACKUP_PATH/"; then
-              echo "::warning::Themes backup creation failed - continuing with deployment"
-            else
-              echo "Themes backup created successfully."
-            fi
+            echo "Backing up changed themes..."
+            for theme_name in ${{ steps.deploy_check.outputs.changed_themes }}; do
+              echo "Backing up theme: $theme_name"
+              if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $THEMES_PATH/$theme_name $BACKUP_PATH/ 2>/dev/null"; then
+                echo "::warning::Failed to backup theme $theme_name - continuing with deployment"
+              else
+                echo "Theme $theme_name backed up successfully."
+              fi
+            done
           fi
           
-          # Backup plugins if deploying plugins
+          # Backup only changed plugins
           if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $PLUGINS_PATH $BACKUP_PATH/"; then
-              echo "::warning::Plugins backup creation failed - continuing with deployment"
-            else
-              echo "Plugins backup created successfully."
-            fi
+            echo "Backing up changed plugins..."
+            for plugin_name in ${{ steps.deploy_check.outputs.changed_plugins }}; do
+              echo "Backing up plugin: $plugin_name"
+              if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $PLUGINS_PATH/$plugin_name $BACKUP_PATH/ 2>/dev/null"; then
+                echo "::warning::Failed to backup plugin $plugin_name - continuing with deployment"
+              else
+                echo "Plugin $plugin_name backed up successfully."
+              fi
+            done
           fi
           
           echo "Backup completed at: $BACKUP_PATH"
@@ -939,35 +947,41 @@ jobs:
           echo "::error::Deployment failed! Initiating rollback..."
           echo "Rolling back from backup: $BACKUP_PATH"
           
-          # Rollback themes if they were deployed
+          # Rollback only changed themes
           if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Rolling back themes..."
-            if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/themes ]"; then
-              if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $THEMES_PATH && cp -r $BACKUP_PATH/themes $THEMES_PATH"; then
-                echo "Theme rollback successful."
+            echo "Rolling back changed themes..."
+            for theme_name in ${{ steps.deploy_check.outputs.changed_themes }}; do
+              echo "Rolling back theme: $theme_name"
+              if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/$theme_name ]"; then
+                if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $THEMES_PATH/$theme_name && cp -r $BACKUP_PATH/$theme_name $THEMES_PATH/"; then
+                  echo "Theme $theme_name rollback successful."
+                else
+                  echo "::error::Theme $theme_name rollback failed!"
+                fi
               else
-                echo "::error::Theme rollback failed!"
+                echo "::warning::No backup found for theme $theme_name"
               fi
-            else
-              echo "::warning::No theme backup found for rollback"
-            fi
+            done
           fi
           
-          # Rollback plugins if they were deployed
+          # Rollback only changed plugins
           if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Rolling back plugins..."
-            if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/plugins ]"; then
-              if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $PLUGINS_PATH && cp -r $BACKUP_PATH/plugins $PLUGINS_PATH"; then
-                echo "Plugin rollback successful."
+            echo "Rolling back changed plugins..."
+            for plugin_name in ${{ steps.deploy_check.outputs.changed_plugins }}; do
+              echo "Rolling back plugin: $plugin_name"
+              if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/$plugin_name ]"; then
+                if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $PLUGINS_PATH/$plugin_name && cp -r $BACKUP_PATH/$plugin_name $PLUGINS_PATH/"; then
+                  echo "Plugin $plugin_name rollback successful."
+                else
+                  echo "::error::Plugin $plugin_name rollback failed!"
+                fi
               else
-                echo "::error::Plugin rollback failed!"
+                echo "::warning::No backup found for plugin $plugin_name"
               fi
-            else
-              echo "::warning::No plugin backup found for rollback"
-            fi
+            done
           fi
           
-          echo "Rollback completed. Previous version restored."
+          echo "Rollback completed. Previous versions restored."
 
       - name: Cleanup Backup
         if: always()
