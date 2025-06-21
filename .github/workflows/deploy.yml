@@ -13,12 +13,16 @@ on:
 # main is now a stable dev branch and does not trigger deployment
 
 jobs:
-  deploy:
+  # Initial setup and change detection
+  setup:
     runs-on: ubuntu-latest
-    environment: 
-      name: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'production' || 'staging') || (github.ref == 'refs/heads/production' && 'production' || 'staging') }}
-      url: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') || (github.ref == 'refs/heads/production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') }}
-    
+    outputs:
+      deploy_themes: ${{ steps.deploy_check.outputs.deploy_themes }}
+      deploy_plugins: ${{ steps.deploy_check.outputs.deploy_plugins }}
+      changed_themes: ${{ steps.deploy_check.outputs.changed_themes }}
+      changed_plugins: ${{ steps.deploy_check.outputs.changed_plugins }}
+      ssh_user: ${{ steps.ssh_setup.outputs.ssh_user }}
+      backup_path: ${{ steps.backup.outputs.backup_path }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -128,44 +132,112 @@ jobs:
             echo "- Changed plugins: ${{ steps.deploy_check.outputs.changed_plugins }}"
           fi
 
+      - name: Setup SSH and Backup
+        id: ssh_setup
+        run: |
+          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
+          echo "ssh_user=$SSH_USER" >> $GITHUB_OUTPUT
+          
+          # Setup SSH
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          
+          # Test SSH connection
+          if ! ssh -o BatchMode=yes -o ConnectTimeout=5 $SSH_USER@ssh.getflywheel.com echo "SSH connection successful"; then
+            echo "::error::SSH connection failed"
+            exit 1
+          fi
+          
+          # Create backup if needed
+          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" || "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            BACKUP_PATH="/tmp/backup_${TIMESTAMP}"
+            
+            echo "Creating pre-deployment backup at $BACKUP_PATH"
+            echo "backup_path=$BACKUP_PATH" >> $GITHUB_OUTPUT
+            
+            # Create backup directory
+            if ! ssh $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH"; then
+              echo "::error::Failed to create backup directory"
+              exit 1
+            fi
+            
+            # Backup only changed themes
+            if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+              echo "Backing up changed themes..."
+              for theme_name in ${{ steps.deploy_check.outputs.changed_themes }}; do
+                echo "Backing up theme: $theme_name"
+                if ! ssh $SSH_USER@ssh.getflywheel.com "cp -r /www/wp-content/themes/$theme_name $BACKUP_PATH/ 2>/dev/null"; then
+                  echo "::warning::Failed to backup theme $theme_name - continuing with deployment"
+                else
+                  echo "Theme $theme_name backed up successfully."
+                fi
+              done
+            fi
+            
+            # Backup only changed plugins
+            if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+              echo "Backing up changed plugins..."
+              for plugin_name in ${{ steps.deploy_check.outputs.changed_plugins }}; do
+                echo "Backing up plugin: $plugin_name"
+                if ! ssh $SSH_USER@ssh.getflywheel.com "cp -r /www/wp-content/plugins/$plugin_name $BACKUP_PATH/ 2>/dev/null"; then
+                  echo "::warning::Failed to backup plugin $plugin_name - continuing with deployment"
+                else
+                  echo "Plugin $plugin_name backed up successfully."
+                fi
+              done
+            fi
+            
+            echo "Backup completed at: $BACKUP_PATH"
+          fi
+
+  # Parallel job for themes
+  deploy-themes:
+    needs: setup
+    if: ${{ needs.setup.outputs.deploy_themes == 'true' }}
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'production' || 'staging') || (github.ref == 'refs/heads/production' && 'production' || 'staging') }}
+      url: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') || (github.ref == 'refs/heads/production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add Flywheel to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
           tools: composer
 
-      - name: Install Composer dependencies
-        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
-        run: |
-          echo "Installing Composer dependencies..."
-          
-          # Check if composer.json exists
-          if [ ! -f "composer.json" ]; then
-            echo "::warning::No composer.json found in root - skipping Composer install"
-            exit 0
-          fi
-          
-          # Try to install dependencies (permissive)
-          composer install --no-dev --optimize-autoloader --verbose 2>/dev/null || {
-            echo "::warning::Composer install failed - continuing with deployment"
-            echo "::group::Composer Debug Info"
-            composer diagnose 2>/dev/null || echo "Composer diagnose failed"
-            composer show 2>/dev/null || echo "Composer show failed"
-            echo "::endgroup::"
-          }
-          echo "Composer dependencies installation completed."
-
       - name: Setup Node.js
-        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
 
-      - name: Build changed components
-        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Build themes
         run: |
-          echo "=== Building Changed Components ==="
+          echo "=== Building Changed Themes ==="
           
           # Function to build a component with robust error handling
           build_component() {
@@ -181,9 +253,6 @@ jobs:
               echo "Installing Composer dependencies for $component_name..."
               if ! composer install --no-dev --optimize-autoloader --no-interaction --no-progress; then
                 echo "::error::Composer install failed for $component_name"
-                echo "::group::Composer Debug for $component_name"
-                composer diagnose || echo "Composer diagnose failed"
-                echo "::endgroup::"
                 return 1
               fi
               echo "Composer dependencies installed successfully for $component_name"
@@ -192,30 +261,14 @@ jobs:
             # Install npm dependencies if package.json exists
             if [ -f "package.json" ]; then
               echo "Installing npm dependencies for $component_name..."
-              echo "Current directory: $(pwd)"
-              echo "Package.json contents:"
-              cat package.json | head -10
               
-              # Try multiple npm install approaches
-              if npm ci --silent; then
+              # Try multiple npm install approaches with optimizations
+              if npm ci --silent --prefer-offline --no-audit; then
                 echo "npm ci successful"
-              elif npm install --silent; then
+              elif npm install --silent --prefer-offline --no-audit --no-optional; then
                 echo "npm install successful"
               else
                 echo "::error::npm install failed for $component_name"
-                echo "::group::npm Debug for $component_name"
-                echo "Node version: $(node --version)"
-                echo "NPM version: $(npm --version)"
-                echo "Package.json exists: $([ -f "package.json" ] && echo "yes" || echo "no")"
-                echo "Package-lock.json exists: $([ -f "package-lock.json" ] && echo "yes" || echo "no")"
-                echo "Node modules exists: $([ -d "node_modules" ] && echo "yes" || echo "no")"
-                echo "Directory contents:"
-                ls -la
-                echo "NPM list (if available):"
-                npm list --depth=0 2>/dev/null || echo "npm list failed"
-                echo "NPM install verbose output:"
-                npm install --verbose 2>&1 | head -20
-                echo "::endgroup::"
                 return 1
               fi
               echo "npm dependencies installed successfully for $component_name"
@@ -230,8 +283,6 @@ jobs:
                   if ! npm run build:production 2>/dev/null; then
                     if ! npm run build 2>/dev/null; then
                       echo "::error::No working build script found for $component_name"
-                      echo "Available scripts:"
-                      npm run 2>/dev/null || echo "No scripts available"
                       return 1
                     fi
                   fi
@@ -274,224 +325,28 @@ jobs:
           }
           
           # Build changed themes
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Building changed themes..."
-            for theme_name in ${{ steps.deploy_check.outputs.changed_themes }}; do
-              theme_path="themes/$theme_name"
-              if [ -d "$theme_path" ]; then
-                # Skip WordPress default themes
-                if [[ "$theme_name" =~ ^(twentytwenty|twentytwentyone|twentytwentytwo|twentytwentythree|twentytwentyfour)$ ]]; then
-                  echo "Skipping WordPress default theme: $theme_name"
-                  continue
-                fi
-                
-                if ! build_component "theme" "$theme_name" "$theme_path"; then
-                  echo "::error::Theme build failed for $theme_name"
-                  exit 1
-                fi
+          echo "Building changed themes..."
+          for theme_name in ${{ needs.setup.outputs.changed_themes }}; do
+            theme_path="themes/$theme_name"
+            if [ -d "$theme_path" ]; then
+              # Skip WordPress default themes
+              if [[ "$theme_name" =~ ^(twentytwenty|twentytwentyone|twentytwentytwo|twentytwentythree|twentytwentyfour)$ ]]; then
+                echo "Skipping WordPress default theme: $theme_name"
+                continue
               fi
-            done
-          fi
-          
-          # Build changed plugins
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Building changed plugins..."
-            for plugin_name in ${{ steps.deploy_check.outputs.changed_plugins }}; do
-              plugin_path="plugins/$plugin_name"
-              if [ -d "$plugin_path" ]; then
-                if ! build_component "plugin" "$plugin_name" "$plugin_path"; then
-                  echo "::error::Plugin build failed for $plugin_name"
-                  exit 1
-                fi
+              
+              if ! build_component "theme" "$theme_name" "$theme_path"; then
+                echo "::error::Theme build failed for $theme_name"
+                exit 1
               fi
-            done
-          fi
-          
-          echo "=== Build Process Completed Successfully ==="
-
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add Flywheel to known hosts
-        run: |
-          echo "Setting up SSH known hosts..."
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          echo "SSH known hosts configured."
-
-      - name: Test SSH Connection
-        run: |
-          echo "Testing SSH connection to Flywheel..."
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          echo "Using SSH user: $SSH_USER"
-          
-          if ! ssh -v -o BatchMode=yes -o ConnectTimeout=5 $SSH_USER@ssh.getflywheel.com echo "SSH connection successful"; then
-            echo "::error::SSH connection failed. Check SSH key and permissions."
-            echo "::group::SSH Debug Info"
-            ssh -v $SSH_USER@ssh.getflywheel.com
-            echo "::endgroup::"
-            exit 1
-          fi
-          echo "SSH connection successful."
-
-      - name: Check Deployment Paths
-        run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          THEMES_PATH="/www/wp-content/themes"
-          PLUGINS_PATH="/www/wp-content/plugins"
-          echo "Checking deployment paths..."
-          
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Themes path: $THEMES_PATH"
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $THEMES_PATH ]"; then
-              echo "::error::Themes directory does not exist: $THEMES_PATH"
-              echo "::group::Path Debug Info"
-              ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /www/wp-content"
-              echo "::endgroup::"
-              exit 1
             fi
-            echo "Themes deployment path exists and is accessible."
-          fi
+          done
           
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Plugins path: $PLUGINS_PATH"
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH ]"; then
-              echo "::error::Plugins directory does not exist: $PLUGINS_PATH"
-              echo "::group::Path Debug Info"
-              ssh -v $SSH_USER@ssh.getflywheel.com "ls -la /www/wp-content"
-              echo "::endgroup::"
-              exit 1
-            fi
-            echo "Plugins deployment path exists and is accessible."
-          fi
+          echo "=== Theme Build Process Completed Successfully ==="
 
-      - name: Create Pre-deployment Backup
-        id: backup
+      - name: Deploy themes
         run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          THEMES_PATH="/www/wp-content/themes"
-          PLUGINS_PATH="/www/wp-content/plugins"
-          BACKUP_PATH="/tmp/backup_${TIMESTAMP}"
-          
-          echo "Creating pre-deployment backup at $BACKUP_PATH"
-          echo "backup_path=$BACKUP_PATH" >> $GITHUB_OUTPUT
-          
-          # Create backup directory
-          if ! ssh -v $SSH_USER@ssh.getflywheel.com "mkdir -p $BACKUP_PATH"; then
-            echo "::error::Failed to create backup directory"
-            exit 1
-          fi
-          
-          # Backup themes if deploying themes
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $THEMES_PATH $BACKUP_PATH/"; then
-              echo "::warning::Themes backup creation failed - continuing with deployment"
-            else
-              echo "Themes backup created successfully."
-            fi
-          fi
-          
-          # Backup plugins if deploying plugins
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "cp -r $PLUGINS_PATH $BACKUP_PATH/"; then
-              echo "::warning::Plugins backup creation failed - continuing with deployment"
-            else
-              echo "Plugins backup created successfully."
-            fi
-          fi
-          
-          echo "Backup completed at: $BACKUP_PATH"
-
-      - name: Security Validation - File Permissions
-        run: |
-          echo "Validating file permissions..."
-          
-          # Check for sensitive files that shouldn't be deployed
-          SENSITIVE_FILES=$(find . -name ".env*" -o -name "wp-config.php" -o -name "*.key" -o -name "*.pem" | head -10)
-          if [[ -n "$SENSITIVE_FILES" ]]; then
-            echo "::warning::Sensitive files detected in deployment:"
-            echo "$SENSITIVE_FILES"
-            echo "Consider adding these to .gitignore"
-          fi
-          
-          # Validate theme file permissions
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Checking theme file permissions..."
-            # Simple permission check without detailed listing
-            theme_files=$(find ./themes -type f | wc -l)
-            echo "Found $theme_files theme files"
-          fi
-          
-          # Validate plugin file permissions
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Checking plugin file permissions..."
-            # Simple permission check without detailed listing
-            plugin_files=$(find ./plugins -type f | wc -l)
-            echo "Found $plugin_files plugin files"
-          fi
-          
-          echo "File permission validation completed."
-
-      - name: Security Validation - Content Checks
-        run: |
-          echo "Validating file content..."
-          
-          # Debug: Show composer.json files that exist locally
-          echo "=== Composer.json Files Found Locally ==="
-          find . -name "composer.json" -type f | head -10
-          echo "=== End Composer.json Files ==="
-          
-          # Check for PHP files with potential security issues
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Scanning theme PHP files for potential issues..."
-            find ./themes -name "*.php" -exec grep -l "eval\|exec\|system\|shell_exec" {} \; || echo "No suspicious functions found in themes"
-          fi
-          
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Scanning plugin PHP files for potential issues..."
-            find ./plugins -name "*.php" -exec grep -l "eval\|exec\|system\|shell_exec" {} \; || echo "No suspicious functions found in plugins"
-          fi
-          
-          # Validate critical theme files
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Validating theme structure..."
-            for theme_dir in ./themes/*/; do
-              if [[ -d "$theme_dir" ]]; then
-                theme_name=$(basename "$theme_dir")
-                if [[ ! -f "$theme_dir/style.css" ]]; then
-                  echo "::warning::Theme $theme_name missing style.css"
-                fi
-                if [[ ! -f "$theme_dir/index.php" ]]; then
-                  echo "::warning::Theme $theme_name missing index.php"
-                fi
-              fi
-            done
-          fi
-          
-          # Validate critical plugin files
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Validating plugin structure..."
-            for plugin_dir in ./plugins/*/; do
-              if [[ -d "$plugin_dir" ]]; then
-                plugin_name=$(basename "$plugin_dir")
-                php_files=$(find "$plugin_dir" -name "*.php" | head -1)
-                if [[ -z "$php_files" ]]; then
-                  echo "::warning::Plugin $plugin_name has no PHP files"
-                fi
-              fi
-            done
-          fi
-          
-          echo "Content validation completed."
-
-      - name: Deploy Themes
-        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' }}
-        run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
+          SSH_USER="${{ needs.setup.outputs.ssh_user }}"
           THEMES_PATH="/www/wp-content/themes"
           echo "Deploying themes to $THEMES_PATH"
           
@@ -531,48 +386,13 @@ jobs:
             --exclude='assets/src' \
             ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes dry run failed"
-            echo "::group::Themes Dry Run Debug Info"
-            rsync -avzn --update --stats --verbose \
-              --include='composer.json' \
-              --exclude='node_modules' \
-              --exclude='.git' \
-              --exclude='*.log' \
-              --exclude='.env*' \
-              --exclude='.vscode' \
-              --exclude='.idea' \
-              --exclude='*.sublime-*' \
-              --exclude='.DS_Store' \
-              --exclude='Thumbs.db' \
-              --exclude='tests' \
-              --exclude='.phpunit.xml' \
-              --exclude='phpunit.xml.dist' \
-              --exclude='.cache' \
-              --exclude='.parcel-cache' \
-              --exclude='.webpack-cache' \
-              --exclude='.sass-cache' \
-              --exclude='package-lock.json' \
-              --exclude='composer.lock' \
-              --exclude='.gitignore' \
-              --exclude='.gitattributes' \
-              --exclude='README.md' \
-              --exclude='webpack.config.js' \
-              --exclude='postcss.config.js' \
-              --exclude='tailwind.config.js' \
-              --exclude='babel.config.js' \
-              --exclude='.eslintrc*' \
-              --exclude='.prettierrc*' \
-              --exclude='.stylelintrc*' \
-              --exclude='src' \
-              --exclude='assets/src' \
-              ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
-            echo "::endgroup::"
             exit 1
           fi
           echo "Themes dry run successful."
           
           # Actual themes deployment
           echo "Starting actual themes deployment..."
-          if ! rsync -avz --update --stats \
+          if ! rsync -avz --update --stats --compress --partial \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -606,49 +426,159 @@ jobs:
             --exclude='assets/src' \
             ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes deployment failed"
-            echo "::group::Themes Deployment Debug Info"
-            rsync -avz --update --stats --verbose \
-              --include='composer.json' \
-              --exclude='node_modules' \
-              --exclude='.git' \
-              --exclude='*.log' \
-              --exclude='.env*' \
-              --exclude='.vscode' \
-              --exclude='.idea' \
-              --exclude='*.sublime-*' \
-              --exclude='.DS_Store' \
-              --exclude='Thumbs.db' \
-              --exclude='tests' \
-              --exclude='.phpunit.xml' \
-              --exclude='phpunit.xml.dist' \
-              --exclude='.cache' \
-              --exclude='.parcel-cache' \
-              --exclude='.webpack-cache' \
-              --exclude='.sass-cache' \
-              --exclude='package-lock.json' \
-              --exclude='composer.lock' \
-              --exclude='.gitignore' \
-              --exclude='.gitattributes' \
-              --exclude='README.md' \
-              --exclude='webpack.config.js' \
-              --exclude='postcss.config.js' \
-              --exclude='tailwind.config.js' \
-              --exclude='babel.config.js' \
-              --exclude='.eslintrc*' \
-              --exclude='.prettierrc*' \
-              --exclude='.stylelintrc*' \
-              --exclude='src' \
-              --exclude='assets/src' \
-              ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
-            echo "::endgroup::"
             exit 1
           fi
           echo "Themes deployment completed successfully."
 
-      - name: Deploy Plugins
-        if: ${{ steps.deploy_check.outputs.deploy_plugins == 'true' }}
+  # Parallel job for plugins
+  deploy-plugins:
+    needs: setup
+    if: ${{ needs.setup.outputs.deploy_plugins == 'true' }}
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'production' || 'staging') || (github.ref == 'refs/heads/production' && 'production' || 'staging') }}
+      url: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') || (github.ref == 'refs/heads/production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add Flywheel to known hosts
         run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Build plugins
+        run: |
+          echo "=== Building Changed Plugins ==="
+          
+          # Function to build a component with robust error handling
+          build_component() {
+            local component_type=$1
+            local component_name=$2
+            local component_path=$3
+            
+            echo "Building $component_type: $component_name"
+            cd "$component_path"
+            
+            # Install Composer dependencies if composer.json exists
+            if [ -f "composer.json" ]; then
+              echo "Installing Composer dependencies for $component_name..."
+              if ! composer install --no-dev --optimize-autoloader --no-interaction --no-progress; then
+                echo "::error::Composer install failed for $component_name"
+                return 1
+              fi
+              echo "Composer dependencies installed successfully for $component_name"
+            fi
+            
+            # Install npm dependencies if package.json exists
+            if [ -f "package.json" ]; then
+              echo "Installing npm dependencies for $component_name..."
+              
+              # Try multiple npm install approaches with optimizations
+              if npm ci --silent --prefer-offline --no-audit; then
+                echo "npm ci successful"
+              elif npm install --silent --prefer-offline --no-audit --no-optional; then
+                echo "npm install successful"
+              else
+                echo "::error::npm install failed for $component_name"
+                return 1
+              fi
+              echo "npm dependencies installed successfully for $component_name"
+            fi
+            
+            # Determine build tool and run build
+            echo "Detecting build tool for $component_name..."
+            if [ -f "webpack.config.js" ]; then
+              echo "Using webpack for $component_name"
+              if ! npm run prod 2>/dev/null; then
+                if ! npm run build:prod 2>/dev/null; then
+                  if ! npm run build:production 2>/dev/null; then
+                    if ! npm run build 2>/dev/null; then
+                      echo "::error::No working build script found for $component_name"
+                      return 1
+                    fi
+                  fi
+                fi
+              fi
+            elif [ -f "gulpfile.js" ]; then
+              echo "Using gulp for $component_name"
+              if ! npm run build 2>/dev/null; then
+                if ! gulp build 2>/dev/null; then
+                  echo "::error::Gulp build failed for $component_name"
+                  return 1
+                fi
+              fi
+            elif [ -f "vite.config.js" ]; then
+              echo "Using vite for $component_name"
+              if ! npm run build 2>/dev/null; then
+                if ! npx vite build 2>/dev/null; then
+                  echo "::error::Vite build failed for $component_name"
+                  return 1
+                fi
+              fi
+            else
+              # Try generic build scripts
+              echo "Using generic build scripts for $component_name"
+              if ! npm run prod 2>/dev/null; then
+                if ! npm run build:prod 2>/dev/null; then
+                  if ! npm run build:production 2>/dev/null; then
+                    if ! npm run build 2>/dev/null; then
+                      echo "::warning::No build script found for $component_name - skipping build"
+                      return 0
+                    fi
+                  fi
+                fi
+              fi
+            fi
+            
+            echo "Build completed successfully for $component_name"
+            cd ../..
+            return 0
+          }
+          
+          # Build changed plugins
+          echo "Building changed plugins..."
+          for plugin_name in ${{ needs.setup.outputs.changed_plugins }}; do
+            plugin_path="plugins/$plugin_name"
+            if [ -d "$plugin_path" ]; then
+              if ! build_component "plugin" "$plugin_name" "$plugin_path"; then
+                echo "::error::Plugin build failed for $plugin_name"
+                exit 1
+              fi
+            fi
+          done
+          
+          echo "=== Plugin Build Process Completed Successfully ==="
+
+      - name: Deploy plugins
+        run: |
+          SSH_USER="${{ needs.setup.outputs.ssh_user }}"
           PLUGINS_PATH="/www/wp-content/plugins"
           echo "Deploying plugins to $PLUGINS_PATH"
           
@@ -688,41 +618,6 @@ jobs:
             --exclude='assets/src' \
             ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins dry run failed"
-            echo "::group::Plugins Dry Run Debug Info"
-            rsync -avzn --update --stats --verbose \
-              --include='composer.json' \
-              --exclude='node_modules' \
-              --exclude='.git' \
-              --exclude='*.log' \
-              --exclude='.env*' \
-              --exclude='.vscode' \
-              --exclude='.idea' \
-              --exclude='*.sublime-*' \
-              --exclude='.DS_Store' \
-              --exclude='Thumbs.db' \
-              --exclude='tests' \
-              --exclude='.phpunit.xml' \
-              --exclude='phpunit.xml.dist' \
-              --exclude='.cache' \
-              --exclude='.parcel-cache' \
-              --exclude='.webpack-cache' \
-              --exclude='.sass-cache' \
-              --exclude='package-lock.json' \
-              --exclude='composer.lock' \
-              --exclude='.gitignore' \
-              --exclude='.gitattributes' \
-              --exclude='README.md' \
-              --exclude='webpack.config.js' \
-              --exclude='postcss.config.js' \
-              --exclude='tailwind.config.js' \
-              --exclude='babel.config.js' \
-              --exclude='.eslintrc*' \
-              --exclude='.prettierrc*' \
-              --exclude='.stylelintrc*' \
-              --exclude='src' \
-              --exclude='assets/src' \
-              ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
-            echo "::endgroup::"
             exit 1
           fi
           echo "Plugins dry run successful."
@@ -733,7 +628,7 @@ jobs:
           
           # Actual plugins deployment
           echo "Starting actual plugins deployment..."
-          if ! rsync -avz --update --stats \
+          if ! rsync -avz --update --stats --compress --partial \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -767,88 +662,50 @@ jobs:
             --exclude='assets/src' \
             ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins deployment failed"
-            echo "::group::Plugins Deployment Debug Info"
-            rsync -avz --update --stats --verbose \
-              --include='composer.json' \
-              --exclude='node_modules' \
-              --exclude='.git' \
-              --exclude='*.log' \
-              --exclude='.env*' \
-              --exclude='.vscode' \
-              --exclude='.idea' \
-              --exclude='*.sublime-*' \
-              --exclude='.DS_Store' \
-              --exclude='Thumbs.db' \
-              --exclude='tests' \
-              --exclude='.phpunit.xml' \
-              --exclude='phpunit.xml.dist' \
-              --exclude='.cache' \
-              --exclude='.parcel-cache' \
-              --exclude='.webpack-cache' \
-              --exclude='.sass-cache' \
-              --exclude='package-lock.json' \
-              --exclude='composer.lock' \
-              --exclude='.gitignore' \
-              --exclude='.gitattributes' \
-              --exclude='README.md' \
-              --exclude='webpack.config.js' \
-              --exclude='postcss.config.js' \
-              --exclude='tailwind.config.js' \
-              --exclude='babel.config.js' \
-              --exclude='.eslintrc*' \
-              --exclude='.prettierrc*' \
-              --exclude='.stylelintrc*' \
-              --exclude='src' \
-              --exclude='assets/src' \
-              ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
-            echo "::endgroup::"
             exit 1
           fi
           echo "Plugins deployment completed successfully."
 
-      - name: Post-deployment Security Validation
+  # Final verification and cleanup
+  verify-and-cleanup:
+    needs: [setup, deploy-themes, deploy-plugins]
+    if: always()
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'production' || 'staging') || (github.ref == 'refs/heads/production' && 'production' || 'staging') }}
+      url: ${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') || (github.ref == 'refs/heads/production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add Flywheel to known hosts
         run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          THEMES_PATH="/www/wp-content/themes"
-          PLUGINS_PATH="/www/wp-content/plugins"
-          echo "Performing post-deployment security validation..."
-          
-          # Check file permissions on server
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Checking deployed theme file permissions..."
-            ssh -v $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -type f -exec ls -la {} \;" | head -5
-          fi
-          
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Checking deployed plugin file permissions..."
-            ssh -v $SSH_USER@ssh.getflywheel.com "find $PLUGINS_PATH -type f -exec ls -la {} \;" | head -5
-          fi
-          
-          echo "Post-deployment validation completed."
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ssh.getflywheel.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Verify Deployment
         run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
+          SSH_USER="${{ needs.setup.outputs.ssh_user }}"
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
           echo "Verifying deployment..."
           
           # Check themes if deployed
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
+          if [[ "${{ needs.setup.outputs.deploy_themes }}" == "true" ]]; then
             echo "Checking theme files..."
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "ls -d $THEMES_PATH/*/ 2>/dev/null | head -1"; then
+            if ! ssh $SSH_USER@ssh.getflywheel.com "ls -d $THEMES_PATH/*/ 2>/dev/null | head -1"; then
               echo "::error::No theme directories found"
-              echo "::group::Theme Check Debug Info"
-              ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $THEMES_PATH"
-              echo "::endgroup::"
               exit 1
             fi
             
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -name 'style.css' -type f | head -1"; then
+            if ! ssh $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -name 'style.css' -type f | head -1"; then
               echo "::error::No style.css files found in themes"
-              echo "::group::Theme File Check Debug Info"
-              ssh -v $SSH_USER@ssh.getflywheel.com "find $THEMES_PATH -type f -name '*.css'"
-              echo "::endgroup::"
               exit 1
             fi
             
@@ -867,7 +724,7 @@ jobs:
                 
                 # Check for composer.json file
                 if [ -f "themes/$theme_name/composer.json" ]; then
-                  if ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $THEMES_PATH/$theme_name/composer.json ]"; then
+                  if ssh $SSH_USER@ssh.getflywheel.com "[ -f $THEMES_PATH/$theme_name/composer.json ]"; then
                     echo "✅ composer.json found for theme $theme_name"
                   else
                     echo "❌ composer.json NOT found for theme $theme_name (but exists locally)"
@@ -882,13 +739,10 @@ jobs:
           fi
           
           # Check plugins if deployed
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
+          if [[ "${{ needs.setup.outputs.deploy_plugins }}" == "true" ]]; then
             echo "Checking plugin files..."
-            if ! ssh -v $SSH_USER@ssh.getflywheel.com "ls -d $PLUGINS_PATH/*/ 2>/dev/null | head -1"; then
+            if ! ssh $SSH_USER@ssh.getflywheel.com "ls -d $PLUGINS_PATH/*/ 2>/dev/null | head -1"; then
               echo "::error::No plugin directories found"
-              echo "::group::Plugin Check Debug Info"
-              ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH"
-              echo "::endgroup::"
               exit 1
             fi
             
@@ -901,7 +755,7 @@ jobs:
                 
                 # Check for composer.json file
                 if [ -f "plugins/$plugin_name/composer.json" ]; then
-                  if ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $PLUGINS_PATH/$plugin_name/composer.json ]"; then
+                  if ssh $SSH_USER@ssh.getflywheel.com "[ -f $PLUGINS_PATH/$plugin_name/composer.json ]"; then
                     echo "✅ composer.json found for $plugin_name"
                   else
                     echo "❌ composer.json NOT found for $plugin_name (but exists locally)"
@@ -912,9 +766,9 @@ jobs:
                 
                 # Check for vendor directory only if composer.json exists
                 if [ -f "plugins/$plugin_name/composer.json" ]; then
-                  if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/vendor ]"; then
+                  if ssh $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/vendor ]"; then
                     echo "✅ Vendor directory found for $plugin_name"
-                    ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/vendor/ | head -5"
+                    ssh $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/vendor/ | head -5"
                   else
                     echo "❌ Vendor directory NOT found for $plugin_name (but composer.json exists)"
                   fi
@@ -931,51 +785,57 @@ jobs:
       - name: Rollback on Failure
         if: failure()
         run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          BACKUP_PATH="${{ steps.backup.outputs.backup_path }}"
+          SSH_USER="${{ needs.setup.outputs.ssh_user }}"
+          BACKUP_PATH="${{ needs.setup.outputs.backup_path }}"
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
           
           echo "::error::Deployment failed! Initiating rollback..."
           echo "Rolling back from backup: $BACKUP_PATH"
           
-          # Rollback themes if they were deployed
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
-            echo "Rolling back themes..."
-            if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/themes ]"; then
-              if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $THEMES_PATH && cp -r $BACKUP_PATH/themes $THEMES_PATH"; then
-                echo "Theme rollback successful."
+          # Rollback only changed themes
+          if [[ "${{ needs.setup.outputs.deploy_themes }}" == "true" ]]; then
+            echo "Rolling back changed themes..."
+            for theme_name in ${{ needs.setup.outputs.changed_themes }}; do
+              echo "Rolling back theme: $theme_name"
+              if ssh $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/$theme_name ]"; then
+                if ssh $SSH_USER@ssh.getflywheel.com "rm -rf $THEMES_PATH/$theme_name && cp -r $BACKUP_PATH/$theme_name $THEMES_PATH/"; then
+                  echo "Theme $theme_name rollback successful."
+                else
+                  echo "::error::Theme $theme_name rollback failed!"
+                fi
               else
-                echo "::error::Theme rollback failed!"
+                echo "::warning::No backup found for theme $theme_name"
               fi
-            else
-              echo "::warning::No theme backup found for rollback"
-            fi
+            done
           fi
           
-          # Rollback plugins if they were deployed
-          if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
-            echo "Rolling back plugins..."
-            if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/plugins ]"; then
-              if ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $PLUGINS_PATH && cp -r $BACKUP_PATH/plugins $PLUGINS_PATH"; then
-                echo "Plugin rollback successful."
+          # Rollback only changed plugins
+          if [[ "${{ needs.setup.outputs.deploy_plugins }}" == "true" ]]; then
+            echo "Rolling back changed plugins..."
+            for plugin_name in ${{ needs.setup.outputs.changed_plugins }}; do
+              echo "Rolling back plugin: $plugin_name"
+              if ssh $SSH_USER@ssh.getflywheel.com "[ -d $BACKUP_PATH/$plugin_name ]"; then
+                if ssh $SSH_USER@ssh.getflywheel.com "rm -rf $PLUGINS_PATH/$plugin_name && cp -r $BACKUP_PATH/$plugin_name $PLUGINS_PATH/"; then
+                  echo "Plugin $plugin_name rollback successful."
+                else
+                  echo "::error::Plugin $plugin_name rollback failed!"
+                fi
               else
-                echo "::error::Plugin rollback failed!"
+                echo "::warning::No backup found for plugin $plugin_name"
               fi
-            else
-              echo "::warning::No plugin backup found for rollback"
-            fi
+            done
           fi
           
-          echo "Rollback completed. Previous version restored."
+          echo "Rollback completed. Previous versions restored."
 
       - name: Cleanup Backup
         if: always()
         run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          BACKUP_PATH="${{ steps.backup.outputs.backup_path }}"
+          SSH_USER="${{ needs.setup.outputs.ssh_user }}"
+          BACKUP_PATH="${{ needs.setup.outputs.backup_path }}"
           
           if [[ -n "$BACKUP_PATH" ]]; then
             echo "Cleaning up backup: $BACKUP_PATH"
-            ssh -v $SSH_USER@ssh.getflywheel.com "rm -rf $BACKUP_PATH" || echo "Backup cleanup failed (non-critical)"
+            ssh $SSH_USER@ssh.getflywheel.com "rm -rf $BACKUP_PATH" || echo "Backup cleanup failed (non-critical)"
           fi 
