@@ -112,7 +112,7 @@ jobs:
           fi
           
           # Only deploy if there are actual changes
-          if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" != "true" && "${{ steps.deploy_check.outputs.deploy_plugins }}" != "true" ]]; then
+          if [[ -z "$CHANGED_THEMES" && -z "$CHANGED_PLUGINS" ]]; then
             echo "No changes detected - skipping deployment"
             echo "deploy_themes=false" >> $GITHUB_OUTPUT
             echo "deploy_plugins=false" >> $GITHUB_OUTPUT
@@ -696,6 +696,10 @@ jobs:
           fi
           echo "Plugins dry run successful."
           
+          # Show what files will be deployed
+          echo "Files to be deployed:"
+          find ./plugins -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/src/*" -not -path "*/assets/src/*" | head -20
+          
           # Actual plugins deployment
           echo "Starting actual plugins deployment..."
           if ! rsync -avz --update --stats \
@@ -789,6 +793,24 @@ jobs:
           
           echo "Post-deployment validation completed."
 
+      - name: Clear Server Caches
+        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
+        run: |
+          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
+          echo "Clearing server caches..."
+          
+          # Clear WordPress object cache
+          ssh -v $SSH_USER@ssh.getflywheel.com "wp cache flush --path=/www" 2>/dev/null || echo "WordPress cache flush failed (non-critical)"
+          
+          # Clear any opcache
+          ssh -v $SSH_USER@ssh.getflywheel.com "php -r 'if (function_exists(\"opcache_reset\")) { opcache_reset(); echo \"OPcache cleared\"; } else { echo \"OPcache not available\"; }'" 2>/dev/null || echo "OPcache clear failed (non-critical)"
+          
+          # Clear any static file caches
+          ssh -v $SSH_USER@ssh.getflywheel.com "find /www/wp-content/cache -type f -name '*.css' -delete 2>/dev/null || true" || echo "CSS cache clear failed (non-critical)"
+          ssh -v $SSH_USER@ssh.getflywheel.com "find /www/wp-content/cache -type f -name '*.js' -delete 2>/dev/null || true" || echo "JS cache clear failed (non-critical)"
+          
+          echo "Cache clearing completed."
+
       - name: Verify Deployment
         run: |
           SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
@@ -827,6 +849,31 @@ jobs:
               echo "::endgroup::"
               exit 1
             fi
+            
+            # Check for built files in deployed plugins
+            echo "Checking for built files in deployed plugins..."
+            for plugin_dir in plugins/*/; do
+              if [ -d "$plugin_dir" ]; then
+                plugin_name=$(basename "$plugin_dir")
+                echo "Checking plugin: $plugin_name"
+                
+                # Check for vendor directory
+                if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/vendor ]"; then
+                  echo "✅ Vendor directory found for $plugin_name"
+                  ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/vendor/ | head -5"
+                else
+                  echo "❌ Vendor directory NOT found for $plugin_name"
+                fi
+                
+                # Check for assets/build directory
+                if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/assets/build ]"; then
+                  echo "✅ Assets build directory found for $plugin_name"
+                  ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/assets/build/"
+                else
+                  echo "❌ Assets build directory NOT found for $plugin_name"
+                fi
+              fi
+            done
             echo "Plugin verification successful."
           fi
           
