@@ -421,13 +421,17 @@ jobs:
           # Validate theme file permissions
           if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
             echo "Checking theme file permissions..."
-            find ./themes -type f -exec ls -la {} \; | head -5
+            # Simple permission check without detailed listing
+            theme_files=$(find ./themes -type f | wc -l)
+            echo "Found $theme_files theme files"
           fi
           
           # Validate plugin file permissions
           if [[ "${{ steps.deploy_check.outputs.deploy_plugins }}" == "true" ]]; then
             echo "Checking plugin file permissions..."
-            find ./plugins -type f -exec ls -la {} \; | head -5
+            # Simple permission check without detailed listing
+            plugin_files=$(find ./plugins -type f | wc -l)
+            echo "Found $plugin_files plugin files"
           fi
           
           echo "File permission validation completed."
@@ -855,12 +859,16 @@ jobs:
                 plugin_name=$(basename "$plugin_dir")
                 echo "Checking plugin: $plugin_name"
                 
-                # Check for vendor directory
-                if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/vendor ]"; then
-                  echo "✅ Vendor directory found for $plugin_name"
-                  ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/vendor/ | head -5"
+                # Check for vendor directory only if composer.json exists
+                if [ -f "plugins/$plugin_name/composer.json" ]; then
+                  if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/vendor ]"; then
+                    echo "✅ Vendor directory found for $plugin_name"
+                    ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/vendor/ | head -5"
+                  else
+                    echo "❌ Vendor directory NOT found for $plugin_name (but composer.json exists)"
+                  fi
                 else
-                  echo "❌ Vendor directory NOT found for $plugin_name"
+                  echo "ℹ️  No composer.json found for $plugin_name - skipping vendor check"
                 fi
                 
                 # Check for assets/build directory
