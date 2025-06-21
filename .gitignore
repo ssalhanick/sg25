@@ -50,6 +50,9 @@ wp-links-opml.php
 wp-mail.php
 wp-trackback.php
 xmlrpc.php
+# Wordpress themes (temp)
+# Wordpress themes (perm)
+themes/sg-twentytwenty-child
 
 # Ignore environment and config files
 .env
