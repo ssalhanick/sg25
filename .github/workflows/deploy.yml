@@ -793,24 +793,6 @@ jobs:
           
           echo "Post-deployment validation completed."
 
-      - name: Clear Server Caches
-        if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' || steps.deploy_check.outputs.deploy_plugins == 'true' }}
-        run: |
-          SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
-          echo "Clearing server caches..."
-          
-          # Clear WordPress object cache
-          ssh -v $SSH_USER@ssh.getflywheel.com "wp cache flush --path=/www" 2>/dev/null || echo "WordPress cache flush failed (non-critical)"
-          
-          # Clear any opcache
-          ssh -v $SSH_USER@ssh.getflywheel.com "php -r 'if (function_exists(\"opcache_reset\")) { opcache_reset(); echo \"OPcache cleared\"; } else { echo \"OPcache not available\"; }'" 2>/dev/null || echo "OPcache clear failed (non-critical)"
-          
-          # Clear any static file caches
-          ssh -v $SSH_USER@ssh.getflywheel.com "find /www/wp-content/cache -type f -name '*.css' -delete 2>/dev/null || true" || echo "CSS cache clear failed (non-critical)"
-          ssh -v $SSH_USER@ssh.getflywheel.com "find /www/wp-content/cache -type f -name '*.js' -delete 2>/dev/null || true" || echo "JS cache clear failed (non-critical)"
-          
-          echo "Cache clearing completed."
-
       - name: Verify Deployment
         run: |
           SSH_USER=${{ github.event_name == 'pull_request' && (github.base_ref == 'production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') || (github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground') }}
