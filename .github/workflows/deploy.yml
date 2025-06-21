@@ -3,15 +3,17 @@ name: Deploy to Flywheel
 on:
   push:
     branches:
-      - main    # Production
-      - staging # Staging environment
+      - production    # Production (live)
+      - staging       # Staging (pre-production)
+
+# main is now a stable dev branch and does not trigger deployment
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: 
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-      url: ${{ github.ref == 'refs/heads/main' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com' }}
+      name: ${{ github.ref == 'refs/heads/production' && 'production' || 'staging' }}
+      url: ${{ github.ref == 'refs/heads/production' && 'https://stompinggroundcomedy.org' || 'https://sg.flywheelstaging.com' }}
     
     steps:
       - name: Checkout code
@@ -303,7 +305,7 @@ jobs:
       - name: Test SSH Connection
         run: |
           echo "Testing SSH connection to Flywheel..."
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           echo "Using SSH user: $SSH_USER"
           
           if ! ssh -v -o BatchMode=yes -o ConnectTimeout=5 $SSH_USER@ssh.getflywheel.com echo "SSH connection successful"; then
@@ -317,7 +319,7 @@ jobs:
 
       - name: Check Deployment Paths
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
           echo "Checking deployment paths..."
@@ -349,7 +351,7 @@ jobs:
       - name: Create Pre-deployment Backup
         id: backup
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
@@ -460,7 +462,7 @@ jobs:
       - name: Deploy Themes
         if: ${{ steps.deploy_check.outputs.deploy_themes == 'true' }}
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           THEMES_PATH="/www/wp-content/themes"
           echo "Deploying themes to $THEMES_PATH"
           
@@ -617,7 +619,7 @@ jobs:
       - name: Deploy Plugins
         if: ${{ steps.deploy_check.outputs.deploy_plugins == 'true' }}
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           PLUGINS_PATH="/www/wp-content/plugins"
           echo "Deploying plugins to $PLUGINS_PATH"
           
@@ -773,7 +775,7 @@ jobs:
 
       - name: Post-deployment Security Validation
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
           echo "Performing post-deployment security validation..."
@@ -793,7 +795,7 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
           echo "Verifying deployment..."
@@ -837,7 +839,7 @@ jobs:
       - name: Rollback on Failure
         if: failure()
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           BACKUP_PATH="${{ steps.backup.outputs.backup_path }}"
           THEMES_PATH="/www/wp-content/themes"
           PLUGINS_PATH="/www/wp-content/plugins"
@@ -878,7 +880,7 @@ jobs:
       - name: Cleanup Backup
         if: always()
         run: |
-          SSH_USER=${{ github.ref == 'refs/heads/main' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
+          SSH_USER=${{ github.ref == 'refs/heads/production' && 'stompingground+stomping-ground' || 'stompingground+staging+stomping-ground' }}
           BACKUP_PATH="${{ steps.backup.outputs.backup_path }}"
           
           if [[ -n "$BACKUP_PATH" ]]; then
