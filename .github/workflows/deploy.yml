@@ -440,6 +440,11 @@ jobs:
         run: |
           echo "Validating file content..."
           
+          # Debug: Show composer.json files that exist locally
+          echo "=== Composer.json Files Found Locally ==="
+          find . -name "composer.json" -type f | head -10
+          echo "=== End Composer.json Files ==="
+          
           # Check for PHP files with potential security issues
           if [[ "${{ steps.deploy_check.outputs.deploy_themes }}" == "true" ]]; then
             echo "Scanning theme PHP files for potential issues..."
@@ -493,6 +498,7 @@ jobs:
           # Deploy themes with dry-run first
           echo "Performing dry run for themes..."
           if ! rsync -avzn --update --stats \
+            --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
             --exclude='*.log' \
@@ -527,6 +533,7 @@ jobs:
             echo "::error::Themes dry run failed"
             echo "::group::Themes Dry Run Debug Info"
             rsync -avzn --update --stats --verbose \
+              --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
               --exclude='*.log' \
@@ -566,6 +573,7 @@ jobs:
           # Actual themes deployment
           echo "Starting actual themes deployment..."
           if ! rsync -avz --update --stats \
+            --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
             --exclude='*.log' \
@@ -600,6 +608,7 @@ jobs:
             echo "::error::Themes deployment failed"
             echo "::group::Themes Deployment Debug Info"
             rsync -avz --update --stats --verbose \
+              --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
               --exclude='*.log' \
@@ -646,6 +655,7 @@ jobs:
           # Deploy plugins with dry-run first
           echo "Performing dry run for plugins..."
           if ! rsync -avzn --update --stats \
+            --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
             --exclude='*.log' \
@@ -680,6 +690,7 @@ jobs:
             echo "::error::Plugins dry run failed"
             echo "::group::Plugins Dry Run Debug Info"
             rsync -avzn --update --stats --verbose \
+              --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
               --exclude='*.log' \
@@ -723,6 +734,7 @@ jobs:
           # Actual plugins deployment
           echo "Starting actual plugins deployment..."
           if ! rsync -avz --update --stats \
+            --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
             --exclude='*.log' \
@@ -757,6 +769,7 @@ jobs:
             echo "::error::Plugins deployment failed"
             echo "::group::Plugins Deployment Debug Info"
             rsync -avz --update --stats --verbose \
+              --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
               --exclude='*.log' \
@@ -838,6 +851,33 @@ jobs:
               echo "::endgroup::"
               exit 1
             fi
+            
+            # Check for composer.json files in themes
+            echo "Checking for composer.json files in deployed themes..."
+            for theme_dir in themes/*/; do
+              if [ -d "$theme_dir" ]; then
+                theme_name=$(basename "$theme_dir")
+                # Skip WordPress default themes
+                if [[ "$theme_name" =~ ^(twentytwenty|twentytwentyone|twentytwentytwo|twentytwentythree|twentytwentyfour)$ ]]; then
+                  echo "Skipping WordPress default theme: $theme_name"
+                  continue
+                fi
+                
+                echo "Checking theme: $theme_name"
+                
+                # Check for composer.json file
+                if [ -f "themes/$theme_name/composer.json" ]; then
+                  if ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $THEMES_PATH/$theme_name/composer.json ]"; then
+                    echo "✅ composer.json found for theme $theme_name"
+                  else
+                    echo "❌ composer.json NOT found for theme $theme_name (but exists locally)"
+                  fi
+                else
+                  echo "ℹ️  No composer.json found locally for theme $theme_name"
+                fi
+              fi
+            done
+            
             echo "Theme verification successful."
           fi
           
@@ -859,6 +899,17 @@ jobs:
                 plugin_name=$(basename "$plugin_dir")
                 echo "Checking plugin: $plugin_name"
                 
+                # Check for composer.json file
+                if [ -f "plugins/$plugin_name/composer.json" ]; then
+                  if ssh -v $SSH_USER@ssh.getflywheel.com "[ -f $PLUGINS_PATH/$plugin_name/composer.json ]"; then
+                    echo "✅ composer.json found for $plugin_name"
+                  else
+                    echo "❌ composer.json NOT found for $plugin_name (but exists locally)"
+                  fi
+                else
+                  echo "ℹ️  No composer.json found locally for $plugin_name"
+                fi
+                
                 # Check for vendor directory only if composer.json exists
                 if [ -f "plugins/$plugin_name/composer.json" ]; then
                   if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/vendor ]"; then
@@ -869,14 +920,6 @@ jobs:
                   fi
                 else
                   echo "ℹ️  No composer.json found for $plugin_name - skipping vendor check"
-                fi
-                
-                # Check for assets/build directory
-                if ssh -v $SSH_USER@ssh.getflywheel.com "[ -d $PLUGINS_PATH/$plugin_name/assets/build ]"; then
-                  echo "✅ Assets build directory found for $plugin_name"
-                  ssh -v $SSH_USER@ssh.getflywheel.com "ls -la $PLUGINS_PATH/$plugin_name/assets/build/"
-                else
-                  echo "❌ Assets build directory NOT found for $plugin_name"
                 fi
               fi
             done
