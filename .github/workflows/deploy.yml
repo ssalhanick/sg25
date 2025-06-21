@@ -470,7 +470,6 @@ jobs:
           echo "Performing dry run for themes..."
           if ! rsync -avzn --update --stats \
             --exclude='node_modules' \
-            --exclude='vendor' \
             --exclude='.git' \
             --exclude='*.log' \
             --exclude='.env*' \
@@ -505,7 +504,6 @@ jobs:
             echo "::group::Themes Dry Run Debug Info"
             rsync -avzn --update --stats --verbose \
               --exclude='node_modules' \
-              --exclude='vendor' \
               --exclude='.git' \
               --exclude='*.log' \
               --exclude='.env*' \
@@ -545,7 +543,6 @@ jobs:
           echo "Starting actual themes deployment..."
           if ! rsync -avz --update --stats \
             --exclude='node_modules' \
-            --exclude='vendor' \
             --exclude='.git' \
             --exclude='*.log' \
             --exclude='.env*' \
@@ -580,7 +577,6 @@ jobs:
             echo "::group::Themes Deployment Debug Info"
             rsync -avz --update --stats --verbose \
               --exclude='node_modules' \
-              --exclude='vendor' \
               --exclude='.git' \
               --exclude='*.log' \
               --exclude='.env*' \
@@ -627,7 +623,6 @@ jobs:
           echo "Performing dry run for plugins..."
           if ! rsync -avzn --update --stats \
             --exclude='node_modules' \
-            --exclude='vendor' \
             --exclude='.git' \
             --exclude='*.log' \
             --exclude='.env*' \
@@ -662,7 +657,6 @@ jobs:
             echo "::group::Plugins Dry Run Debug Info"
             rsync -avzn --update --stats --verbose \
               --exclude='node_modules' \
-              --exclude='vendor' \
               --exclude='.git' \
               --exclude='*.log' \
               --exclude='.env*' \
@@ -702,7 +696,6 @@ jobs:
           echo "Starting actual plugins deployment..."
           if ! rsync -avz --update --stats \
             --exclude='node_modules' \
-            --exclude='vendor' \
             --exclude='.git' \
             --exclude='*.log' \
             --exclude='.env*' \
@@ -737,7 +730,6 @@ jobs:
             echo "::group::Plugins Deployment Debug Info"
             rsync -avz --update --stats --verbose \
               --exclude='node_modules' \
-              --exclude='vendor' \
               --exclude='.git' \
               --exclude='*.log' \
               --exclude='.env*' \
