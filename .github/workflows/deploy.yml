@@ -192,67 +192,83 @@ jobs:
             # Install npm dependencies if package.json exists
             if [ -f "package.json" ]; then
               echo "Installing npm dependencies for $component_name..."
-              if ! npm ci --only=production --silent; then
+              echo "Current directory: $(pwd)"
+              echo "Package.json contents:"
+              cat package.json | head -10
+              
+              # Try multiple npm install approaches
+              if npm ci --silent; then
+                echo "npm ci successful"
+              elif npm install --silent; then
+                echo "npm install successful"
+              else
                 echo "::error::npm install failed for $component_name"
                 echo "::group::npm Debug for $component_name"
-                npm list --depth=0 || echo "npm list failed"
+                echo "Node version: $(node --version)"
+                echo "NPM version: $(npm --version)"
+                echo "Package.json exists: $([ -f "package.json" ] && echo "yes" || echo "no")"
+                echo "Package-lock.json exists: $([ -f "package-lock.json" ] && echo "yes" || echo "no")"
+                echo "Node modules exists: $([ -d "node_modules" ] && echo "yes" || echo "no")"
+                echo "Directory contents:"
+                ls -la
+                echo "NPM list (if available):"
+                npm list --depth=0 2>/dev/null || echo "npm list failed"
+                echo "NPM install verbose output:"
+                npm install --verbose 2>&1 | head -20
                 echo "::endgroup::"
                 return 1
               fi
               echo "npm dependencies installed successfully for $component_name"
-              
-              # Determine build tool and run build
-              echo "Detecting build tool for $component_name..."
-              if [ -f "webpack.config.js" ]; then
-                echo "Using webpack for $component_name"
-                if ! npm run prod 2>/dev/null; then
-                  if ! npm run build:prod 2>/dev/null; then
-                    if ! npm run build:production 2>/dev/null; then
-                      if ! npm run build 2>/dev/null; then
-                        echo "::error::No working build script found for $component_name"
-                        echo "Available scripts:"
-                        npm run 2>/dev/null || echo "No scripts available"
-                        return 1
-                      fi
-                    fi
-                  fi
-                fi
-              elif [ -f "gulpfile.js" ]; then
-                echo "Using gulp for $component_name"
-                if ! npm run build 2>/dev/null; then
-                  if ! gulp build 2>/dev/null; then
-                    echo "::error::Gulp build failed for $component_name"
-                    return 1
-                  fi
-                fi
-              elif [ -f "vite.config.js" ]; then
-                echo "Using vite for $component_name"
-                if ! npm run build 2>/dev/null; then
-                  if ! npx vite build 2>/dev/null; then
-                    echo "::error::Vite build failed for $component_name"
-                    return 1
-                  fi
-                fi
-              else
-                # Try generic build scripts
-                echo "Using generic build scripts for $component_name"
-                if ! npm run prod 2>/dev/null; then
-                  if ! npm run build:prod 2>/dev/null; then
-                    if ! npm run build:production 2>/dev/null; then
-                      if ! npm run build 2>/dev/null; then
-                        echo "::warning::No build script found for $component_name - skipping build"
-                        return 0
-                      fi
+            fi
+            
+            # Determine build tool and run build
+            echo "Detecting build tool for $component_name..."
+            if [ -f "webpack.config.js" ]; then
+              echo "Using webpack for $component_name"
+              if ! npm run prod 2>/dev/null; then
+                if ! npm run build:prod 2>/dev/null; then
+                  if ! npm run build:production 2>/dev/null; then
+                    if ! npm run build 2>/dev/null; then
+                      echo "::error::No working build script found for $component_name"
+                      echo "Available scripts:"
+                      npm run 2>/dev/null || echo "No scripts available"
+                      return 1
                     fi
                   fi
                 fi
               fi
-              
-              echo "Build completed successfully for $component_name"
+            elif [ -f "gulpfile.js" ]; then
+              echo "Using gulp for $component_name"
+              if ! npm run build 2>/dev/null; then
+                if ! gulp build 2>/dev/null; then
+                  echo "::error::Gulp build failed for $component_name"
+                  return 1
+                fi
+              fi
+            elif [ -f "vite.config.js" ]; then
+              echo "Using vite for $component_name"
+              if ! npm run build 2>/dev/null; then
+                if ! npx vite build 2>/dev/null; then
+                  echo "::error::Vite build failed for $component_name"
+                  return 1
+                fi
+              fi
             else
-              echo "No package.json found for $component_name - skipping npm build"
+              # Try generic build scripts
+              echo "Using generic build scripts for $component_name"
+              if ! npm run prod 2>/dev/null; then
+                if ! npm run build:prod 2>/dev/null; then
+                  if ! npm run build:production 2>/dev/null; then
+                    if ! npm run build 2>/dev/null; then
+                      echo "::warning::No build script found for $component_name - skipping build"
+                      return 0
+                    fi
+                  fi
+                fi
+              fi
             fi
             
+            echo "Build completed successfully for $component_name"
             cd ../..
             return 0
           }
