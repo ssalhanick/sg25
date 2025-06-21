@@ -8,6 +8,7 @@ import '../sass/frontend.scss';
 console.log('sg-humanitix-importer frontend loaded');
 console.log('...this is loaded...');
 console.log('another test');
+console.log('yet another test');
 
 // Access plugin data.
 if (typeof sgHumanitixImporter !== 'undefined') {
