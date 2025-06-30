@@ -124,6 +124,16 @@ class Logger {
 	}
 
 	/**
+	 * Get recent logs
+	 *
+	 * @param int $limit The number of logs to return.
+	 * @return array Recent logs.
+	 */
+	public function get_recent_logs( $limit = 10 ) {
+		return $this->get_logs( '', '', $limit, 0 );
+	}
+
+	/**
 	 * Get recent imports
 	 *
 	 * @param int $limit The number of imports to return.
@@ -307,5 +317,105 @@ class Logger {
 		);
 
 		return $result === $wpdb->humanitix_import_logs;
+	}
+
+	/**
+	 * Get API connection test logs.
+	 *
+	 * @param int $limit The number of connection tests to return.
+	 * @return array Array of connection test logs.
+	 */
+	public function get_connection_test_logs( $limit = 50 ) {
+		global $wpdb;
+
+		$limit = absint( $limit );
+
+		return $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM $wpdb->humanitix_import_logs 
+                 WHERE context LIKE %s 
+                 ORDER BY created_at DESC 
+                 LIMIT %d",
+				'%test_type%connection_test%',
+				$limit
+			)
+		);
+	}
+
+	/**
+	 * Get connection test statistics.
+	 *
+	 * @param int $days The number of days to analyze.
+	 * @return object Connection test statistics.
+	 */
+	public function get_connection_test_stats( $days = 30 ) {
+		global $wpdb;
+
+		$days = absint( $days );
+
+		$stats = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT 
+                    COUNT(*) as total_tests,
+                    COUNT(CASE WHEN level = %s THEN 1 END) as successful_tests,
+                    COUNT(CASE WHEN level = %s THEN 1 END) as failed_tests,
+                    COUNT(CASE WHEN level = %s THEN 1 END) as warning_tests,
+                    MAX(created_at) as last_test
+                 FROM $wpdb->humanitix_import_logs 
+                 WHERE context LIKE %s 
+                 AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+				'success',
+				'error',
+				'warning',
+				'%test_type%connection_test%',
+				$days
+			)
+		);
+
+		// Calculate success rate.
+		if ( $stats && $stats->total_tests > 0 ) {
+			$stats->success_rate = round( ( $stats->successful_tests / $stats->total_tests ) * 100, 2 );
+		} else {
+			$stats->success_rate = 0;
+		}
+
+		return $stats;
+	}
+
+	/**
+	 * Get recent connection test results.
+	 *
+	 * @param int $limit The number of recent tests to return.
+	 * @return array Array of recent connection test results.
+	 */
+	public function get_recent_connection_tests( $limit = 10 ) {
+		global $wpdb;
+
+		$limit = absint( $limit );
+
+		return $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT 
+                    level,
+                    message,
+                    context,
+                    created_at,
+                    CASE 
+                        WHEN level = %s THEN 'success'
+                        WHEN level = %s THEN 'error'
+                        WHEN level = %s THEN 'warning'
+                        ELSE 'info'
+                    END as status
+                 FROM $wpdb->humanitix_import_logs 
+                 WHERE context LIKE %s 
+                 ORDER BY created_at DESC 
+                 LIMIT %d",
+				'success',
+				'error',
+				'warning',
+				'%test_type%connection_test%',
+				$limit
+			)
+		);
 	}
 }

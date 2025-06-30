@@ -23,6 +23,7 @@ const BUILD_DIR = path.resolve(__dirname, 'assets/build');
 const entry = {
 	editor: JS_DIR + '/editor.js',
 	frontend: JS_DIR + '/frontend.js',
+	admin: JS_DIR + '/admin.js',
 };
 
 const output = {

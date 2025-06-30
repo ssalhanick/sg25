@@ -1,0 +1,254 @@
+// Admin styles for Humanitix API Importer
+
+.dashboard-connection-tests {
+	margin-top: 2rem;
+	
+	.connection-stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 1rem;
+		margin-bottom: 2rem;
+		
+		.stat-card {
+			background: #fff;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			padding: 1rem;
+			text-align: center;
+			
+			h4 {
+				margin: 0 0 0.5rem 0;
+				color: #666;
+				font-size: 0.9rem;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+			
+			.stat-number {
+				font-size: 2rem;
+				font-weight: bold;
+				margin: 0;
+				
+				&.success {
+					color: #46b450;
+				}
+				
+				&.warning {
+					color: #ffb900;
+				}
+				
+				&.error {
+					color: #dc3232;
+				}
+			}
+		}
+	}
+	
+	.recent-connection-tests {
+		.status-success {
+			color: #46b450;
+			font-weight: bold;
+		}
+		
+		.status-error {
+			color: #dc3232;
+			font-weight: bold;
+		}
+		
+		.status-warning {
+			color: #ffb900;
+			font-weight: bold;
+		}
+		
+		.status-info {
+			color: #0073aa;
+			font-weight: bold;
+		}
+	}
+}
+
+// General dashboard improvements
+.dashboard-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+	margin-bottom: 2rem;
+	
+	.stat-card {
+		background: #fff;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+		padding: 1rem;
+		text-align: center;
+		
+		h3 {
+			margin: 0 0 0.5rem 0;
+			color: #666;
+			font-size: 0.9rem;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		
+		.stat-number {
+			font-size: 2rem;
+			font-weight: bold;
+			margin: 0;
+			color: #0073aa;
+		}
+	}
+}
+
+// Status indicators for import logs
+.status-success {
+	color: #46b450;
+	font-weight: bold;
+}
+
+.status-error {
+	color: #dc3232;
+	font-weight: bold;
+}
+
+.status-warning {
+	color: #ffb900;
+	font-weight: bold;
+}
+
+// Progress bar styling
+.progress-bar {
+	width: 100%;
+	height: 20px;
+	background-color: #f1f1f1;
+	border-radius: 10px;
+	overflow: hidden;
+	margin: 1rem 0;
+	
+	.progress-fill {
+		height: 100%;
+		background-color: #0073aa;
+		width: 0%;
+		transition: width 0.3s ease;
+	}
+}
+
+.progress-text {
+	text-align: center;
+	color: #666;
+	font-style: italic;
+}
+
+// Error details functionality
+.error-toggle {
+	color: #dc3232;
+	text-decoration: none;
+	font-weight: bold;
+	cursor: pointer;
+	
+	&:hover {
+		color: #a00;
+		text-decoration: underline;
+	}
+	
+	&.expanded {
+		color: #a00;
+		text-decoration: underline;
+	}
+}
+
+// Button link styling (makes buttons look like links)
+.button-link {
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	cursor: pointer;
+	text-decoration: none;
+	
+	&:hover {
+		text-decoration: underline;
+	}
+	
+	&:focus {
+		outline: none;
+		text-decoration: underline;
+	}
+}
+
+.error-details {
+	background-color: #fef7f1;
+	border-left: 4px solid #dc3232;
+	
+	.error-messages {
+		padding: 1rem;
+		
+		h4 {
+			margin: 0 0 0.5rem 0;
+			color: #dc3232;
+			font-size: 1rem;
+		}
+		
+		ul {
+			margin: 0;
+			padding-left: 1.5rem;
+			
+			li {
+				margin-bottom: 0.5rem;
+				color: #666;
+				font-family: monospace;
+				font-size: 0.9rem;
+				line-height: 1.4;
+				
+				&:last-child {
+					margin-bottom: 0;
+				}
+			}
+		}
+	}
+}
+
+// Import controls styling
+.import-controls {
+	margin: 1rem 0;
+	
+	button {
+		margin-right: 0.5rem;
+	}
+	
+	#import-status {
+		display: inline-block;
+		margin-left: 1rem;
+		vertical-align: middle;
+		
+		.spinner {
+			margin-right: 0.5rem;
+		}
+		
+		.dashicons {
+			margin-right: 0.5rem;
+		}
+	}
+}
+
+// Results styling
+#import-results {
+	margin-top: 1rem;
+	padding: 1rem;
+	background: #f9f9f9;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	
+	#results-content {
+		p {
+			margin: 0.5rem 0;
+			
+			&:first-child {
+				margin-top: 0;
+			}
+			
+			&:last-child {
+				margin-bottom: 0;
+			}
+		}
+	}
+} 

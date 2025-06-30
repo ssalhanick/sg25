@@ -13,6 +13,9 @@ namespace SG\HumanitixApiImporter;
 
 use SG\HumanitixApiImporter\Security\AjaxSecurityHandler;
 use SG\HumanitixApiImporter\Security\RestApiSecurityHandler;
+use SG\HumanitixApiImporter\Admin\Logger;
+use SG\HumanitixApiImporter\Admin\AdminInterface;
+use SG\HumanitixApiImporter\Admin\SettingsManager;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -84,7 +87,9 @@ class Plugin {
 	 * @return void
 	 */
 	public function activate() {
-		error_log( '[sg-humanitix-api-importer] Plugin activated' );
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Plugin activated' );
+		}
 		$this->create_logs_table();
 	}
 
@@ -97,7 +102,9 @@ class Plugin {
 	 * @return void
 	 */
 	public function deactivate() {
-		error_log( '[sg-humanitix-api-importer] Plugin deactivated' );
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Plugin deactivated' );
+		}
 	}
 
 	/**
@@ -109,11 +116,22 @@ class Plugin {
 	 * @return void
 	 */
 	private function init() {
-		define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH', untrailingslashit( plugin_dir_path( __DIR__ ) ) );
-		define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_URL', untrailingslashit( plugin_dir_url( __DIR__ ) ) );
-		define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_PATH', SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/assets/build' );
-		define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_URL', SG_HUMANITIX_API_IMPORTER_PLUGIN_URL . '/assets/build' );
-		define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_VERSION', '1.0.0' );
+		// Define constants only if they haven't been defined already.
+		if ( ! defined( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH' ) ) {
+			define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH', untrailingslashit( plugin_dir_path( __DIR__ ) ) );
+		}
+		if ( ! defined( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_URL' ) ) {
+			define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_URL', untrailingslashit( plugin_dir_url( __DIR__ ) ) );
+		}
+		if ( ! defined( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_PATH' ) ) {
+			define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_PATH', SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/assets/build' );
+		}
+		if ( ! defined( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_URL' ) ) {
+			define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_URL', SG_HUMANITIX_API_IMPORTER_PLUGIN_URL . '/assets/build' );
+		}
+		if ( ! defined( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_VERSION' ) ) {
+			define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_VERSION', '1.0.0' );
+		}
 
 		new Assets();
 
@@ -139,21 +157,27 @@ class Plugin {
 		// Initialize logger.
 		$this->logger = new Logger();
 
-		// Get API key from settings.
-		$api_key = get_option( 'sg_humanitix_api_key', '' );
+		// Initialize settings manager.
+		$this->settings = new SettingsManager();
 
-		if ( ! empty( $api_key ) ) {
-			// Initialize API client.
-			$this->api = new HumanitixAPI( $api_key );
+		// Get API settings from options.
+		$options      = get_option( 'humanitix_importer_options', array() );
+		$api_key      = $options['api_key'] ?? '';
+		$org_id       = $options['org_id'] ?? '';
+		$api_endpoint = $options['api_endpoint'] ?? '';
+
+		// Initialize admin interface with settings.
+		$this->admin = new AdminInterface( null, $this->settings );
+
+		if ( ! empty( $api_key ) && ! empty( $org_id ) ) {
+			// Initialize API client with organization ID.
+			$this->api = new HumanitixAPI( $api_key, $api_endpoint, $org_id );
 
 			// Initialize importer with logger.
 			$this->importer = new Importer\EventsImporter( $this->api, $this->logger );
 
-			// Initialize admin interface (when you create it).
-			$this->admin = new Admin\AdminInterface( $this->importer, $this->logger );
-
-			// Initialize settings manager (when you create it).
-			$this->settings = new Admin\SettingsManager();
+			// Update admin interface with importer.
+			$this->admin->set_importer( $this->importer );
 		}
 	}
 

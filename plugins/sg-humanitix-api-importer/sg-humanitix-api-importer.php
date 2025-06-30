@@ -26,8 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Define constants.
 define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_FILE', __FILE__ );
 define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH', untrailingslashit( plugin_dir_path( __FILE__ ) ) );
-define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_URL', untrailingslashit( plugin_dir_url( __FILE__ ) ) );
-define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_VERSION', '1.0.0' );
+// Note: Other constants are defined in Plugin.php to avoid conflicts
 
 // Composer autoloader.
 if ( file_exists( SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/vendor/autoload.php' ) ) {
@@ -40,7 +39,7 @@ if ( file_exists( SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/vendor/autoload.php'
 add_action(
 	'plugins_loaded',
 	function () {
-		if ( ! class_exists( 'SG\HumanitixApiImporter\\Plugin' ) ) {
+		if ( ! class_exists( 'SG\\HumanitixApiImporter\\Plugin' ) ) {
 			return;
 		}
 
@@ -58,7 +57,7 @@ add_action(
 	function () {
 		if ( ! is_admin() ) {
 			// Preload critical classes for frontend.
-			class_exists( 'SG\HumanitixApiImporter\\Assets' );
+			class_exists( 'SG\\HumanitixApiImporter\\Assets' );
 
 		}
 	},

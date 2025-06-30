@@ -1,236 +1,147 @@
 # Humanitix API Importer
 
-This plugin imports Humanitix events through their API and converts them into The Events Calendar events.
+A WordPress plugin to import events from the Humanitix API into The Events Calendar plugin.
+
+## Features
+
+- Import events from Humanitix API
+- Automatic venue and organizer creation
+- Comprehensive logging and debugging
+- Admin interface for configuration
+- Support for recurring imports
 
 ## Installation
 
-1. Clone this repository to your plugins directory:
-   ```bash
-   cd /wp-content/plugins/
-   git clone [repository-url] sg-humanitix-api-importer
-   ```
+1. Upload the plugin files to `/wp-content/plugins/sg-humanitix-api-importer/`
+2. Activate the plugin through the 'Plugins' screen in WordPress
+3. Configure your API settings in the admin panel
 
-2. Install dependencies:
-   ```bash
-   cd sg-humanitix-api-importer
-   composer install
-   npm install
-   ```
+## Configuration
 
-3. Build assets:
-   ```bash
-   npm run prod
-   ```
+### API Settings
 
-4. Activate the plugin in WordPress admin.
+1. Go to **WordPress Admin** → **Humanitix** → **Settings**
+2. Enter your Humanitix API key
+3. Enter your Organization ID
+4. Optionally set a custom API endpoint
+5. Test your connection using the "Test API Connection" button
+
+### Debug Mode
+
+For plugin authors and developers, debug mode can be enabled in several ways:
+
+#### Method 1: Define Debug Constant
+Add this to your `wp-config.php`:
+```php
+define( 'HUMANITIX_DEBUG', true );
+```
+
+#### Method 2: WordPress Debug Mode
+If `WP_DEBUG` is enabled, debug mode will be automatically available.
+
+#### Method 3: User Capabilities
+Debug mode is available to users with:
+- `manage_network_options` capability
+- Administrator role with `edit_plugins` capability
+
+#### Method 4: Specific User IDs
+Add your WordPress user ID to the `$debug_user_ids` array in `src/Admin/AdminInterface.php`.
+
+### Debug Features
+
+When debug mode is enabled, you'll see a **Debug** menu item that provides:
+- WordPress debug settings status
+- Plugin configuration details
+- API connection test results
+- Recent logs and activity
+- Event import debugging information
+
+## Usage
+
+### Manual Import
+
+1. Go to **WordPress Admin** → **Humanitix**
+2. Click **"Start Import"** to manually import events
+3. Monitor the import progress and results
+
+### Automatic Import
+
+1. Enable automatic imports in the settings
+2. Set your preferred import frequency
+3. The plugin will automatically import events according to your schedule
+
+## Troubleshooting
+
+### Common Issues
+
+1. **API Connection Failed**
+   - Verify your API key and organization ID
+   - Check that your API key has the correct permissions
+   - Ensure your organization ID is correct
+
+2. **No Events Imported**
+   - Check the debug page for detailed information
+   - Verify that your organization has events in Humanitix
+   - Check the API response format
+
+3. **Import Errors**
+   - Review the logs in the admin panel
+   - Check for conflicts with other plugins
+   - Verify The Events Calendar plugin is active
+
+### Debug Information
+
+When debug mode is enabled, you can access detailed debugging information:
+- API request/response logs
+- Event mapping details
+- Import process step-by-step logs
+- Error details and stack traces
 
 ## Development
 
-### Prerequisites
-
-- PHP 8.0+
-- Node.js 16+
-- Composer
-
-
-### Build Commands
-
-```bash
-# Development build with watch
-npm run dev
-
-# Production build
-npm run prod
-
-# Clean build directory
-npm run clean
-
-# Lint PHP code
-npm run lint:php
-
-# Fix PHP code style
-npm run lint:php:fix
-
-# Lint JavaScript
-npm run lint
-
-# Fix JavaScript issues
-npm run lint:fix
-
-# Lint CSS/SCSS
-npm run lint-css
-
-# Fix CSS/SCSS issues
-npm run lint-css:fix
-```
-
-## Architecture
-
-This plugin follows modern WordPress plugin architecture patterns with the following structure:
+### File Structure
 
 ```
 sg-humanitix-api-importer/
-├── src/                    # PHP source files
-│   ├── Plugin.php          # Main plugin class
-│   └── Assets.php          # Asset management
+├── src/
+│   ├── Admin/
+│   │   ├── AdminInterface.php
+│   │   ├── Logger.php
+│   │   └── SettingsManager.php
+│   ├── Importer/
+│   │   ├── DataMapper.php
+│   │   └── EventsImporter.php
+│   ├── Security/
+│   │   ├── AjaxSecurityHandler.php
+│   │   ├── RestApiSecurityHandler.php
+│   │   └── SecurityValidator.php
+│   ├── Assets.php
+│   ├── HumanitixAPI.php
+│   └── Plugin.php
 ├── assets/
-│   ├── src/                # Source assets
-│   │   ├── js/             # JavaScript files
-│   │   └── sass/           # SCSS files
-│   └── build/              # Built assets (auto-generated)
-├── inc/                    # Custom functions and includes
-├── templates/              # Template files
-└── examples/               # Usage examples
+├── composer.json
+└── README.md
 ```
 
+### Adding Debug Information
 
-
-## Plugin Structure
-
-### Main Classes
-
-#### Plugin Class
-The main plugin initialization class:
+To add debug information to your code:
 
 ```php
-<?php
-use SG\HumanitixApiImporter\Plugin;
+// Log information
+$this->logger->log( 'info', 'Your message here', array( 'context' => 'data' ) );
 
-// The plugin automatically initializes when WordPress loads
-$plugin = new Plugin();
+// Error logging
+$this->logger->log( 'error', 'Error message', array( 'error_details' => $error ) );
+
+// Success logging
+$this->logger->log( 'success', 'Operation completed', array( 'results' => $results ) );
 ```
 
-#### Assets Class
-Handles all asset enqueuing and optimization:
+## Support
 
-```php
-<?php
-use SG\HumanitixApiImporter\Assets;
-
-// Automatically initialized by Plugin class
-// Enqueues frontend and editor assets
-// Handles script localization
-```
-
-### Plugin Classes
-
-This plugin includes comprehensive utilities for WordPress development:
-
-#### Security Classes
-
-**AJAX Security Handler**
-```php
-<?php
-use SG\HumanitixApiImporter\Security\AjaxSecurityHandler;
-
-// Register secure AJAX action
-AjaxSecurityHandler::register_action(
-    'my_secure_action',
-    array( $this, 'handle_action' ),
-    array( 'capability_required' => 'edit_posts' ),
-    array(
-        'email' => array(
-            'type' => 'email',
-            'required' => true
-        )
-    )
-);
-```
-
-**REST API Security Handler**
-```php
-<?php
-use SG\HumanitixApiImporter\Security\RestApiSecurityHandler;
-
-// Register secure REST endpoint
-RestApiSecurityHandler::register_endpoint(
-    '{{PLUGIN_SLUG}}/v1',
-    '/data',
-    array(
-        'methods' => 'GET',
-        'callback' => array( $this, 'get_data' )
-    ),
-    array(
-        'capability_required' => 'read',
-        'rate_limit' => true
-    )
-);
-```
-
-**Security Validator**
-```php
-<?php
-use SG\HumanitixApiImporter\Security\SecurityValidator;
-
-// Validate and sanitize user input
-$clean_data = SecurityValidator::validate($input, 'email');
-```
-
-#### Block Manager
-```php
-<?php
-// Custom blocks are managed automatically
-// Add your own blocks by editing src/BlockManager.php
-$block_manager = new BlockManager();
-$block_manager->register_block('{{PLUGIN_SLUG}}/my-block', $config);
-```
-
-#### Patterns Manager
-```php
-<?php
-// Block patterns are registered automatically
-// Customize patterns in src/Patterns.php
-$patterns = new Patterns();
-$patterns->add_pattern('{{PLUGIN_SLUG}}/my-pattern', $pattern_data);
-```
-
-## Constants
-
-The plugin defines the following constants:
-
-- `SG_HUMANITIX_API_IMPORTER_PLUGIN_FILE` - Main plugin file path
-- `SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH` - Plugin directory path
-- `SG_HUMANITIX_API_IMPORTER_PLUGIN_URL` - Plugin directory URL
-- `SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_PATH` - Built assets directory path
-- `SG_HUMANITIX_API_IMPORTER_PLUGIN_BUILD_URL` - Built assets directory URL
-- `SG_HUMANITIX_API_IMPORTER_PLUGIN_VERSION` - Plugin version
-
-## JavaScript Global
-
-The plugin exposes a global JavaScript object `sgHumanitixApiImporter` with:
-
-```javascript
-window.sgHumanitixApiImporter = {
-    ajax_url: '/wp-admin/admin-ajax.php',
-    nonce: 'security-nonce',
-    plugin_url: '/wp-content/plugins/sg-humanitix-api-importer',
-    version: '1.0.0'
-};
-```
-
-## Hooks and Filters
-
-### Actions
-- `plugins_loaded` - Plugin initialization
-- `wp_enqueue_scripts` - Frontend asset enqueuing
-- `enqueue_block_assets` - Editor asset enqueuing
-
-### Filters
-- `script_loader_tag` - Script optimization
-- `style_loader_tag` - Style optimization
-
-## Contributing
-
-1. Follow WordPress coding standards
-2. Run linting before committing: `npm run precommit`
-3. Write unit tests for new features
-4. Update documentation for API changes
+For support and bug reports, please use the plugin's debug features to gather detailed information about any issues.
 
 ## License
 
-GPL v2 or later
-
-## Changelog
-
-### 1.0.0
-- Initial release 
+This plugin is licensed under the GPL v2 or later. 

@@ -12,7 +12,8 @@
 namespace SG\HumanitixApiImporter\Importer;
 
 use SG\HumanitixApiImporter\HumanitixAPI;
-use SG\HumanitixApiImporter\Logger;
+use SG\HumanitixApiImporter\Admin\Logger;
+use SG\HumanitixApiImporter\Importer\DataMapper;
 
 /**
  * Events Importer Class.
@@ -68,87 +69,86 @@ class EventsImporter {
 	 */
 	public function __construct( HumanitixAPI $api, Logger $logger = null ) {
 		$this->api    = $api;
-		$this->logger = $logger ? $logger : new Logger();
+		$this->logger = $logger ? $logger : new \SG\HumanitixApiImporter\Admin\Logger();
 	}
 
 	/**
-	 * Main import method.
+	 * Import events from Humanitix API.
 	 *
-	 * Fetches events from Humanitix API and imports them into The Events Calendar.
-	 *
-	 * @since 1.0.0
-	 * @param array $options Import options and filters.
-	 * @return array Import results with success status, count, and errors.
+	 * @param int $page Page number to import (>= 1).
+	 * @return array Import result.
 	 */
-	public function import_events( $options = array() ) {
-		$this->start_time      = microtime( true );
-		$this->imported_events = array();
-		$this->errors          = array();
-
-		$this->logger->log(
-			'info',
-			'Starting event import process',
-			array(
-				'options'   => $options,
-				'timestamp' => current_time( 'mysql' ),
-			)
-		);
+	public function import_events( $page = 1 ) {
+		error_log( 'Humanitix EventsImporter: Starting import_events with page: ' . $page );
 
 		try {
-			// Fetch events from Humanitix API.
-			$this->logger->log( 'info', 'Fetching events from Humanitix API' );
-			$events = $this->api->get_events( $options );
+			// Get events from Humanitix API.
+			error_log( 'Humanitix EventsImporter: Calling api->get_events()' );
+			$events = $this->api->get_events( $page );
+			error_log( 'Humanitix EventsImporter: API response: ' . print_r( $events, true ) );
 
-			$this->logger->log(
-				'info',
-				'Retrieved events from API',
-				array(
-					'event_count' => count( $events ),
-				)
-			);
-
-			foreach ( $events as $event_data ) {
-				$this->import_single_event( $event_data );
+			if ( is_wp_error( $events ) ) {
+				error_log( 'Humanitix EventsImporter: API returned WP_Error: ' . $events->get_error_message() );
+				return array(
+					'success'  => false,
+					'message'  => 'Failed to fetch events: ' . $events->get_error_message(),
+					'imported' => 0,
+					'errors'   => array( 'Failed to fetch events: ' . $events->get_error_message() ),
+				);
 			}
 
-			$duration = round( microtime( true ) - $this->start_time, 2 );
+			if ( empty( $events ) ) {
+				error_log( 'Humanitix EventsImporter: No events returned from API' );
+				return array(
+					'success'  => true,
+					'message'  => 'No events found to import.',
+					'imported' => 0,
+					'errors'   => array(),
+				);
+			}
 
-			$this->logger->log(
-				'import',
-				'Import process completed',
-				array(
-					'events_imported' => count( $this->imported_events ),
-					'errors'          => count( $this->errors ),
-					'duration'        => $duration,
-					'success_rate'    => count( $events ) > 0 ? round( ( count( $this->imported_events ) / count( $events ) ) * 100, 2 ) : 0,
-				)
+			error_log( 'Humanitix EventsImporter: Processing ' . count( $events ) . ' events' );
+			$imported_count = 0;
+			$errors         = array();
+
+			foreach ( $events as $index => $event ) {
+				error_log( 'Humanitix EventsImporter: Processing event ' . ( $index + 1 ) . ': ' . ( $event['name'] ?? 'Unknown' ) );
+				$result = $this->import_single_event( $event );
+				if ( $result['success'] ) {
+					++$imported_count;
+					error_log( 'Humanitix EventsImporter: Event imported successfully' );
+				} else {
+					$errors[] = $result['message'];
+					error_log( 'Humanitix EventsImporter: Event import failed: ' . $result['message'] );
+				}
+			}
+
+			$message = sprintf(
+				'Successfully imported %d events from page %d.',
+				$imported_count,
+				$page
 			);
 
+			if ( ! empty( $errors ) ) {
+				$message .= ' Errors: ' . implode( ', ', $errors );
+			}
+
+			error_log( 'Humanitix EventsImporter: Import completed. Imported: ' . $imported_count . ', Errors: ' . count( $errors ) );
+
 			return array(
-				'success'  => true,
-				'imported' => count( $this->imported_events ),
-				'errors'   => $this->errors,
+				'success'  => $imported_count > 0,
+				'message'  => $message,
+				'imported' => $imported_count,
+				'errors'   => $errors,
 			);
 
 		} catch ( \Exception $e ) {
-			$duration = round( microtime( true ) - $this->start_time, 2 );
-
-			$this->logger->log(
-				'error',
-				'Import process failed',
-				array(
-					'error'           => $e->getMessage(),
-					'duration'        => $duration,
-					'events_imported' => count( $this->imported_events ),
-					'errors'          => count( $this->errors ),
-				)
-			);
-
+			error_log( 'Humanitix EventsImporter: Exception caught: ' . $e->getMessage() );
 			return array(
 				'success'  => false,
-				'error'    => $e->getMessage(),
-				'imported' => count( $this->imported_events ),
-				'errors'   => $this->errors,
+				'message'  => 'Import failed: ' . $e->getMessage(),
+				'imported' => 0,
+				'errors'   => array( 'Import failed: ' . $e->getMessage() ),
 			);
 		}
 	}
@@ -156,61 +156,77 @@ class EventsImporter {
 	/**
 	 * Import a single event.
 	 *
-	 * Processes individual event data and either creates or updates the event.
-	 *
-	 * @since 1.0.0
-	 * @param array $event_data The event data from Humanitix API.
-	 * @return void
+	 * @param array $event_data Humanitix event data.
+	 * @return array Import result.
 	 */
-	private function import_single_event( $event_data ) {
-		$event_title = $event_data['title'] ?? 'Unknown Event';
-		$event_id    = $event_data['id'] ?? 'unknown';
-
-		$this->logger->log(
-			'info',
-			"Processing event: {$event_title}",
-			array(
-				'humanitix_id' => $event_id,
-				'event_title'  => $event_title,
-			)
-		);
-
+	public function import_single_event( $event_data ) {
 		try {
-			// Check if event already exists (by external ID).
-			$existing_event = $this->find_existing_event( $event_id );
+			// Use DataMapper to convert Humanitix format to TEC format.
+			$mapper       = new DataMapper();
+			$mapped_event = $mapper->map_event( $event_data );
+
+			if ( empty( $mapped_event ) ) {
+				return array(
+					'success' => false,
+					'message' => 'Failed to map event data for event: ' . ( $event_data['name'] ?? 'Unknown' ),
+				);
+			}
+
+			// Check if event already exists by Humanitix ID.
+			$existing_event = $this->find_existing_event( $event_data['_id'] ?? '' );
 
 			if ( $existing_event ) {
-				$this->logger->log(
-					'info',
-					"Updating existing event: {$event_title}",
-					array(
-						'wordpress_id' => $existing_event,
-						'humanitix_id' => $event_id,
-					)
-				);
-				$this->update_event( $existing_event, $event_data );
+				// Update existing event.
+				$post_id = wp_update_post( array_merge( $mapped_event, array( 'ID' => $existing_event ) ) );
+				$action  = 'updated';
 			} else {
-				$this->logger->log(
-					'info',
-					"Creating new event: {$event_title}",
-					array(
-						'humanitix_id' => $event_id,
-					)
-				);
-				$this->create_event( $event_data );
+				// Create new event.
+				$post_id = wp_insert_post( $mapped_event );
+				$action  = 'created';
 			}
-		} catch ( \Exception $e ) {
-			$error_message  = "Failed to import event {$event_title}: " . $e->getMessage();
-			$this->errors[] = $error_message;
 
+			if ( is_wp_error( $post_id ) ) {
+				return array(
+					'success' => false,
+					'message' => 'Failed to ' . $action . ' event: ' . $post_id->get_error_message(),
+				);
+			}
+
+			// Update meta fields.
+			$this->update_event_meta( $post_id, $mapped_event['meta_input'] );
+
+			// Log the import.
+			$this->logger->log(
+				'import',
+				'Event ' . $action,
+				array(
+					'post_id'      => $post_id,
+					'humanitix_id' => $event_data['_id'] ?? '',
+					'action'       => $action,
+					'event_title'  => $mapped_event['post_title'] ?? '',
+				)
+			);
+
+			return array(
+				'success' => true,
+				'message' => 'Event ' . $action . ' successfully',
+				'post_id' => $post_id,
+				'action'  => $action,
+			);
+
+		} catch ( \Exception $e ) {
 			$this->logger->log(
 				'error',
-				$error_message,
+				'Failed to import event',
 				array(
-					'humanitix_id' => $event_id,
-					'event_title'  => $event_title,
-					'exception'    => $e->getMessage(),
+					'error'      => $e->getMessage(),
+					'event_data' => $event_data,
 				)
+			);
+
+			return array(
+				'success' => false,
+				'message' => 'Import failed: ' . $e->getMessage(),
 			);
 		}
 	}
@@ -644,27 +660,32 @@ class EventsImporter {
 	/**
 	 * Find existing event by Humanitix ID.
 	 *
-	 * Searches for an existing event using the Humanitix event ID.
-	 *
-	 * @since 1.0.0
-	 * @param string $humanitix_id The Humanitix event ID.
-	 * @return int|false The event ID or false if not found.
+	 * @param string $humanitix_id Humanitix event ID.
+	 * @return int|false Post ID if found, false otherwise.
 	 */
 	private function find_existing_event( $humanitix_id ) {
+		if ( empty( $humanitix_id ) ) {
+			return false;
+		}
+
 		$args = array(
 			'post_type'      => 'tribe_events',
+			'post_status'    => 'any',
 			'meta_query'     => array(
 				array(
-					'key'     => '_humanitix_event_id',
+					'key'     => 'humanitix_event_id',
 					'value'   => $humanitix_id,
 					'compare' => '=',
 				),
 			),
 			'posts_per_page' => 1,
+			'fields'         => 'ids',
 		);
 
 		$query = new \WP_Query( $args );
-		return $query->have_posts() ? $query->posts[0]->ID : false;
+		$posts = $query->posts;
+
+		return ! empty( $posts ) ? $posts[0] : false;
 	}
 
 	/**
@@ -722,6 +743,22 @@ class EventsImporter {
 		}
 
 		return implode( ', ', $costs );
+	}
+
+	/**
+	 * Update event meta fields.
+	 *
+	 * @param int   $post_id Post ID.
+	 * @param array $meta_data Meta data to update.
+	 */
+	private function update_event_meta( $post_id, $meta_data ) {
+		if ( empty( $meta_data ) || ! is_array( $meta_data ) ) {
+			return;
+		}
+
+		foreach ( $meta_data as $meta_key => $meta_value ) {
+			update_post_meta( $post_id, $meta_key, $meta_value );
+		}
 	}
 
 	/**

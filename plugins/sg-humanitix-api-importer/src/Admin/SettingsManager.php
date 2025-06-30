@@ -37,6 +37,13 @@ class SettingsManager {
 	private $options_name = 'humanitix_importer_options';
 
 	/**
+	 * Whether settings have been initialized.
+	 *
+	 * @var bool
+	 */
+	private static $settings_initialized = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * Initializes the settings manager and hooks into WordPress admin.
@@ -44,7 +51,10 @@ class SettingsManager {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		add_action( 'admin_init', array( $this, 'init_settings' ) );
+		if ( ! self::$settings_initialized ) {
+			add_action( 'admin_init', array( $this, 'init_settings' ) );
+			self::$settings_initialized = true;
+		}
 	}
 
 	/**
@@ -69,6 +79,22 @@ class SettingsManager {
 			'api_key',
 			'Humanitix API Key',
 			array( $this, 'render_api_key_field' ),
+			'humanitix-importer-settings',
+			'api_settings'
+		);
+
+		add_settings_field(
+			'org_id',
+			'Organization ID',
+			array( $this, 'render_org_id_field' ),
+			'humanitix-importer-settings',
+			'api_settings'
+		);
+
+		add_settings_field(
+			'api_endpoint',
+			'API Endpoint',
+			array( $this, 'render_api_endpoint_field' ),
 			'humanitix-importer-settings',
 			'api_settings'
 		);
@@ -178,6 +204,13 @@ class SettingsManager {
 				<p>Test your API connection to ensure it's working properly.</p>
 				<button id="test-api" class="button">Test API Connection</button>
 				<div id="api-test-result"></div>
+				
+				<?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : ?>
+					<hr>
+					<p><strong>Debug Tools:</strong></p>
+					<p><a href="<?php echo esc_url( admin_url( 'admin.php?page=humanitix-debug' ) ); ?>" class="button">View Debug Page</a></p>
+					<p><small>For detailed API analysis and troubleshooting.</small></p>
+				<?php endif; ?>
 			</div>
 		</div>
 		<?php
@@ -190,7 +223,7 @@ class SettingsManager {
 	 * @return void
 	 */
 	public function render_api_section() {
-		echo '<p>Configure your Humanitix API settings.</p>';
+		echo '<p>Configure your Humanitix API credentials. You\'ll need your API key and organization ID from your Humanitix account.</p>';
 	}
 
 	/**
@@ -204,12 +237,98 @@ class SettingsManager {
 	public function render_api_key_field() {
 		$options = get_option( $this->options_name, array() );
 		$api_key = $options['api_key'] ?? '';
+
+		// Validate API key if it exists
+		$validation_message = '';
+		$validation_class   = '';
+
+		if ( ! empty( $api_key ) ) {
+			$api        = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key );
+			$validation = $api->validate_api_key_format( $api_key );
+
+			if ( ! $validation['valid'] ) {
+				$validation_class    = 'notice-error';
+				$validation_message  = '<strong>API Key Format Issues:</strong><br>';
+				$validation_message .= '<ul>';
+				foreach ( $validation['issues'] as $issue ) {
+					$validation_message .= '<li>' . esc_html( $issue ) . '</li>';
+				}
+				$validation_message .= '</ul>';
+
+				if ( ! empty( $validation['suggestions'] ) ) {
+					$validation_message .= '<strong>Suggestions:</strong><br>';
+					$validation_message .= '<ul>';
+					foreach ( $validation['suggestions'] as $suggestion ) {
+						$validation_message .= '<li>' . esc_html( $suggestion ) . '</li>';
+					}
+					$validation_message .= '</ul>';
+				}
+			} else {
+				$validation_class   = 'notice-success';
+				$validation_message = '<strong>API Key Format:</strong> Valid (' . $validation['length'] . ' characters)';
+			}
+		}
 		?>
 		<input type="password" 
 				name="<?php echo esc_attr( $this->options_name ); ?>[api_key]" 
 				value="<?php echo esc_attr( $api_key ); ?>" 
 				class="regular-text" />
-		<p class="description">Enter your Humanitix API key from the console.</p>
+		<p class="description">Enter your Humanitix API key from the console. The API key will be sent in the x-api-key header.</p>
+		
+		<?php if ( ! empty( $validation_message ) ) : ?>
+			<div class="notice <?php echo esc_attr( $validation_class ); ?> inline">
+				<p><?php echo wp_kses_post( $validation_message ); ?></p>
+			</div>
+		<?php endif; ?>
+		<?php
+	}
+
+	/**
+	 * Render the organization ID input field.
+	 *
+	 * Outputs a text field for the organization ID.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_org_id_field() {
+		$options = get_option( $this->options_name, array() );
+		$org_id  = $options['org_id'] ?? '';
+		?>
+		<input type="text" 
+				name="<?php echo esc_attr( $this->options_name ); ?>[org_id]" 
+				value="<?php echo esc_attr( $org_id ); ?>" 
+				class="regular-text" 
+				placeholder="e.g., org_1234567890abcdef" />
+		<p class="description">
+			Enter your Humanitix organization ID. This is required to scope API requests to your organization.<br>
+			<strong>How to find it:</strong> Log into your Humanitix account and check your organization settings or API documentation.
+		</p>
+		<?php
+	}
+
+	/**
+	 * Render the API endpoint input field.
+	 *
+	 * Outputs a text field for the Humanitix API endpoint.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_api_endpoint_field() {
+		$options      = get_option( $this->options_name, array() );
+		$api_endpoint = $options['api_endpoint'] ?? '';
+		?>
+		<input type="text" 
+				name="<?php echo esc_attr( $this->options_name ); ?>[api_endpoint]" 
+				value="<?php echo esc_attr( $api_endpoint ); ?>" 
+				class="regular-text" 
+				placeholder="https://api.humanitix.com/v1" />
+		<p class="description">
+			Enter your Humanitix API endpoint. Leave blank for the default endpoint.<br>
+			<strong>For testing:</strong> Use the mock server: <code>https://stoplight.io/mocks/humanitix/humanitix-public-api/259010741</code><br>
+			<strong>Note:</strong> The mock server may have different endpoint paths than the live API.
+		</p>
 		<?php
 	}
 
@@ -418,6 +537,8 @@ class SettingsManager {
 		$sanitized = array();
 
 		$sanitized['api_key']           = sanitize_text_field( $input['api_key'] ?? '' );
+		$sanitized['org_id']            = sanitize_text_field( $input['org_id'] ?? '' );
+		$sanitized['api_endpoint']      = sanitize_text_field( $input['api_endpoint'] ?? '' );
 		$sanitized['auto_import']       = isset( $input['auto_import'] );
 		$sanitized['import_frequency']  = sanitize_text_field( $input['import_frequency'] ?? 'daily' );
 		$sanitized['update_existing']   = isset( $input['update_existing'] );
