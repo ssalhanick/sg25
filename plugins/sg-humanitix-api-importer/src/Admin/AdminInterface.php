@@ -60,9 +60,9 @@ class AdminInterface {
 	 * @param SettingsManager $settings The settings manager instance.
 	 */
 	public function __construct( $importer = null, SettingsManager $settings = null ) {
-		$this->importer = $importer;
-		$this->settings = $settings ?? new SettingsManager();
-		$this->logger   = new Logger();
+		$this->importer         = $importer;
+		$this->settings         = $settings ?? new SettingsManager();
+		$this->logger           = new Logger();
 		$this->security_handler = new \SG\HumanitixApiImporter\Security\AjaxSecurityHandler();
 
 		$this->init_hooks();
@@ -686,7 +686,7 @@ class AdminInterface {
 				<?php
 				$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
 				if ( file_exists( $log_file ) ) {
-					$log_contents = file_get_contents( $log_file );
+					$log_contents = wp_remote_get( $log_file );
 					if ( ! empty( $log_contents ) ) {
 						echo '<p><strong>Custom Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
 						echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( filesize( $log_file ) ) ) . '</p>';
@@ -754,11 +754,11 @@ class AdminInterface {
 	 * Handling AJAX Imports
 	 */
 	public function handle_import_ajax() {
-		// Add basic error logging for debugging
+		// Add basic error logging for debugging.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( 'Humanitix Import: AJAX handler called' );
 		}
-		
+
 		check_ajax_referer( 'humanitix_import_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -770,7 +770,7 @@ class AdminInterface {
 			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
 		}
 
-		// Get import limit if provided (only in debug mode)
+		// Get import limit if provided (only in debug mode).
 		$import_limit = null;
 		if ( $this->is_debug_enabled() && isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
 			$import_limit = intval( $_POST['import_limit'] );
@@ -782,7 +782,7 @@ class AdminInterface {
 		$start_time = microtime( true );
 
 		try {
-			// Pass import limit to the importer if set
+			// Pass import limit to the importer if set.
 			if ( $import_limit ) {
 				$result = $this->importer->import_events( 1, $import_limit );
 			} else {
@@ -792,10 +792,10 @@ class AdminInterface {
 			$end_time = microtime( true );
 			$duration = round( $end_time - $start_time, 2 );
 
-			// Clean up debug log if it's getting too large
+			// Clean up debug log if it's getting too large.
 			$this->logger->cleanup_debug_log( 10 );
 
-			// Log the import with duration
+			// Log the import with duration.
 			$this->logger->log_import_summary( $result['imported'], $result['errors'], $duration );
 
 			wp_send_json_success(

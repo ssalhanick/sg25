@@ -47,8 +47,8 @@ const plugins = (argv) => {
 		}),
 
 		new ESLintPlugin({
-			// This tells the plugin to use your .eslintrc.json file
-			useEslintrc: true,
+			// Explicitly specify the ESLint config file to use
+			overrideConfigFile: '.eslintrc.json',
 			files: 'assets/src/js/**/*.js', // Specify which files to lint
 			fix: true,// Fix ESLint errors if possible
 			// Other options you might want

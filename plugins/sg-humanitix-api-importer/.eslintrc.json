@@ -61,6 +61,7 @@
 			"error",
 			"always"
 		],
+		"@wordpress/no-date": "off",
 		"jsdoc/check-alignment": 1,
 		"jsdoc/check-param-names": 1,
 		"jsdoc/check-tag-names": 1,

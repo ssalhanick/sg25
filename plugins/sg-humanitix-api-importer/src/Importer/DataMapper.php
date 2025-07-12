@@ -94,8 +94,6 @@ class DataMapper {
 			return array();
 		}
 
-
-
 		$mapped_event = array(
 			'post_type'   => 'tribe_events',
 			'post_status' => 'publish',
@@ -106,7 +104,7 @@ class DataMapper {
 		if ( isset( $humanitix_event['createdAt'] ) && ! empty( $humanitix_event['createdAt'] ) ) {
 			$created_timestamp = strtotime( $humanitix_event['createdAt'] );
 			if ( false !== $created_timestamp ) {
-				$mapped_event['post_date'] = date( 'Y-m-d H:i:s', $created_timestamp );
+				$mapped_event['post_date']     = date( 'Y-m-d H:i:s', $created_timestamp );
 				$mapped_event['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $created_timestamp );
 			}
 		}
@@ -125,11 +123,11 @@ class DataMapper {
 						$mapped_event['post_content'] = wp_kses_post( $value );
 						break;
 					case '_EventStartDate':
-						// Store the raw UTC date string for later timezone conversion
+						// Store the raw UTC date string for later timezone conversion.
 						$mapped_event['meta_input']['_humanitix_start_date_utc'] = $value;
 						break;
 					case '_EventEndDate':
-						// Store the raw UTC date string for later timezone conversion
+						// Store the raw UTC date string for later timezone conversion.
 						$mapped_event['meta_input']['_humanitix_end_date_utc'] = $value;
 						break;
 					case '_EventTimezone':
@@ -158,8 +156,6 @@ class DataMapper {
 		// Set default values for required TEC fields.
 		$mapped_event = $this->set_default_values( $mapped_event );
 
-
-
 		return $mapped_event;
 	}
 
@@ -171,12 +167,12 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function map_nested_data( $humanitix_event, $mapped_event ) {
-		// Initialize debug helper
-		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
+		// Initialize debug helper,
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
-		
+
 		// Handle venue data - store for reference but let EventsImporter handle venue creation.
-		// Check multiple possible field names for venue data
+		// Check multiple possible field names for venue data.
 		$venue = null;
 		if ( isset( $humanitix_event['venue'] ) && is_array( $humanitix_event['venue'] ) ) {
 			$venue = $humanitix_event['venue'];
@@ -185,7 +181,7 @@ class DataMapper {
 		} elseif ( isset( $humanitix_event['location'] ) && is_array( $humanitix_event['location'] ) ) {
 			$venue = $humanitix_event['location'];
 		}
-		
+
 		if ( $venue ) {
 			// Store venue instructions and online URL as custom fields (not standard TEC venue fields).
 			if ( isset( $venue['instructions'] ) ) {
@@ -194,8 +190,8 @@ class DataMapper {
 			if ( isset( $venue['online_url'] ) ) {
 				$mapped_event['meta_input']['humanitix_online_url'] = esc_url_raw( $venue['online_url'] );
 			}
-			
-			// Store coordinates from Humanitix eventLocation structure
+
+			// Store coordinates from Humanitix eventLocation structure.
 			if ( isset( $venue['latLng'] ) && is_array( $venue['latLng'] ) ) {
 				$mapped_event['meta_input']['humanitix_lat_lng'] = wp_json_encode( $venue['latLng'] );
 			} elseif ( isset( $venue['lat_lng'] ) && is_array( $venue['lat_lng'] ) ) {
@@ -210,9 +206,13 @@ class DataMapper {
 		if ( isset( $humanitix_event['ticketTypes'] ) && is_array( $humanitix_event['ticketTypes'] ) ) {
 			$mapped_event['meta_input']['humanitix_ticket_types'] = wp_json_encode( $humanitix_event['ticketTypes'] );
 
-					$debug_helper->smart_log( 'DataMapper', 'Processing ticket types', array(
-			'ticket_count' => count( $humanitix_event['ticketTypes'] ),
-		) );
+					$debug_helper->smart_log(
+						'DataMapper',
+						'Processing ticket types',
+						array(
+							'ticket_count' => count( $humanitix_event['ticketTypes'] ),
+						)
+					);
 
 			// Calculate total capacity and available tickets.
 			$total_capacity    = 0;
@@ -239,27 +239,35 @@ class DataMapper {
 				}
 			}
 
-			$mapped_event['meta_input']['_EventCapacity']               = $total_capacity;
+			$mapped_event['meta_input']['_EventCapacity']              = $total_capacity;
 			$mapped_event['meta_input']['humanitix_available_tickets'] = $available_tickets;
 
-			$debug_helper->smart_log( 'DataMapper', 'Calculated pricing from tickets', array(
-				'min_price' => $min_price,
-				'max_price' => $max_price,
-				'total_capacity' => $total_capacity,
-			) );
+			$debug_helper->smart_log(
+				'DataMapper',
+				'Calculated pricing from tickets',
+				array(
+					'min_price'      => $min_price,
+					'max_price'      => $max_price,
+					'total_capacity' => $total_capacity,
+				)
+			);
 
 			// Set pricing information.
 			if ( null !== $min_price ) {
-				// Only set cost from ticket types if pricing data hasn't already set it
+				// Only set cost from ticket types if pricing data hasn't already set it.
 				if ( ! isset( $mapped_event['meta_input']['_EventCost'] ) ) {
 					$mapped_event['meta_input']['_EventCost'] = $min_price;
 					if ( $max_price !== $min_price ) {
 						$mapped_event['meta_input']['_EventCost'] .= ' - ' . $max_price;
 					}
-					
-					$debug_helper->smart_log( 'DataMapper', 'Set event cost from ticket types', array(
-						'cost' => $mapped_event['meta_input']['_EventCost'],
-					) );
+
+					$debug_helper->smart_log(
+						'DataMapper',
+						'Set event cost from ticket types',
+						array(
+							'cost' => $mapped_event['meta_input']['_EventCost'],
+						)
+					);
 				} else {
 					$debug_helper->smart_log( 'DataMapper', 'Event cost already set from pricing data, skipping ticket types pricing' );
 				}
@@ -269,19 +277,27 @@ class DataMapper {
 		// Handle pricing information.
 		if ( isset( $humanitix_event['pricing'] ) && is_array( $humanitix_event['pricing'] ) ) {
 			$mapped_event['meta_input']['humanitix_pricing'] = wp_json_encode( $humanitix_event['pricing'] );
-			
-			$debug_helper->smart_log( 'DataMapper', 'Processing pricing data', array(
-				'pricing_keys' => array_keys( $humanitix_event['pricing'] ),
-			) );
-			
-			// Check for maximumPrice in pricing data
+
+			$debug_helper->smart_log(
+				'DataMapper',
+				'Processing pricing data',
+				array(
+					'pricing_keys' => array_keys( $humanitix_event['pricing'] ),
+				)
+			);
+
+			// Check for maximumPrice in pricing data.
 			if ( isset( $humanitix_event['pricing']['maximumPrice'] ) ) {
 				$maximum_price_from_pricing = floatval( $humanitix_event['pricing']['maximumPrice'] );
-				$debug_helper->smart_log( 'DataMapper', 'Found maximumPrice in pricing data', array(
-					'maximum_price' => $maximum_price_from_pricing,
-				) );
-				
-				// Use maximumPrice as the event cost
+				$debug_helper->smart_log(
+					'DataMapper',
+					'Found maximumPrice in pricing data',
+					array(
+						'maximum_price' => $maximum_price_from_pricing,
+					)
+				);
+
+				// Use maximumPrice as the event cost.
 				$mapped_event['meta_input']['_EventCost'] = $maximum_price_from_pricing;
 			}
 		}
@@ -303,27 +319,35 @@ class DataMapper {
 
 			// Set featured image if available.
 			if ( isset( $images['feature'] ) ) {
-				$thumbnail_id = $this->process_event_image( $images['feature'] );
+				$thumbnail_id                                = $this->process_event_image( $images['feature'] );
 				$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
 			} elseif ( isset( $images['banner'] ) ) {
-				$thumbnail_id = $this->process_event_image( $images['banner'] );
+				$thumbnail_id                                = $this->process_event_image( $images['banner'] );
 				$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
 			}
 		}
 
-		// Validate required fields
+		// Validate required fields.
 		if ( empty( $mapped_event['post_title'] ) ) {
-			$debug_helper->log_critical_error( 'DataMapper', 'Event mapping failed: Missing required post_title', array(
-				'humanitix_id' => $humanitix_event['_id'] ?? 'unknown',
-				'available_fields' => array_keys( $humanitix_event ),
-			) );
+			$debug_helper->log_critical_error(
+				'DataMapper',
+				'Event mapping failed: Missing required post_title',
+				array(
+					'humanitix_id'     => $humanitix_event['_id'] ?? 'unknown',
+					'available_fields' => array_keys( $humanitix_event ),
+				)
+			);
 		}
 
 		if ( empty( $mapped_event['meta_input']['_EventStartDate'] ) ) {
-			$debug_helper->log_critical_error( 'DataMapper', 'Event mapping failed: Missing required start date', array(
-				'humanitix_id' => $humanitix_event['_id'] ?? 'unknown',
-				'start_date_raw' => $humanitix_event['startDate'] ?? 'not set',
-			) );
+			$debug_helper->log_critical_error(
+				'DataMapper',
+				'Event mapping failed: Missing required start date',
+				array(
+					'humanitix_id'   => $humanitix_event['_id'] ?? 'unknown',
+					'start_date_raw' => $humanitix_event['startDate'] ?? 'not set',
+				)
+			);
 		}
 
 		// Handle dates array.
@@ -402,7 +426,7 @@ class DataMapper {
 		}
 
 		// Handle ISO 8601 format from Humanitix API (e.g., "2021-02-01T23:26:13.485Z").
-		// Note: This method is now deprecated in favor of proper timezone conversion
+		// Note: This method is now deprecated in favor of proper timezone conversion.
 		// in the set_timezone_info method.
 		$timestamp = strtotime( $date_string );
 		if ( false === $timestamp ) {
@@ -459,27 +483,35 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function set_timezone_info( $humanitix_event, $mapped_event ) {
-		// Initialize debug helper
-		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
+		// Initialize debug helper.
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
-		
+
 		// Get the timezone from Humanitix data.
 		$timezone_string = '';
 		if ( isset( $humanitix_event['timezone'] ) ) {
 			$timezone_string = $this->convert_timezone_for_tec( $humanitix_event['timezone'] );
-			$debug_helper->log( 'DataMapper', 'Set timezone from Humanitix data', array(
-				'timezone' => $timezone_string,
-			) );
+			$debug_helper->log(
+				'DataMapper',
+				'Set timezone from Humanitix data',
+				array(
+					'timezone' => $timezone_string,
+				)
+			);
 		}
 
 		// If no timezone from Humanitix, try to determine from event venue.
 		$venue_data = $humanitix_event['venue'] ?? $humanitix_event['eventLocation'] ?? $humanitix_event['location'] ?? array();
 		if ( empty( $timezone_string ) && isset( $venue_data['country'] ) ) {
 			$timezone_string = $this->get_timezone_from_location( $venue_data );
-			$debug_helper->log( 'DataMapper', 'Set timezone from venue', array(
-				'timezone' => $timezone_string,
-				'venue_country' => $venue_data['country'] ?? 'unknown',
-			) );
+			$debug_helper->log(
+				'DataMapper',
+				'Set timezone from venue',
+				array(
+					'timezone'      => $timezone_string,
+					'venue_country' => $venue_data['country'] ?? 'unknown',
+				)
+			);
 		}
 
 		// Fallback to WordPress site timezone.
@@ -488,40 +520,48 @@ class DataMapper {
 			if ( empty( $timezone_string ) ) {
 				$timezone_string = 'America/New_York'; // Final fallback.
 			}
-			$debug_helper->log( 'DataMapper', 'Set timezone from WordPress fallback', array(
-				'timezone' => $timezone_string,
-			) );
+			$debug_helper->log(
+				'DataMapper',
+				'Set timezone from WordPress fallback',
+				array(
+					'timezone' => $timezone_string,
+				)
+			);
 		}
 
 		// Set the timezone field.
 		$mapped_event['meta_input']['_EventTimezone'] = $timezone_string;
-		$debug_helper->log( 'DataMapper', 'Final timezone set', array(
-			'timezone' => $timezone_string,
-		) );
+		$debug_helper->log(
+			'DataMapper',
+			'Final timezone set',
+			array(
+				'timezone' => $timezone_string,
+			)
+		);
 
-		// Convert UTC dates to the event's timezone
+		// Convert UTC dates to the event's timezone.
 		if ( isset( $mapped_event['meta_input']['_humanitix_start_date_utc'] ) && ! empty( $mapped_event['meta_input']['_humanitix_start_date_utc'] ) ) {
-			$converted_start_date = $this->convert_utc_to_timezone( $mapped_event['meta_input']['_humanitix_start_date_utc'], $timezone_string );
+			$converted_start_date                          = $this->convert_utc_to_timezone( $mapped_event['meta_input']['_humanitix_start_date_utc'], $timezone_string );
 			$mapped_event['meta_input']['_EventStartDate'] = $converted_start_date;
-			
-			// Set timezone abbreviation
+
+			// Set timezone abbreviation.
 			$mapped_event['meta_input']['_EventTimezoneAbbr'] = $this->get_timezone_abbr( $converted_start_date, $timezone_string );
-			
-			// Store UTC version for reference
+
+			// Store UTC version for reference.
 			$mapped_event['meta_input']['_EventStartDateUTC'] = $mapped_event['meta_input']['_humanitix_start_date_utc'];
-			
-			// Clean up temporary field
+
+			// Clean up temporary field.
 			unset( $mapped_event['meta_input']['_humanitix_start_date_utc'] );
 		}
 
 		if ( isset( $mapped_event['meta_input']['_humanitix_end_date_utc'] ) && ! empty( $mapped_event['meta_input']['_humanitix_end_date_utc'] ) ) {
-			$converted_end_date = $this->convert_utc_to_timezone( $mapped_event['meta_input']['_humanitix_end_date_utc'], $timezone_string );
+			$converted_end_date                          = $this->convert_utc_to_timezone( $mapped_event['meta_input']['_humanitix_end_date_utc'], $timezone_string );
 			$mapped_event['meta_input']['_EventEndDate'] = $converted_end_date;
-			
-			// Store UTC version for reference
+
+			// Store UTC version for reference.
 			$mapped_event['meta_input']['_EventEndDateUTC'] = $mapped_event['meta_input']['_humanitix_end_date_utc'];
-			
-			// Clean up temporary field
+
+			// Clean up temporary field.
 			unset( $mapped_event['meta_input']['_humanitix_end_date_utc'] );
 		}
 
@@ -742,10 +782,10 @@ class DataMapper {
 			return false;
 		}
 
-		// Use static cache for this request
+		// Use static cache for this request.
 		static $image_cache = array();
-		$cache_key = md5( $image_url );
-		
+		$cache_key          = md5( $image_url );
+
 		if ( isset( $image_cache[ $cache_key ] ) ) {
 			return $image_cache[ $cache_key ];
 		}
@@ -757,9 +797,9 @@ class DataMapper {
 			return $existing_attachment;
 		}
 
-		// For performance, skip image download by default during bulk imports
-		// Images can be processed separately or on-demand
-		// Only download images if explicitly enabled
+		// For performance, skip image download by default during bulk imports.
+		// Images can be processed separately or on-demand.
+		// Only download images if explicitly enabled.
 		if ( ! \SG\HumanitixApiImporter\Admin\PerformanceConfig::should_enable_image_download() ) {
 			$image_cache[ $cache_key ] = false;
 			return false;
@@ -767,7 +807,7 @@ class DataMapper {
 
 		// Download and attach image.
 		$attachment_id = $this->download_and_attach_image( $image_url );
-		
+
 		$image_cache[ $cache_key ] = $attachment_id;
 		return $attachment_id;
 	}
@@ -851,21 +891,21 @@ class DataMapper {
 
 		// Map MIME types to extensions.
 		$mime_to_ext = array(
-			'image/jpeg' => 'jpg',
-			'image/jpg'  => 'jpg',
-			'image/png'  => 'png',
-			'image/gif'  => 'gif',
-			'image/webp' => 'webp',
+			'image/jpeg'    => 'jpg',
+			'image/jpg'     => 'jpg',
+			'image/png'     => 'png',
+			'image/gif'     => 'gif',
+			'image/webp'    => 'webp',
 			'image/svg+xml' => 'svg',
-			'image/bmp'  => 'bmp',
-			'image/tiff' => 'tiff',
+			'image/bmp'     => 'bmp',
+			'image/tiff'    => 'tiff',
 		);
 
-		$extension = $mime_to_ext[ $mime_type ] ?? 'jpg'; // Default to jpg if unknown
+		$extension = $mime_to_ext[ $mime_type ] ?? 'jpg'; // Default to jpg if unknown.
 
 		// Try to get filename from URL.
-		$url_parts = parse_url( $image_url );
-		$path = $url_parts['path'] ?? '';
+		$url_parts         = parse_url( $image_url );
+		$path              = $url_parts['path'] ?? '';
 		$original_filename = basename( $path );
 
 		// If the original filename doesn't have an extension, add one.
@@ -891,11 +931,11 @@ class DataMapper {
 	private function get_mime_type( $file_path ) {
 		// Method 1: Use fileinfo extension if available.
 		if ( function_exists( 'finfo_open' ) ) {
-			$finfo = finfo_open( FILEINFO_MIME_TYPE );
+			$finfo     = finfo_open( FILEINFO_MIME_TYPE );
 			$mime_type = finfo_file( $finfo, $file_path );
 			finfo_close( $finfo );
-			
-			if ( $mime_type && $mime_type !== 'application/octet-stream' ) {
+
+			if ( $mime_type && 'application/octet-stream' !== $mime_type ) {
 				return $mime_type;
 			}
 		}
@@ -903,13 +943,13 @@ class DataMapper {
 		// Method 2: Use mime_content_type if available.
 		if ( function_exists( 'mime_content_type' ) ) {
 			$mime_type = mime_content_type( $file_path );
-			if ( $mime_type && $mime_type !== 'application/octet-stream' ) {
+			if ( $mime_type && 'application/octet-stream' !== $mime_type ) {
 				return $mime_type;
 			}
 		}
 
 		// Method 3: Check file extension as fallback.
-		$extension = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+		$extension   = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
 		$ext_to_mime = array(
 			'jpg'  => 'image/jpeg',
 			'jpeg' => 'image/jpeg',
@@ -939,13 +979,13 @@ class DataMapper {
 	 */
 	private function convert_timezone_for_tec( $timezone ) {
 		$original_timezone = $timezone;
-		$timezone = trim( $timezone );
-		
-		// Debug logging for timezone conversion
+		$timezone          = trim( $timezone );
+
+		// Debug logging for timezone conversion.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( "Humanitix DataMapper: Converting timezone '{$original_timezone}' to geographic timezone" );
 		}
-		
+
 		// If it's already a geographic timezone, return as is.
 		if ( $this->is_geographic_timezone( $timezone ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -953,14 +993,26 @@ class DataMapper {
 			}
 			return $timezone;
 		}
-		
+
 		// Handle UTC timezone variants.
 		$utc_variants = array(
-			'UTC', 'UTC+0', 'UTC+00:00', 'UTC-0', 'UTC-00:00',
-			'GMT', 'GMT+0', 'GMT-0', 'GMT+00:00', 'GMT-00:00',
-			'Z', '+00:00', '-00:00', '+0', '-0'
+			'UTC',
+			'UTC+0',
+			'UTC+00:00',
+			'UTC-0',
+			'UTC-00:00',
+			'GMT',
+			'GMT+0',
+			'GMT-0',
+			'GMT+00:00',
+			'GMT-00:00',
+			'Z',
+			'+00:00',
+			'-00:00',
+			'+0',
+			'-0',
 		);
-		
+
 		if ( in_array( strtoupper( $timezone ), array_map( 'strtoupper', $utc_variants ) ) ) {
 			// Use WordPress site timezone as fallback.
 			$wp_timezone = get_option( 'timezone_string' );
@@ -970,24 +1022,24 @@ class DataMapper {
 				}
 				return $wp_timezone;
 			}
-			
+
 			// If WordPress timezone is not set, use a default.
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "Humanitix DataMapper: Converting UTC timezone to default: America/New_York" );
+				error_log( 'Humanitix DataMapper: Converting UTC timezone to default: America/New_York' );
 			}
 			return 'America/New_York';
 		}
-		
+
 		// Handle offset-based timezones (e.g., UTC+5, UTC-8, +5, -8).
 		$offset_patterns = array(
-			'/^UTC([+-]\d{1,2}(?::\d{2})?)$/',  // UTC+5, UTC-8, UTC+5:30
-			'/^GMT([+-]\d{1,2}(?::\d{2})?)$/',  // GMT+5, GMT-8, GMT+5:30
-			'/^([+-]\d{1,2}(?::\d{2})?)$/',     // +5, -8, +5:30
+			'/^UTC([+-]\d{1,2}(?::\d{2})?)$/',  // UTC+5, UTC-8, UTC+5:30.
+			'/^GMT([+-]\d{1,2}(?::\d{2})?)$/',  // GMT+5, GMT-8, GMT+5:30.
+			'/^([+-]\d{1,2}(?::\d{2})?)$/',     // +5, -8, +5:30.
 		);
-		
+
 		foreach ( $offset_patterns as $pattern ) {
 			if ( preg_match( $pattern, $timezone, $matches ) ) {
-				$offset = $matches[1];
+				$offset              = $matches[1];
 				$geographic_timezone = $this->get_geographic_timezone_from_offset( $offset );
 				if ( $geographic_timezone ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -997,7 +1049,7 @@ class DataMapper {
 				}
 			}
 		}
-		
+
 		// If we can't convert it, use WordPress site timezone as fallback.
 		$wp_timezone = get_option( 'timezone_string' );
 		if ( ! empty( $wp_timezone ) ) {
@@ -1006,14 +1058,14 @@ class DataMapper {
 			}
 			return $wp_timezone;
 		}
-		
+
 		// Final fallback.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "Humanitix DataMapper: Using final fallback timezone: America/New_York" );
+			error_log( 'Humanitix DataMapper: Using final fallback timezone: America/New_York' );
 		}
 		return 'America/New_York';
 	}
-	
+
 	/**
 	 * Check if a timezone is a geographic timezone.
 	 *
@@ -1023,77 +1075,177 @@ class DataMapper {
 	private function is_geographic_timezone( $timezone ) {
 		// List of common geographic timezone patterns.
 		$geographic_patterns = array(
-			'/^[A-Z][a-z]+\/[A-Z][a-z_]+$/', // America/New_York, Europe/London
-			'/^[A-Z][a-z]+\/[A-Z][a-z]+\/[A-Z][a-z]+$/', // America/Indiana/Indianapolis
-			'/^[A-Z][a-z]+\/[A-Z][a-z]+$/', // Asia/Tokyo, Africa/Cairo
-			'/^[A-Z][a-z]+\/[A-Z][a-z]+\/[A-Z][a-z]+\/[A-Z][a-z]+$/', // America/Indiana/Indianapolis
+			'/^[A-Z][a-z]+\/[A-Z][a-z_]+$/', // America/New_York, Europe/London.
+			'/^[A-Z][a-z]+\/[A-Z][a-z]+\/[A-Z][a-z]+$/', // America/Indiana/Indianapolis.
+			'/^[A-Z][a-z]+\/[A-Z][a-z]+$/', // Asia/Tokyo, Africa/Cairo.
+			'/^[A-Z][a-z]+\/[A-Z][a-z]+\/[A-Z][a-z]+\/[A-Z][a-z]+$/', // America/Indiana/Indianapolis.
 		);
-		
+
 		foreach ( $geographic_patterns as $pattern ) {
 			if ( preg_match( $pattern, $timezone ) ) {
 				return true;
 			}
 		}
-		
+
 		// Check against a comprehensive list of known geographic timezones.
 		$known_geographic = array(
-			// America
-			'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-			'America/Toronto', 'America/Vancouver', 'America/Edmonton', 'America/Winnipeg',
-			'America/Mexico_City', 'America/Sao_Paulo', 'America/Argentina/Buenos_Aires',
-			'America/Santiago', 'America/Lima', 'America/Caracas', 'America/Bogota',
-			'America/Guayaquil', 'America/La_Paz', 'America/Asuncion', 'America/Montevideo',
-			'America/Guyana', 'America/Paramaribo', 'America/Cayenne',
-			
-			// Europe
-			'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
-			'Europe/Rome', 'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Brussels',
-			'Europe/Zurich', 'Europe/Vienna', 'Europe/Stockholm', 'Europe/Oslo',
-			'Europe/Copenhagen', 'Europe/Helsinki', 'Europe/Warsaw', 'Europe/Prague',
-			'Europe/Budapest', 'Europe/Bucharest', 'Europe/Sofia', 'Europe/Zagreb',
-			'Europe/Ljubljana', 'Europe/Bratislava', 'Europe/Vilnius', 'Europe/Riga',
-			'Europe/Tallinn', 'Europe/Dublin', 'Europe/Lisbon', 'Europe/Athens',
-			'Europe/Istanbul', 'Europe/Kiev', 'Europe/Minsk', 'Europe/Chisinau',
-			
-			// Asia
-			'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai',
-			'Asia/Seoul', 'Asia/Singapore', 'Asia/Kuala_Lumpur', 'Asia/Bangkok',
-			'Asia/Ho_Chi_Minh', 'Asia/Manila', 'Asia/Jakarta', 'Asia/Colombo',
-			'Asia/Dhaka', 'Asia/Kathmandu', 'Asia/Thimphu', 'Asia/Yangon',
-			'Asia/Vientiane', 'Asia/Phnom_Penh', 'Asia/Ulaanbaatar', 'Asia/Almaty',
-			'Asia/Tashkent', 'Asia/Bishkek', 'Asia/Dushanbe', 'Asia/Ashgabat',
-			'Asia/Kabul', 'Asia/Karachi', 'Asia/Tehran', 'Asia/Baghdad',
-			'Asia/Damascus', 'Asia/Beirut', 'Asia/Amman', 'Asia/Jerusalem',
-			'Asia/Gaza', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Bahrain',
-			'Asia/Kuwait', 'Asia/Muscat', 'Asia/Aden', 'Asia/Tbilisi',
-			'Asia/Yerevan', 'Asia/Baku', 'Asia/Nicosia',
-			
-			// Australia & Pacific
-			'Australia/Sydney', 'Australia/Melbourne', 'Australia/Perth',
-			'Australia/Brisbane', 'Australia/Adelaide', 'Australia/Darwin',
-			'Pacific/Auckland', 'Pacific/Honolulu', 'Pacific/Fiji',
-			'Pacific/Guadalcanal', 'Pacific/Midway', 'Pacific/Kwajalein',
-			
-			// Africa
-			'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi',
-			'Africa/Accra', 'Africa/Casablanca', 'Africa/Tunis', 'Africa/Algiers',
-			'Africa/Tripoli', 'Africa/Khartoum', 'Africa/Addis_Ababa', 'Africa/Kampala',
-			'Africa/Dar_es_Salaam', 'Africa/Lusaka', 'Africa/Harare', 'Africa/Gaborone',
-			'Africa/Windhoek', 'Africa/Johannesburg',
-			
-			// Indian Ocean
-			'Indian/Antananarivo', 'Indian/Mauritius', 'Indian/Mahe', 'Indian/Maldives',
-			
-			// Atlantic
-			'Atlantic/Azores', 'Atlantic/South_Georgia', 'Atlantic/Stanley',
-			
-			// Other
-			'Etc/UTC', 'Etc/Zulu', 'ZULU',
+			// America.
+			'America/New_York',
+			'America/Chicago',
+			'America/Denver',
+			'America/Los_Angeles',
+			'America/Toronto',
+			'America/Vancouver',
+			'America/Edmonton',
+			'America/Winnipeg',
+			'America/Mexico_City',
+			'America/Sao_Paulo',
+			'America/Argentina/Buenos_Aires',
+			'America/Santiago',
+			'America/Lima',
+			'America/Caracas',
+			'America/Bogota',
+			'America/Guayaquil',
+			'America/La_Paz',
+			'America/Asuncion',
+			'America/Montevideo',
+			'America/Guyana',
+			'America/Paramaribo',
+			'America/Cayenne',
+
+			// Europe.
+			'Europe/London',
+			'Europe/Paris',
+			'Europe/Berlin',
+			'Europe/Moscow',
+			'Europe/Rome',
+			'Europe/Madrid',
+			'Europe/Amsterdam',
+			'Europe/Brussels',
+			'Europe/Zurich',
+			'Europe/Vienna',
+			'Europe/Stockholm',
+			'Europe/Oslo',
+			'Europe/Copenhagen',
+			'Europe/Helsinki',
+			'Europe/Warsaw',
+			'Europe/Prague',
+			'Europe/Budapest',
+			'Europe/Bucharest',
+			'Europe/Sofia',
+			'Europe/Zagreb',
+			'Europe/Ljubljana',
+			'Europe/Bratislava',
+			'Europe/Vilnius',
+			'Europe/Riga',
+			'Europe/Tallinn',
+			'Europe/Dublin',
+			'Europe/Lisbon',
+			'Europe/Athens',
+			'Europe/Istanbul',
+			'Europe/Kiev',
+			'Europe/Minsk',
+			'Europe/Chisinau',
+
+			// Asia.
+			'Asia/Tokyo',
+			'Asia/Shanghai',
+			'Asia/Kolkata',
+			'Asia/Dubai',
+			'Asia/Seoul',
+			'Asia/Singapore',
+			'Asia/Kuala_Lumpur',
+			'Asia/Bangkok',
+			'Asia/Ho_Chi_Minh',
+			'Asia/Manila',
+			'Asia/Jakarta',
+			'Asia/Colombo',
+			'Asia/Dhaka',
+			'Asia/Kathmandu',
+			'Asia/Thimphu',
+			'Asia/Yangon',
+			'Asia/Vientiane',
+			'Asia/Phnom_Penh',
+			'Asia/Ulaanbaatar',
+			'Asia/Almaty',
+			'Asia/Tashkent',
+			'Asia/Bishkek',
+			'Asia/Dushanbe',
+			'Asia/Ashgabat',
+			'Asia/Kabul',
+			'Asia/Karachi',
+			'Asia/Tehran',
+			'Asia/Baghdad',
+			'Asia/Damascus',
+			'Asia/Beirut',
+			'Asia/Amman',
+			'Asia/Jerusalem',
+			'Asia/Gaza',
+			'Asia/Riyadh',
+			'Asia/Qatar',
+			'Asia/Bahrain',
+			'Asia/Kuwait',
+			'Asia/Muscat',
+			'Asia/Aden',
+			'Asia/Tbilisi',
+			'Asia/Yerevan',
+			'Asia/Baku',
+			'Asia/Nicosia',
+
+			// Australia & Pacific.
+			'Australia/Sydney',
+			'Australia/Melbourne',
+			'Australia/Perth',
+			'Australia/Brisbane',
+			'Australia/Adelaide',
+			'Australia/Darwin',
+			'Pacific/Auckland',
+			'Pacific/Honolulu',
+			'Pacific/Fiji',
+			'Pacific/Guadalcanal',
+			'Pacific/Midway',
+			'Pacific/Kwajalein',
+
+			// Africa.
+			'Africa/Cairo',
+			'Africa/Johannesburg',
+			'Africa/Lagos',
+			'Africa/Nairobi',
+			'Africa/Accra',
+			'Africa/Casablanca',
+			'Africa/Tunis',
+			'Africa/Algiers',
+			'Africa/Tripoli',
+			'Africa/Khartoum',
+			'Africa/Addis_Ababa',
+			'Africa/Kampala',
+			'Africa/Dar_es_Salaam',
+			'Africa/Lusaka',
+			'Africa/Harare',
+			'Africa/Gaborone',
+			'Africa/Windhoek',
+			'Africa/Johannesburg',
+
+			// Indian Ocean.
+			'Indian/Antananarivo',
+			'Indian/Mauritius',
+			'Indian/Mahe',
+			'Indian/Maldives',
+
+			// Atlantic.
+			'Atlantic/Azores',
+			'Atlantic/South_Georgia',
+			'Atlantic/Stanley',
+
+			// Other.
+			'Etc/UTC',
+			'Etc/Zulu',
+			'ZULU',
 		);
-		
+
 		return in_array( $timezone, $known_geographic );
 	}
-	
+
 	/**
 	 * Get geographic timezone from UTC offset.
 	 *
@@ -1103,7 +1255,7 @@ class DataMapper {
 	private function get_geographic_timezone_from_offset( $offset ) {
 		// Map common UTC offsets to geographic timezones.
 		$offset_map = array(
-			// Positive offsets
+			// Positive offsets.
 			'+0'     => 'Europe/London',
 			'+1'     => 'Europe/Paris',
 			'+2'     => 'Europe/Helsinki',
@@ -1118,10 +1270,10 @@ class DataMapper {
 			'+10'    => 'Australia/Sydney',
 			'+11'    => 'Pacific/Guadalcanal',
 			'+12'    => 'Pacific/Auckland',
-			'+13'    => 'Pacific/Auckland', // During daylight saving
+			'+13'    => 'Pacific/Auckland', // During daylight saving.
 			'+14'    => 'Pacific/Kiritimati',
-			
-			// Negative offsets
+
+			// Negative offsets.
 			'-1'     => 'Atlantic/Azores',
 			'-2'     => 'Atlantic/South_Georgia',
 			'-3'     => 'America/Sao_Paulo',
@@ -1134,8 +1286,8 @@ class DataMapper {
 			'-10'    => 'Pacific/Honolulu',
 			'-11'    => 'Pacific/Midway',
 			'-12'    => 'Pacific/Kwajalein',
-			
-			// Half-hour offsets
+
+			// Half-hour offsets.
 			'+3:30'  => 'Asia/Tehran',
 			'+4:30'  => 'Asia/Kabul',
 			'+6:30'  => 'Asia/Yangon',
@@ -1148,7 +1300,7 @@ class DataMapper {
 			'-4:30'  => 'America/Caracas',
 			'-9:30'  => 'Pacific/Marquesas',
 		);
-		
+
 		return isset( $offset_map[ $offset ] ) ? $offset_map[ $offset ] : false;
 	}
 
@@ -1317,15 +1469,15 @@ class DataMapper {
 	 */
 	private function convert_utc_to_timezone( $utc_datetime, $timezone ) {
 		try {
-			// Create DateTime object from UTC string
+			// Create DateTime object from UTC string.
 			$utc_date = new \DateTime( $utc_datetime, new \DateTimeZone( 'UTC' ) );
-			
-			// Convert to target timezone
+
+			// Convert to target timezone.
 			$utc_date->setTimezone( new \DateTimeZone( $timezone ) );
-			
+
 			return $utc_date->format( 'Y-m-d H:i:s' );
 		} catch ( \Exception $e ) {
-			// Fallback to simple conversion if DateTime fails
+			// Fallback to simple conversion if DateTime fails.
 			$timestamp = strtotime( $utc_datetime );
 			if ( false !== $timestamp ) {
 				return date( 'Y-m-d H:i:s', $timestamp );

@@ -42,7 +42,7 @@ class DebugHelper {
 	 * @param Logger $logger The logger instance.
 	 */
 	public function __construct( Logger $logger ) {
-		$this->logger = $logger;
+		$this->logger        = $logger;
 		$this->debug_enabled = defined( 'WP_DEBUG' ) && WP_DEBUG;
 	}
 
@@ -60,7 +60,7 @@ class DebugHelper {
 		}
 
 		$message = sprintf( '[%s] %s', strtoupper( $component ), $action );
-		
+
 		$this->logger->log( $level, $message, $context );
 	}
 
@@ -74,13 +74,13 @@ class DebugHelper {
 	 */
 	public function log_api_request( $endpoint, $request_data = array(), $response_data = array(), $status_code = null ) {
 		$context = array(
-			'endpoint'     => $endpoint,
-			'status_code'  => $status_code,
-			'request_size' => is_array( $request_data ) ? count( $request_data ) : 0,
+			'endpoint'      => $endpoint,
+			'status_code'   => $status_code,
+			'request_size'  => is_array( $request_data ) ? count( $request_data ) : 0,
 			'response_size' => is_array( $response_data ) ? count( $response_data ) : 0,
 		);
 
-		// Only include actual data if it's small and relevant
+		// Only include actual data if it's small and relevant.
 		if ( ! empty( $request_data ) && count( $request_data ) <= 5 ) {
 			$context['request_data'] = $this->sanitize_debug_data( $request_data );
 		}
@@ -120,8 +120,8 @@ class DebugHelper {
 	 */
 	public function log_event_status( $event_name, $post_id, $action, $context = array() ) {
 		$context['post_id'] = $post_id;
-		$context['action'] = $action;
-		
+		$context['action']  = $action;
+
 		$this->log( 'Importer', "Event {$action}: {$event_name} (ID: {$post_id})", $context );
 	}
 
@@ -135,11 +135,11 @@ class DebugHelper {
 	 */
 	public function log_venue_processing( $venue_name, $venue_id = null, $action = 'process', $venue_data = array() ) {
 		$context = array(
-			'venue_name' => $venue_name,
-			'venue_id'   => $venue_id,
-			'action'     => $action,
+			'venue_name'  => $venue_name,
+			'venue_id'    => $venue_id,
+			'action'      => $action,
 			'has_address' => isset( $venue_data['address'] ),
-			'has_coords' => isset( $venue_data['latLng'] ) || isset( $venue_data['lat_lng'] ),
+			'has_coords'  => isset( $venue_data['latLng'] ) || isset( $venue_data['lat_lng'] ),
 		);
 
 		$this->log( 'Venue', "{$action} venue: {$venue_name}", $context );
@@ -155,9 +155,9 @@ class DebugHelper {
 	 */
 	public function log_data_mapping( $source_field, $target_field, $value = null, $component = 'DataMapper' ) {
 		$context = array(
-			'source_field' => $source_field,
-			'target_field' => $target_field,
-			'value_type'   => gettype( $value ),
+			'source_field'  => $source_field,
+			'target_field'  => $target_field,
+			'value_type'    => gettype( $value ),
 			'value_preview' => $this->get_value_preview( $value ),
 		);
 
@@ -187,14 +187,14 @@ class DebugHelper {
 	 * @param array  $context Additional error context.
 	 */
 	public function log_critical_error( $component, $error_message, $context = array() ) {
-		$context['error_type'] = 'critical';
-		$context['timestamp']  = current_time( 'mysql' );
+		$context['error_type']    = 'critical';
+		$context['timestamp']     = current_time( 'mysql' );
 		$context['admin_visible'] = true;
 
-		// Log to both debug and admin interface
+		// Log to both debug and admin interface.
 		$this->log( $component, "CRITICAL: {$error_message}", $context, 'error' );
-		
-		// Also log to admin interface for immediate visibility
+
+		// Also log to admin interface for immediate visibility.
 		$this->logger->log( 'error', "CRITICAL ERROR: {$error_message}", $context );
 	}
 
@@ -223,16 +223,16 @@ class DebugHelper {
 	 */
 	public function log_import_summary( $total_events, $imported_count, $skipped_count = 0, $errors = array(), $duration = 0 ) {
 		$context = array(
-			'total_events'    => $total_events,
-			'imported_count'  => $imported_count,
-			'skipped_count'   => $skipped_count,
-			'error_count'     => count( $errors ),
-			'duration'        => $duration,
-			'success_rate'    => $total_events > 0 ? round( ( $imported_count / $total_events ) * 100, 2 ) : 0,
+			'total_events'   => $total_events,
+			'imported_count' => $imported_count,
+			'skipped_count'  => $skipped_count,
+			'error_count'    => count( $errors ),
+			'duration'       => $duration,
+			'success_rate'   => $total_events > 0 ? round( ( $imported_count / $total_events ) * 100, 2 ) : 0,
 		);
 
 		if ( ! empty( $errors ) ) {
-			$context['errors'] = array_slice( $errors, 0, 5 ); // Limit to first 5 errors
+			$context['errors'] = array_slice( $errors, 0, 5 ); // Limit to first 5 errors.
 		}
 
 		$this->log( 'Import', "Summary: {$imported_count}/{$total_events} imported", $context, 'info' );
@@ -265,7 +265,7 @@ class DebugHelper {
 		if ( is_array( $data ) ) {
 			$sanitized = array();
 			foreach ( $data as $key => $value ) {
-				// Redact sensitive keys
+				// Redact sensitive keys.
 				if ( in_array( strtolower( $key ), array( 'api_key', 'password', 'token', 'secret' ), true ) ) {
 					$sanitized[ $key ] = '[REDACTED]';
 				} else {
@@ -332,14 +332,14 @@ class DebugHelper {
 			return;
 		}
 
-		$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
+		$log_file  = WP_CONTENT_DIR . '/humanitix-debug.log';
 		$timestamp = current_time( 'mysql' );
-		
+
 		$log_entries = array();
 		foreach ( $messages as $message ) {
 			$log_entries[] = "[{$timestamp}] " . $message;
 		}
-		
+
 		file_put_contents( $log_file, implode( "\n", $log_entries ) . "\n", FILE_APPEND | LOCK_EX );
 	}
 
@@ -352,14 +352,14 @@ class DebugHelper {
 	 * @param string $level The log level.
 	 */
 	public function log_optimized( $component, $action, $context = array(), $level = 'debug' ) {
-		// Only log critical errors to database
-		if ( $level === 'error' || $level === 'critical' ) {
+		// Only log critical errors to database.
+		if ( 'error' === $level || 'critical' === $level ) {
 			$this->log( $component, $action, $context, $level );
 		} else {
-			// Log to file for performance
-			$message = sprintf( '[%s] %s', strtoupper( $component ), $action );
-			$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
-			$timestamp = current_time( 'mysql' );
+			// Log to file for performance.
+			$message     = sprintf( '[%s] %s', strtoupper( $component ), $action );
+			$log_file    = WP_CONTENT_DIR . '/humanitix-debug.log';
+			$timestamp   = current_time( 'mysql' );
 			$context_str = ! empty( $context ) ? ' | ' . wp_json_encode( $context ) : '';
 			file_put_contents( $log_file, "[{$timestamp}] {$message}{$context_str}\n", FILE_APPEND | LOCK_EX );
 		}
@@ -371,7 +371,7 @@ class DebugHelper {
 	 * @return bool Whether to use optimized logging.
 	 */
 	public function should_use_optimized_logging() {
-		// Use optimized logging by default, unless explicitly disabled
+		// Use optimized logging by default, unless explicitly disabled.
 		return PerformanceConfig::is_optimized_logging_enabled();
 	}
 
@@ -390,4 +390,4 @@ class DebugHelper {
 			$this->log( $component, $action, $context, $level );
 		}
 	}
-} 
+}

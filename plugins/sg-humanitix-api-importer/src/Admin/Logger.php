@@ -245,16 +245,16 @@ class Logger {
 	 */
 	public function cleanup_debug_log( $max_size_mb = 10 ) {
 		$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
-		
+
 		if ( ! file_exists( $log_file ) ) {
 			return true;
 		}
 
 		$file_size = filesize( $log_file );
-		$max_size  = $max_size_mb * 1024 * 1024; // Convert MB to bytes
+		$max_size  = $max_size_mb * 1024 * 1024; // Convert MB to bytes.
 
 		if ( $file_size > $max_size ) {
-			// Keep only the last 1000 lines
+			// Keep only the last 1000 lines.
 			$lines = file( $log_file );
 			$lines = array_slice( $lines, -1000 );
 			file_put_contents( $log_file, implode( '', $lines ) );
@@ -267,7 +267,7 @@ class Logger {
 	/**
 	 * Log a concise import summary
 	 *
-	 * @param int $imported_count Number of events imported.
+	 * @param int   $imported_count Number of events imported.
 	 * @param array $errors Array of error messages.
 	 * @param float $duration Import duration in seconds.
 	 */

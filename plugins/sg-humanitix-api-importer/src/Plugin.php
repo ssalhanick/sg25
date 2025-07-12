@@ -374,8 +374,8 @@ class Plugin {
 		}
 
 		// Future version updates would go here.
-		// if (version_compare($from_version, '1.1.0', '<')) {
+		// if (version_compare($from_version, '1.1.0', '<')) {.
 		// Add new columns, etc.
-		// }
+		// }.
 	}
 }

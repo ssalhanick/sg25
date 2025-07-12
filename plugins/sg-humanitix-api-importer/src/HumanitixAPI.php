@@ -143,7 +143,7 @@ class HumanitixAPI {
 			'issues'      => $issues,
 			'suggestions' => $suggestions,
 			'length'      => strlen( $cleaned_key ),
-			'preview'     => '[REDACTED]', // Don't expose API key preview
+			'preview'     => '[REDACTED]', // Don't expose API key preview.
 		);
 	}
 
@@ -513,15 +513,19 @@ class HumanitixAPI {
 	 * @return array|WP_Error Events data or error.
 	 */
 	public function get_events( $page = 1 ) {
-		// Initialize debug helper
-		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
+		// Initialize debug helper.
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
-		
-		$debug_helper->log( 'API', "get_events called with page: {$page}", array(
-			'endpoint' => $this->api_endpoint,
-			'has_api_key' => ! empty( $this->api_key ),
-			'has_org_id' => ! empty( $this->org_id ),
-		) );
+
+		$debug_helper->log(
+			'API',
+			"get_events called with page: {$page}",
+			array(
+				'endpoint'    => $this->api_endpoint,
+				'has_api_key' => ! empty( $this->api_key ),
+				'has_org_id'  => ! empty( $this->org_id ),
+			)
+		);
 
 		$params = array(
 			'page' => max( 1, absint( $page ) ),
@@ -540,25 +544,29 @@ class HumanitixAPI {
 
 			$response = $this->make_request( 'GET', $endpoint, $params );
 
-					if ( is_wp_error( $response ) ) {
-			$debug_helper->log_critical_error( 'API', "Endpoint {$endpoint} returned WP_Error: " . $response->get_error_message(), array(
-				'endpoint' => $endpoint,
-				'error_message' => $response->get_error_message(),
-			) );
-			continue; // Try next endpoint.
-		}
+			if ( is_wp_error( $response ) ) {
+				$debug_helper->log_critical_error(
+					'API',
+					"Endpoint {$endpoint} returned WP_Error: " . $response->get_error_message(),
+					array(
+						'endpoint'      => $endpoint,
+						'error_message' => $response->get_error_message(),
+					)
+				);
+				continue; // Try next endpoint.
+			}
 
 			// Handle different response formats.
 			$events = array();
 			if ( isset( $response['data'] ) ) {
 				$events = $response['data'];
-				$debug_helper->log( 'API', "Found events in response[data]: " . count( $events ) . ' events' );
+				$debug_helper->log( 'API', 'Found events in response[data]: ' . count( $events ) . ' events' );
 			} elseif ( isset( $response['events'] ) ) {
 				$events = $response['events'];
-				$debug_helper->log( 'API', "Found events in response[events]: " . count( $events ) . ' events' );
+				$debug_helper->log( 'API', 'Found events in response[events]: ' . count( $events ) . ' events' );
 			} elseif ( is_array( $response ) ) {
 				$events = $response;
-				$debug_helper->log( 'API', "Response is array with " . count( $events ) . ' items' );
+				$debug_helper->log( 'API', 'Response is array with ' . count( $events ) . ' items' );
 			}
 
 			if ( ! empty( $events ) ) {
@@ -604,18 +612,22 @@ class HumanitixAPI {
 	 * @return array|WP_Error Response data or error.
 	 */
 	private function make_request( $method, $endpoint, $params = array(), $is_test = false ) {
-		// Initialize debug helper
-		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
+		// Initialize debug helper.
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
-		
+
 		$url = trailingslashit( $this->api_endpoint ) . ltrim( $endpoint, '/' );
-		
-		$debug_helper->log( 'API', "Making request to {$endpoint}", array(
-			'url' => $url,
-			'method' => $method,
-			'params_count' => count( $params ),
-			'is_test' => $is_test,
-		) );
+
+		$debug_helper->log(
+			'API',
+			"Making request to {$endpoint}",
+			array(
+				'url'          => $url,
+				'method'       => $method,
+				'params_count' => count( $params ),
+				'is_test'      => $is_test,
+			)
+		);
 
 		$headers = array(
 			'x-api-key'    => $this->api_key,  // Humanitix API expects x-api-key header.
@@ -649,22 +661,30 @@ class HumanitixAPI {
 		$response = wp_remote_request( $url, $args );
 
 		if ( is_wp_error( $response ) ) {
-			$debug_helper->log_critical_error( 'API', 'wp_remote_request returned WP_Error: ' . $response->get_error_message(), array(
-				'url' => $url,
-				'method' => $method,
-				'error_message' => $response->get_error_message(),
-			) );
+			$debug_helper->log_critical_error(
+				'API',
+				'wp_remote_request returned WP_Error: ' . $response->get_error_message(),
+				array(
+					'url'           => $url,
+					'method'        => $method,
+					'error_message' => $response->get_error_message(),
+				)
+			);
 			return $response;
 		}
 
 		$status_code = wp_remote_retrieve_response_code( $response );
 		$body        = wp_remote_retrieve_body( $response );
 
-		$debug_helper->log( 'API', "Response received", array(
-			'status_code' => $status_code,
-			'body_length' => strlen( $body ),
-			'body_preview' => substr( $body, 0, 200 ),
-		) );
+		$debug_helper->log(
+			'API',
+			'Response received',
+			array(
+				'status_code'  => $status_code,
+				'body_length'  => strlen( $body ),
+				'body_preview' => substr( $body, 0, 200 ),
+			)
+		);
 
 		// For test requests, return the full response for debugging.
 		if ( $is_test ) {
@@ -674,19 +694,27 @@ class HumanitixAPI {
 		$data = json_decode( $body, true );
 
 		if ( json_last_error() !== JSON_ERROR_NONE ) {
-			$debug_helper->log_critical_error( 'API', 'JSON decode error: ' . json_last_error_msg(), array(
-				'body_preview' => substr( $body, 0, 200 ),
-				'json_error' => json_last_error_msg(),
-			) );
+			$debug_helper->log_critical_error(
+				'API',
+				'JSON decode error: ' . json_last_error_msg(),
+				array(
+					'body_preview' => substr( $body, 0, 200 ),
+					'json_error'   => json_last_error_msg(),
+				)
+			);
 			return new \WP_Error( 'json_error', 'Invalid JSON response from API: ' . $body );
 		}
 
-		$debug_helper->log( 'API', 'Data decoded successfully', array(
-			'data_type' => gettype( $data ),
-			'is_array' => is_array( $data ),
-			'array_count' => is_array( $data ) ? count( $data ) : 0,
-		) );
-		
+		$debug_helper->log(
+			'API',
+			'Data decoded successfully',
+			array(
+				'data_type'   => gettype( $data ),
+				'is_array'    => is_array( $data ),
+				'array_count' => is_array( $data ) ? count( $data ) : 0,
+			)
+		);
+
 		return $data;
 	}
 
@@ -767,8 +795,8 @@ class HumanitixAPI {
 		}
 
 		// Humanitix API doesn't provide schema endpoints, so return a helpful error.
-		return new \WP_Error( 
-			'schema_not_found', 
+		return new \WP_Error(
+			'schema_not_found',
 			'The Humanitix API does not provide OpenAPI/Swagger schema endpoints. This is normal and expected. The plugin will analyze the actual event data structure instead.'
 		);
 	}

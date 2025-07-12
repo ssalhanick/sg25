@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Define constants.
 define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_FILE', __FILE__ );
 define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH', untrailingslashit( plugin_dir_path( __FILE__ ) ) );
-// Note: Other constants are defined in Plugin.php to avoid conflicts
+// Note: Other constants are defined in Plugin.php to avoid conflicts.
 
 // Composer autoloader.
 if ( file_exists( SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/vendor/autoload.php' ) ) {
