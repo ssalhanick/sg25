@@ -50,6 +50,15 @@ wp-links-opml.php
 wp-mail.php
 wp-trackback.php
 xmlrpc.php
+# Wordpress themes (temp)
+themes/twentytwentyfive
+# Wordpress themes (perm)
+themes/sg-twentytwenty-child
+themes/twentytwentyfour
+themes/twentytwentythree
+themes/twentytwentytwo
+themes/twentytwentyone
+themes/twentytwenty
 
 # Ignore environment and config files
 .env
@@ -86,6 +95,14 @@ access_log
 *.bak
 *~
 
+# Plugins to Ignore
+plugins/events-calendar-pro/
+plugins/the-events-calendar/
+plugins/plugin-scaffolding/
+
+# Themes to Ignore
+themes/sg-twentytwenty-child/
+
 # Database files
 *.sql
 *.sqlite
@@ -93,3 +110,5 @@ access_log
 
 # here's a test comment for commit
 plugins/plugin-scaffolding/
+plugins/the-events-calendar/
+plugins/events-calendar-pro/
