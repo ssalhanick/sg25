@@ -3,7 +3,11 @@
  * Humanitix API Schema Analyzer
  *
  * This script analyzes the Humanitix API structure and suggests field mappings.
+<<<<<<< Updated upstream
  * Run this from the command line: php schema-analyzer.php
+=======
+ * Run this from the command line: php schema-analyzer.php [--limit=N]
+>>>>>>> Stashed changes
  *
  * @package SG\HumanitixApiImporter
  */
@@ -16,7 +20,25 @@ if ( php_sapi_name() !== 'cli' ) {
 	die( 'This script must be run from the command line.' );
 }
 
+<<<<<<< Updated upstream
 echo "=== Humanitix API Schema Analyzer ===\n\n";
+=======
+// Parse command line arguments.
+$sg_limit = 10; // Default to 10 events
+foreach ( $argv as $sg_arg ) {
+	if ( strpos( $sg_arg, '--limit=' ) === 0 ) {
+		$sg_limit = (int) substr( $sg_arg, 8 );
+		if ( $sg_limit < 1 ) {
+			$sg_limit = 1;
+		} elseif ( $sg_limit > 50 ) {
+			$sg_limit = 50;
+		}
+	}
+}
+
+echo "=== Humanitix API Schema Analyzer ===\n\n";
+echo "Analyzing up to {$sg_limit} events...\n\n";
+>>>>>>> Stashed changes
 
 // Get API settings from WordPress admin.
 $sg_options      = get_option( 'humanitix_importer_options', array() );
@@ -77,8 +99,14 @@ try {
 	$sg_schema_result = $sg_api->get_schema_info();
 
 	if ( is_wp_error( $sg_schema_result ) ) {
+<<<<<<< Updated upstream
 		echo '⚠️  Could not retrieve API schema: ' . esc_html( $sg_schema_result->get_error_message() ) . "\n";
 		echo "This is normal for mock servers or APIs without schema endpoints.\n\n";
+=======
+		echo 'ℹ️  API schema not available: ' . esc_html( $sg_schema_result->get_error_message() ) . "\n";
+		echo "This is expected for the Humanitix API, which doesn't provide OpenAPI/Swagger schema endpoints.\n";
+		echo "The schema analysis will continue using sample event data instead.\n\n";
+>>>>>>> Stashed changes
 	} else {
 		echo '✅ API schema retrieved from: ' . esc_html( $sg_schema_result['endpoint'] ) . "\n";
 		echo 'Schema type: ' . esc_html( $sg_schema_result['description'] ) . "\n\n";
@@ -96,8 +124,35 @@ try {
 		}
 	}
 
+<<<<<<< Updated upstream
 	echo "3. Attempting to get sample events...\n";
 	$sg_sample_result = $sg_api->get_sample_events( 3 );
+=======
+	// Provide information about Humanitix API structure.
+	echo "Humanitix API Information:\n";
+	echo "  Base URL: https://api.humanitix.com/v1\n";
+	echo "  Authentication: x-api-key header\n";
+	echo "  Organization scoping: Required via header or query parameter\n";
+	echo "  Main endpoints:\n";
+	echo "    - GET /events - List events for organization\n";
+	echo "    - GET /events/{id} - Get specific event details\n";
+	echo "    - GET /venues - List venues for organization\n";
+	echo "    - GET /organizers - List organizers for organization\n";
+	echo "  Event data includes:\n";
+	echo "    - name: Event title\n";
+	echo "    - description: Event description\n";
+	echo "    - startDate: Start date/time (ISO 8601 format, e.g., '2021-02-01T23:26:13.485Z')\n";
+	echo "    - endDate: End date/time (ISO 8601 format)\n";
+	echo "    - timezone: Event timezone (e.g., 'Pacific/Auckland')\n";
+	echo "    - venue: Venue information\n";
+	echo "    - organizer: Organizer information\n";
+	echo "    - ticketTypes: Ticket information\n";
+	echo "    - images: Event images\n";
+	echo "  Series events: Supported with recurrence rules and instance tracking\n\n";
+
+	echo "3. Attempting to get sample events...\n";
+	$sg_sample_result = $sg_api->get_sample_events( $sg_limit );
+>>>>>>> Stashed changes
 
 	if ( is_wp_error( $sg_sample_result ) ) {
 		echo '❌ Could not retrieve sample events: ' . esc_html( $sg_sample_result->get_error_message() ) . "\n";
@@ -214,6 +269,14 @@ try {
 	echo "5. Summary and recommendations:\n";
 	echo "✅ Schema analysis completed successfully!\n\n";
 
+<<<<<<< Updated upstream
+=======
+	echo "Usage:\n";
+	echo "  php schema-analyzer.php              # Analyze 10 events (default)\n";
+	echo "  php schema-analyzer.php --limit=5    # Analyze 5 events\n";
+	echo "  php schema-analyzer.php --limit=20   # Analyze 20 events (max 50)\n\n";
+
+>>>>>>> Stashed changes
 	echo "Next steps:\n";
 	echo "1. Review the field mappings above\n";
 	echo "2. Customize the DataMapper class if needed\n";

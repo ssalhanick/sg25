@@ -95,6 +95,14 @@ access_log
 *.bak
 *~
 
+# Plugins to Ignore
+plugins/events-calendar-pro/
+plugins/the-events-calendar/
+plugins/plugin-scaffolding/
+
+# Themes to Ignore
+themes/sg-twentytwenty-child/
+
 # Database files
 *.sql
 *.sqlite

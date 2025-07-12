@@ -238,6 +238,66 @@ class Logger {
 	}
 
 	/**
+<<<<<<< Updated upstream
+=======
+	 * Clean up debug log file
+	 *
+	 * @param int $max_size_mb Maximum size in MB before cleanup.
+	 * @return bool Whether cleanup was successful.
+	 */
+	public function cleanup_debug_log( $max_size_mb = 10 ) {
+		$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
+		
+		if ( ! file_exists( $log_file ) ) {
+			return true;
+		}
+
+		$file_size = filesize( $log_file );
+		$max_size  = $max_size_mb * 1024 * 1024; // Convert MB to bytes
+
+		if ( $file_size > $max_size ) {
+			// Keep only the last 1000 lines
+			$lines = file( $log_file );
+			$lines = array_slice( $lines, -1000 );
+			file_put_contents( $log_file, implode( '', $lines ) );
+			return true;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Log a concise import summary
+	 *
+	 * @param int $imported_count Number of events imported.
+	 * @param array $errors Array of error messages.
+	 * @param float $duration Import duration in seconds.
+	 */
+	public function log_import_summary( $imported_count, $errors = array(), $duration = 0 ) {
+		$message = sprintf(
+			'Import completed: %d events imported in %.2f seconds',
+			$imported_count,
+			$duration
+		);
+
+		if ( ! empty( $errors ) ) {
+			$message .= sprintf( ' (%d errors)', count( $errors ) );
+		}
+
+		$this->log(
+			'import',
+			$message,
+			array(
+				'imported_count' => $imported_count,
+				'error_count'    => count( $errors ),
+				'errors'         => $errors,
+				'duration'       => $duration,
+			)
+		);
+	}
+
+	/**
+>>>>>>> Stashed changes
 	 * Get total log count
 	 */
 	public function get_total_count() {
