@@ -60,6 +60,9 @@ class AdminInterface {
 	 * @param SettingsManager $settings The settings manager instance.
 	 */
 	public function __construct( $importer = null, SettingsManager $settings = null ) {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] AdminInterface constructor called' );
+		}
 		$this->importer         = $importer;
 		$this->settings         = $settings ?? new SettingsManager();
 		$this->logger           = new Logger();
@@ -91,6 +94,21 @@ class AdminInterface {
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
+		
+		// Add a standalone test page
+		add_action( 'admin_menu', function() {
+			add_menu_page(
+				'Humanitix Test',
+				'Humanitix Test',
+				'manage_options',
+				'humanitix-test-standalone',
+				function() {
+					echo '<div class="wrap"><h1>Humanitix Test Page</h1><p>If you can see this, the plugin is working.</p></div>';
+				},
+				'dashicons-calendar-alt',
+				31
+			);
+		});
 	}
 
 	/**
@@ -100,6 +118,13 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function add_admin_menu() {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Adding admin menu' );
+			error_log( '[sg-humanitix-api-importer] Current user ID: ' . get_current_user_id() );
+			error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
+			error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
+		}
+		
 		add_menu_page(
 			'Humanitix Importer',
 			'Humanitix',
@@ -115,7 +140,7 @@ class AdminInterface {
 			'Settings',
 			'Settings',
 			'manage_options',
-			'humanitix-settings',
+			'humanitix-importer-settings',
 			array( $this, 'render_settings_page' )
 		);
 
@@ -148,6 +173,22 @@ class AdminInterface {
 			'humanitix-importer-dashboard',
 			array( $this, 'render_dashboard_page' )
 		);
+		
+		// Add a test menu page with lower permissions for debugging
+		add_submenu_page(
+			'humanitix-importer',
+			'Test Page',
+			'Test Page',
+			'edit_posts',
+			'humanitix-test',
+			function() {
+				echo '<div class="wrap"><h1>Test Page</h1><p>If you can see this, menu registration is working.</p></div>';
+			}
+		);
+		
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
+		}
 	}
 
 	/**
