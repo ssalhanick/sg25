@@ -141,7 +141,8 @@ class AdminInterface {
 			'Settings',
 			'manage_options',
 			'humanitix-importer-settings',
-			array( $this, 'render_settings_page' )
+			array( $this, 'render_settings_page' ),
+			10
 		);
 
 		// Only show debug page to plugin authors or when debug is enabled.
@@ -152,7 +153,8 @@ class AdminInterface {
 				'Debug',
 				'manage_options',
 				'humanitix-debug',
-				array( $this, 'render_debug_page' )
+				array( $this, 'render_debug_page' ),
+				20
 			);
 		}
 
@@ -162,7 +164,8 @@ class AdminInterface {
 			'Import Logs',
 			'manage_options',
 			'humanitix-importer-logs',
-			array( $this, 'render_logs_page' )
+			array( $this, 'render_logs_page' ),
+			30
 		);
 
 		add_submenu_page(
@@ -171,7 +174,8 @@ class AdminInterface {
 			'Dashboard',
 			'manage_options',
 			'humanitix-importer-dashboard',
-			array( $this, 'render_dashboard_page' )
+			array( $this, 'render_dashboard_page' ),
+			40
 		);
 		
 		// Add a test menu page with lower permissions for debugging
@@ -183,7 +187,8 @@ class AdminInterface {
 			'humanitix-test',
 			function() {
 				echo '<div class="wrap"><h1>Test Page</h1><p>If you can see this, menu registration is working.</p></div>';
-			}
+			},
+			50
 		);
 		
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

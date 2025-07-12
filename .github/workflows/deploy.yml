@@ -544,7 +544,6 @@ jobs:
             --exclude='.eslintrc*' \
             --exclude='.prettierrc*' \
             --exclude='.stylelintrc*' \
-            --exclude='src' \
             --exclude='assets/src' \
             ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes dry run failed"
@@ -701,7 +700,6 @@ jobs:
             --exclude='.eslintrc*' \
             --exclude='.prettierrc*' \
             --exclude='.stylelintrc*' \
-            --exclude='src' \
             --exclude='assets/src' \
             ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins dry run failed"
@@ -736,7 +734,6 @@ jobs:
               --exclude='.eslintrc*' \
               --exclude='.prettierrc*' \
               --exclude='.stylelintrc*' \
-              --exclude='src' \
               --exclude='assets/src' \
               ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
             echo "::endgroup::"
@@ -780,7 +777,6 @@ jobs:
             --exclude='.eslintrc*' \
             --exclude='.prettierrc*' \
             --exclude='.stylelintrc*' \
-            --exclude='src' \
             --exclude='assets/src' \
             ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins deployment failed"
@@ -815,7 +811,6 @@ jobs:
               --exclude='.eslintrc*' \
               --exclude='.prettierrc*' \
               --exclude='.stylelintrc*' \
-              --exclude='src' \
               --exclude='assets/src' \
               ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH
             echo "::endgroup::"
