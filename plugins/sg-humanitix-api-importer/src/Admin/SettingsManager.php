@@ -238,7 +238,7 @@ class SettingsManager {
 		$options = get_option( $this->options_name, array() );
 		$api_key = $options['api_key'] ?? '';
 
-		// Validate API key if it exists
+		// Validate API key if it exists.
 		$validation_message = '';
 		$validation_class   = '';
 
