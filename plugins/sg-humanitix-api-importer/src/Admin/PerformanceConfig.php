@@ -27,11 +27,11 @@ class PerformanceConfig {
 	 */
 	public static function get_settings() {
 		return array(
-			'optimized_logging' => ! defined( 'HUMANITIX_OPTIMIZED_LOGGING' ) || HUMANITIX_OPTIMIZED_LOGGING,
+			'optimized_logging'     => ! defined( 'HUMANITIX_OPTIMIZED_LOGGING' ) || HUMANITIX_OPTIMIZED_LOGGING,
 			'enable_image_download' => defined( 'HUMANITIX_ENABLE_IMAGE_DOWNLOAD' ) && HUMANITIX_ENABLE_IMAGE_DOWNLOAD,
-			'batch_size' => defined( 'HUMANITIX_BATCH_SIZE' ) ? HUMANITIX_BATCH_SIZE : 25,
-			'enable_caching' => ! defined( 'HUMANITIX_DISABLE_CACHING' ) || HUMANITIX_DISABLE_CACHING,
-			'log_to_file' => ! defined( 'HUMANITIX_DISABLE_FILE_LOGGING' ) || HUMANITIX_DISABLE_FILE_LOGGING,
+			'batch_size'            => defined( 'HUMANITIX_BATCH_SIZE' ) ? HUMANITIX_BATCH_SIZE : 25,
+			'enable_caching'        => ! defined( 'HUMANITIX_DISABLE_CACHING' ) || HUMANITIX_DISABLE_CACHING,
+			'log_to_file'           => ! defined( 'HUMANITIX_DISABLE_FILE_LOGGING' ) || HUMANITIX_DISABLE_FILE_LOGGING,
 		);
 	}
 
@@ -87,11 +87,11 @@ class PerformanceConfig {
 	 */
 	public static function get_high_performance_settings() {
 		return array(
-			'HUMANITIX_OPTIMIZED_LOGGING' => true,
+			'HUMANITIX_OPTIMIZED_LOGGING'     => true,
 			'HUMANITIX_ENABLE_IMAGE_DOWNLOAD' => false,
-			'HUMANITIX_BATCH_SIZE' => 50,
-			'HUMANITIX_DISABLE_CACHING' => false,
-			'HUMANITIX_DISABLE_FILE_LOGGING' => false,
+			'HUMANITIX_BATCH_SIZE'            => 50,
+			'HUMANITIX_DISABLE_CACHING'       => false,
+			'HUMANITIX_DISABLE_FILE_LOGGING'  => false,
 		);
 	}
 
@@ -102,11 +102,11 @@ class PerformanceConfig {
 	 */
 	public static function get_debug_settings() {
 		return array(
-			'HUMANITIX_OPTIMIZED_LOGGING' => false,
+			'HUMANITIX_OPTIMIZED_LOGGING'     => false,
 			'HUMANITIX_ENABLE_IMAGE_DOWNLOAD' => true,
-			'HUMANITIX_BATCH_SIZE' => 5,
-			'HUMANITIX_DISABLE_CACHING' => false,
-			'HUMANITIX_DISABLE_FILE_LOGGING' => false,
+			'HUMANITIX_BATCH_SIZE'            => 5,
+			'HUMANITIX_DISABLE_CACHING'       => false,
+			'HUMANITIX_DISABLE_FILE_LOGGING'  => false,
 		);
 	}
-} 
+}

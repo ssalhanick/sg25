@@ -10,8 +10,8 @@
 		"svg": "svgr -d assets/src/js/icons assets/src/icons",
 		"lint:php": "vendor\\bin\\phpcs --report=full",
 		"lint:php:fix": "vendor\\bin\\phpcbf",
-		"lint": "eslint assets/src/js/**/*.js",
-		"lint:fix": "eslint --fix assets/src/js/**/*.js",
+		"lint": "eslint --no-eslintrc --config .eslintrc.json assets/src/js/**/*.js",
+		"lint:fix": "eslint --no-eslintrc --config .eslintrc.json --fix assets/src/js/**/*.js",
 		"lint-css": "stylelint 'assets/src/sass/**/*.{scss,sass}'",
 		"lint-css:fix": "npm run lint-css -- --fix",
 		"precommit": "npm run lint:php && npm run lint-css:fix && npm run lint:fix && npm run prod"

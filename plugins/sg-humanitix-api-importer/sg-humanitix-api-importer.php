@@ -9,7 +9,7 @@
  * Description:       This plugin imports Humanitix events through their API and converts them into The Events Calendar events.
  * Version:           1.0.0
  * Requires at least: 6.5
- * Requires PHP:      7.4
+ * Requires PHP:      7.4+
  * Author:            Scott Salhanick
  * Author URI:        https://example.com
  * License:           GPL v2 or later
@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Define constants.
 define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_FILE', __FILE__ );
 define( 'SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH', untrailingslashit( plugin_dir_path( __FILE__ ) ) );
-// Note: Other constants are defined in Plugin.php to avoid conflicts
+// Note: Other constants are defined in Plugin.php to avoid conflicts.
 
 // Composer autoloader.
 if ( file_exists( SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/vendor/autoload.php' ) ) {
