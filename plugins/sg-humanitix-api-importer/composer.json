@@ -1,0 +1,106 @@
+{
+	"name": "sg/sg-humanitix-api-importer",
+	"description": "This plugin imports Humanitix events through their API and converts them into The Events Calendar events.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"automattic/vipwpcs": "^3.0",
+		"phpcompatibility/phpcompatibility-wp": "^2.1",
+		"squizlabs/php_codesniffer": "^3.7",
+		"wp-coding-standards/wpcs": "^3.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"SG\\HumanitixApiImporter\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"SG\\HumanitixApiImporter\\Tests\\": "tests/"
+		}
+	},
+	"scripts": {
+		"post-install-cmd": [
+			"@install-npm-safe",
+			"@build-safe"
+		],
+		"post-update-cmd": [
+			"@install-npm-safe", 
+			"@build-safe"
+		],
+		"install-npm-safe": "npm install --silent || echo 'npm install failed, continuing...'",
+		"build-safe": "npm run prod || echo 'npm build failed, continuing...'",
+		"deploy": [
+			"@composer install --no-dev --optimize-autoloader",
+			"npm ci --silent",
+			"npm run prod"
+		],
+		"build": "npm run prod",
+		"lint": [
+			"@lint:php",
+			"npm run lint-css",
+			"npm run lint"
+		],
+		"lint:php": "vendor/bin/phpcs",
+		"clean": [
+			"@clean:composer",
+			"@clean:npm",
+			"@clean:build",
+			"@clean:cache",
+			"@clean:logs",
+			"@clean:temp",
+			"@reset:autoloader"
+		],
+		"clean:composer": [
+			"@php -r \"if (is_dir('vendor')) { system('rmdir /s /q vendor 2>nul || rmdir -rf vendor'); }\"",
+			"@php -r \"if (file_exists('composer.lock')) { unlink('composer.lock'); }\""
+		],
+		"clean:npm": [
+			"@php -r \"if (is_dir('node_modules')) { system('rmdir /s /q node_modules 2>nul || rmdir -rf node_modules'); }\"",
+			"@php -r \"if (file_exists('package-lock.json')) { unlink('package-lock.json'); }\""
+		],
+		"clean:build": [
+			"@php -r \"if (is_dir('assets/build')) { system('rmdir /s /q assets/build 2>nul || rmdir -rf assets/build'); mkdir('assets/build', 0755, true); }\""
+		],
+		"clean:cache": [
+			"@php -r \"if (is_dir('.cache')) { system('rmdir /s /q .cache 2>nul || rmdir -rf .cache'); }\"",
+			"@php -r \"if (is_dir('.webpack')) { system('rmdir /s /q .webpack 2>nul || rmdir -rf .webpack'); }\"",
+			"@php -r \"if (is_dir('.nyc_output')) { system('rmdir /s /q .nyc_output 2>nul || rmdir -rf .nyc_output'); }\"",
+			"@php -r \"if (is_dir('coverage')) { system('rmdir /s /q coverage 2>nul || rmdir -rf coverage'); }\""
+		],
+		"clean:logs": [
+			"@php -r \"foreach (glob('*.log') as $file) { unlink($file); }\"",
+			"@php -r \"if (is_dir('logs')) { foreach (glob('logs/*.log') as $file) { unlink($file); } }\""
+		],
+		"clean:temp": [
+			"@php -r \"if (is_dir('tmp')) { system('rmdir /s /q tmp 2>nul || rmdir -rf tmp'); }\"",
+			"@php -r \"if (is_dir('temp')) { system('rmdir /s /q temp 2>nul || rmdir -rf temp'); }\"",
+			"@php -r \"if (file_exists('.DS_Store')) { unlink('.DS_Store'); }\"",
+			"@php -r \"if (file_exists('Thumbs.db')) { unlink('Thumbs.db'); }\""
+		],
+		"reset:autoloader": "composer dump-autoload --optimize",
+		"reset": [
+			"@clean",
+			"@install-npm-safe",
+			"@build-safe"
+		],
+		"fresh": [
+			"@clean",
+			"composer install",
+			"npm install",
+			"npm run prod"
+		]
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"classmap-authoritative": true,
+		"apcu-autoloader": true,
+		"sort-packages": true,
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
+}
