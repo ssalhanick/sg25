@@ -9,7 +9,7 @@
  * Description:       This plugin imports Humanitix events through their API and converts them into The Events Calendar events.
  * Version:           1.0.0
  * Requires at least: 6.5
- * Requires PHP:      8.0+
+ * Requires PHP:      7.4+
  * Author:            Scott Salhanick
  * Author URI:        https://example.com
  * License:           GPL v2 or later
