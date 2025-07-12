@@ -34,16 +34,6 @@ class DataMapper {
 		'_id'             => 'humanitix_id',
 		'name'            => 'post_title',
 		'description'     => 'post_content',
-<<<<<<< Updated upstream
-		'startDate'       => 'EventStartDate',
-		'endDate'         => 'EventEndDate',
-		'timezone'        => 'EventTimezone',
-		'url'             => 'EventURL',
-		'slug'            => 'humanitix_slug',
-		'category'        => 'EventCategory',
-		'currency'        => 'EventCurrency',
-		'totalCapacity'   => 'EventCapacity',
-=======
 		'startDate'       => '_EventStartDate',
 		'endDate'         => '_EventEndDate',
 		'timezone'        => '_EventTimezone',
@@ -52,7 +42,6 @@ class DataMapper {
 		'category'        => '_EventCategory',
 		'currency'        => '_EventCurrency',
 		'totalCapacity'   => '_EventCapacity',
->>>>>>> Stashed changes
 		'public'          => 'humanitix_public',
 		'published'       => 'humanitix_published',
 		'suspendSales'    => 'humanitix_suspend_sales',
@@ -69,11 +58,7 @@ class DataMapper {
 	 * @var array
 	 */
 	private $custom_mappings = array(
-<<<<<<< Updated upstream
-		'humanitix_id'            => 'humanitix_event_id',
-=======
 		'humanitix_id'            => '_humanitix_event_id',
->>>>>>> Stashed changes
 		'humanitix_url'           => 'humanitix_event_url',
 		'humanitix_organizer'     => 'humanitix_organizer_name',
 		'humanitix_venue'         => 'humanitix_venue_name',
@@ -109,20 +94,14 @@ class DataMapper {
 			return array();
 		}
 
-<<<<<<< Updated upstream
-=======
 
 
->>>>>>> Stashed changes
 		$mapped_event = array(
 			'post_type'   => 'tribe_events',
 			'post_status' => 'publish',
 			'meta_input'  => array(),
 		);
 
-<<<<<<< Updated upstream
-		// Map basic .
-=======
 		// Set publication date from Humanitix createdAt field if available.
 		if ( isset( $humanitix_event['createdAt'] ) && ! empty( $humanitix_event['createdAt'] ) ) {
 			$created_timestamp = strtotime( $humanitix_event['createdAt'] );
@@ -133,7 +112,6 @@ class DataMapper {
 		}
 
 		// Map basic fields.
->>>>>>> Stashed changes
 		foreach ( $this->field_mappings as $humanitix_field => $tec_field ) {
 			if ( isset( $humanitix_event[ $humanitix_field ] ) ) {
 				$value = $humanitix_event[ $humanitix_field ];
@@ -146,15 +124,6 @@ class DataMapper {
 					case 'post_content':
 						$mapped_event['post_content'] = wp_kses_post( $value );
 						break;
-<<<<<<< Updated upstream
-					case 'EventStartDate':
-					case 'EventEndDate':
-						$mapped_event['meta_input'][ $tec_field ] = $this->format_date( $value );
-						break;
-					case 'EventStartTime':
-					case 'EventEndTime':
-						$mapped_event['meta_input'][ $tec_field ] = $this->format_time( $value );
-=======
 					case '_EventStartDate':
 						// Store the raw UTC date string for later timezone conversion
 						$mapped_event['meta_input']['_humanitix_start_date_utc'] = $value;
@@ -165,7 +134,6 @@ class DataMapper {
 						break;
 					case '_EventTimezone':
 						$mapped_event['meta_input'][ $tec_field ] = $this->convert_timezone_for_tec( $value );
->>>>>>> Stashed changes
 						break;
 					default:
 						$mapped_event['meta_input'][ $tec_field ] = sanitize_text_field( $value );
@@ -184,11 +152,6 @@ class DataMapper {
 		// Handle nested objects and arrays.
 		$mapped_event = $this->map_nested_data( $humanitix_event, $mapped_event );
 
-<<<<<<< Updated upstream
-		// Set default values for required TEC fields.
-		$mapped_event = $this->set_default_values( $mapped_event );
-
-=======
 		// Set timezone information after we have the event dates.
 		$mapped_event = $this->set_timezone_info( $humanitix_event, $mapped_event );
 
@@ -197,7 +160,6 @@ class DataMapper {
 
 
 
->>>>>>> Stashed changes
 		return $mapped_event;
 	}
 
@@ -209,39 +171,6 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function map_nested_data( $humanitix_event, $mapped_event ) {
-<<<<<<< Updated upstream
-		// Handle event location information.
-		if ( isset( $humanitix_event['eventLocation'] ) && is_array( $humanitix_event['eventLocation'] ) ) {
-			$location = $humanitix_event['eventLocation'];
-
-			if ( isset( $location['venueName'] ) ) {
-				$mapped_event['meta_input']['EventVenue'] = sanitize_text_field( $location['venueName'] );
-			}
-			if ( isset( $location['address'] ) ) {
-				$mapped_event['meta_input']['EventAddress'] = sanitize_text_field( $location['address'] );
-			}
-			if ( isset( $location['city'] ) ) {
-				$mapped_event['meta_input']['EventCity'] = sanitize_text_field( $location['city'] );
-			}
-			if ( isset( $location['region'] ) ) {
-				$mapped_event['meta_input']['EventState'] = sanitize_text_field( $location['region'] );
-			}
-			if ( isset( $location['country'] ) ) {
-				$mapped_event['meta_input']['EventCountry'] = sanitize_text_field( $location['country'] );
-			}
-			if ( isset( $location['instructions'] ) ) {
-				$mapped_event['meta_input']['humanitix_location_instructions'] = sanitize_textarea_field( $location['instructions'] );
-			}
-			if ( isset( $location['onlineUrl'] ) ) {
-				$mapped_event['meta_input']['humanitix_online_url'] = esc_url_raw( $location['onlineUrl'] );
-			}
-			if ( isset( $location['latLng'] ) && is_array( $location['latLng'] ) ) {
-				$mapped_event['meta_input']['humanitix_lat_lng'] = wp_json_encode( $location['latLng'] );
-			}
-
-			// Store full location data.
-			$mapped_event['meta_input']['humanitix_location_data'] = wp_json_encode( $location );
-=======
 		// Initialize debug helper
 		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
@@ -275,20 +204,16 @@ class DataMapper {
 
 			// Store full venue data for reference.
 			$mapped_event['meta_input']['humanitix_venue_data'] = wp_json_encode( $venue );
->>>>>>> Stashed changes
 		}
 
 		// Handle ticket types information.
 		if ( isset( $humanitix_event['ticketTypes'] ) && is_array( $humanitix_event['ticketTypes'] ) ) {
 			$mapped_event['meta_input']['humanitix_ticket_types'] = wp_json_encode( $humanitix_event['ticketTypes'] );
 
-<<<<<<< Updated upstream
-=======
 					$debug_helper->smart_log( 'DataMapper', 'Processing ticket types', array(
 			'ticket_count' => count( $humanitix_event['ticketTypes'] ),
 		) );
 
->>>>>>> Stashed changes
 			// Calculate total capacity and available tickets.
 			$total_capacity    = 0;
 			$available_tickets = 0;
@@ -314,16 +239,6 @@ class DataMapper {
 				}
 			}
 
-<<<<<<< Updated upstream
-			$mapped_event['meta_input']['EventCapacity']               = $total_capacity;
-			$mapped_event['meta_input']['humanitix_available_tickets'] = $available_tickets;
-
-			// Set pricing information.
-			if ( null !== $min_price ) {
-				$mapped_event['meta_input']['EventCost'] = $min_price;
-				if ( $max_price !== $min_price ) {
-					$mapped_event['meta_input']['EventCost'] .= ' - ' . $max_price;
-=======
 			$mapped_event['meta_input']['_EventCapacity']               = $total_capacity;
 			$mapped_event['meta_input']['humanitix_available_tickets'] = $available_tickets;
 
@@ -347,7 +262,6 @@ class DataMapper {
 					) );
 				} else {
 					$debug_helper->smart_log( 'DataMapper', 'Event cost already set from pricing data, skipping ticket types pricing' );
->>>>>>> Stashed changes
 				}
 			}
 		}
@@ -355,8 +269,6 @@ class DataMapper {
 		// Handle pricing information.
 		if ( isset( $humanitix_event['pricing'] ) && is_array( $humanitix_event['pricing'] ) ) {
 			$mapped_event['meta_input']['humanitix_pricing'] = wp_json_encode( $humanitix_event['pricing'] );
-<<<<<<< Updated upstream
-=======
 			
 			$debug_helper->smart_log( 'DataMapper', 'Processing pricing data', array(
 				'pricing_keys' => array_keys( $humanitix_event['pricing'] ),
@@ -372,7 +284,6 @@ class DataMapper {
 				// Use maximumPrice as the event cost
 				$mapped_event['meta_input']['_EventCost'] = $maximum_price_from_pricing;
 			}
->>>>>>> Stashed changes
 		}
 
 		// Handle images.
@@ -392,14 +303,6 @@ class DataMapper {
 
 			// Set featured image if available.
 			if ( isset( $images['feature'] ) ) {
-<<<<<<< Updated upstream
-				$mapped_event['meta_input']['_thumbnail_id'] = $this->process_event_image( $images['feature'] );
-			} elseif ( isset( $images['banner'] ) ) {
-				$mapped_event['meta_input']['_thumbnail_id'] = $this->process_event_image( $images['banner'] );
-			}
-		}
-
-=======
 				$thumbnail_id = $this->process_event_image( $images['feature'] );
 				$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
 			} elseif ( isset( $images['banner'] ) ) {
@@ -423,7 +326,6 @@ class DataMapper {
 			) );
 		}
 
->>>>>>> Stashed changes
 		// Handle dates array.
 		if ( isset( $humanitix_event['dates'] ) && is_array( $humanitix_event['dates'] ) ) {
 			$mapped_event['meta_input']['humanitix_dates'] = wp_json_encode( $humanitix_event['dates'] );
@@ -470,11 +372,7 @@ class DataMapper {
 	/**
 	 * Format date for The Events Calendar.
 	 *
-<<<<<<< Updated upstream
-	 * @param string $date_string Humanitix date string.
-=======
 	 * @param string $date_string Humanitix date string (ISO 8601 format).
->>>>>>> Stashed changes
 	 * @return string Formatted date.
 	 */
 	private function format_date( $date_string ) {
@@ -482,9 +380,6 @@ class DataMapper {
 			return '';
 		}
 
-<<<<<<< Updated upstream
-		// Handle ISO 8601 format from Humanitix API.
-=======
 		// Handle ISO 8601 format from Humanitix API (e.g., "2021-02-01T23:26:13.485Z").
 		$timestamp = strtotime( $date_string );
 		if ( false === $timestamp ) {
@@ -509,21 +404,11 @@ class DataMapper {
 		// Handle ISO 8601 format from Humanitix API (e.g., "2021-02-01T23:26:13.485Z").
 		// Note: This method is now deprecated in favor of proper timezone conversion
 		// in the set_timezone_info method.
->>>>>>> Stashed changes
 		$timestamp = strtotime( $date_string );
 		if ( false === $timestamp ) {
 			return '';
 		}
 
-<<<<<<< Updated upstream
-		return gmdate( 'Y-m-d', $timestamp );
-	}
-
-	/**
-	 * Format time for The Events Calendar.
-	 *
-	 * @param string $date_string Humanitix date string.
-=======
 		return date( 'Y-m-d H:i:s', $timestamp );
 	}
 
@@ -533,7 +418,6 @@ class DataMapper {
 	 * Format time for The Events Calendar.
 	 *
 	 * @param string $date_string Humanitix date string (ISO 8601 format).
->>>>>>> Stashed changes
 	 * @return string Formatted time.
 	 */
 	private function format_time( $date_string ) {
@@ -541,22 +425,14 @@ class DataMapper {
 			return '';
 		}
 
-<<<<<<< Updated upstream
-		// Handle ISO 8601 format from Humanitix API.
-=======
 		// Handle ISO 8601 format from Humanitix API (e.g., "2021-02-01T23:26:13.485Z").
->>>>>>> Stashed changes
 		$timestamp = strtotime( $date_string );
 		if ( false === $timestamp ) {
 			return '';
 		}
 
-<<<<<<< Updated upstream
-		return gmdate( 'H:i:s', $timestamp );
-=======
 		// Use date() to preserve the original timezone information from the ISO string.
 		return date( 'H:i:s', $timestamp );
->>>>>>> Stashed changes
 	}
 
 	/**
@@ -576,8 +452,6 @@ class DataMapper {
 	}
 
 	/**
-<<<<<<< Updated upstream
-=======
 	 * Set timezone information for the event.
 	 *
 	 * @param array $humanitix_event Humanitix event data.
@@ -655,7 +529,6 @@ class DataMapper {
 	}
 
 	/**
->>>>>>> Stashed changes
 	 * Set default values for required TEC fields.
 	 *
 	 * @param array $mapped_event Mapped event data.
@@ -663,24 +536,6 @@ class DataMapper {
 	 */
 	private function set_default_values( $mapped_event ) {
 		// Set default event duration if not specified.
-<<<<<<< Updated upstream
-		if ( ! isset( $mapped_event['meta_input']['EventEndDate'] ) ) {
-			$mapped_event['meta_input']['EventEndDate'] = $mapped_event['meta_input']['EventStartDate'] ?? '';
-		}
-
-		if ( ! isset( $mapped_event['meta_input']['EventEndTime'] ) ) {
-			$mapped_event['meta_input']['EventEndTime'] = $mapped_event['meta_input']['EventStartTime'] ?? '';
-		}
-
-		// Set default event status.
-		if ( ! isset( $mapped_event['meta_input']['EventStatus'] ) ) {
-			$mapped_event['meta_input']['EventStatus'] = 'publish';
-		}
-
-		// Set default event cost if not specified.
-		if ( ! isset( $mapped_event['meta_input']['EventCost'] ) ) {
-			$mapped_event['meta_input']['EventCost'] = '';
-=======
 		if ( ! isset( $mapped_event['meta_input']['_EventEndDate'] ) ) {
 			$mapped_event['meta_input']['_EventEndDate'] = $mapped_event['meta_input']['_EventStartDate'] ?? '';
 		}
@@ -693,7 +548,6 @@ class DataMapper {
 		// Set default event cost if not specified.
 		if ( ! isset( $mapped_event['meta_input']['_EventCost'] ) ) {
 			$mapped_event['meta_input']['_EventCost'] = '';
->>>>>>> Stashed changes
 		}
 
 		return $mapped_event;
@@ -888,16 +742,6 @@ class DataMapper {
 			return false;
 		}
 
-<<<<<<< Updated upstream
-		// Check if image already exists.
-		$existing_attachment = $this->find_existing_image( $image_url );
-		if ( $existing_attachment ) {
-			return $existing_attachment;
-		}
-
-		// Download and attach image.
-		$attachment_id = $this->download_and_attach_image( $image_url );
-=======
 		// Use static cache for this request
 		static $image_cache = array();
 		$cache_key = md5( $image_url );
@@ -925,7 +769,6 @@ class DataMapper {
 		$attachment_id = $this->download_and_attach_image( $image_url );
 		
 		$image_cache[ $cache_key ] = $attachment_id;
->>>>>>> Stashed changes
 		return $attachment_id;
 	}
 
@@ -969,12 +812,6 @@ class DataMapper {
 			return false;
 		}
 
-<<<<<<< Updated upstream
-		// Get file info.
-		$file_array = array(
-			'name'     => basename( $image_url ),
-			'tmp_name' => $tmp,
-=======
 		// Get file info and determine proper filename with extension.
 		$file_info = $this->get_file_info_from_url( $image_url, $tmp );
 
@@ -983,7 +820,6 @@ class DataMapper {
 			'name'     => $file_info['filename'],
 			'tmp_name' => $tmp,
 			'type'     => $file_info['mime'],
->>>>>>> Stashed changes
 		);
 
 		// Move the temporary file into the uploads directory.
@@ -1001,8 +837,6 @@ class DataMapper {
 
 		return $id;
 	}
-<<<<<<< Updated upstream
-=======
 
 	/**
 	 * Get file information from URL and local file.
@@ -1521,5 +1355,4 @@ class DataMapper {
 			return '';
 		}
 	}
->>>>>>> Stashed changes
 }

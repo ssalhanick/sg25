@@ -46,8 +46,6 @@ class AdminInterface {
 	private $logger;
 
 	/**
-<<<<<<< Updated upstream
-=======
 	 * The security handler instance.
 	 *
 	 * @var \SG\HumanitixApiImporter\Security\AjaxSecurityHandler|null
@@ -55,7 +53,6 @@ class AdminInterface {
 	private $security_handler;
 
 	/**
->>>>>>> Stashed changes
 	 * Constructor.
 	 *
 	 * @since 1.0.0
@@ -63,24 +60,12 @@ class AdminInterface {
 	 * @param SettingsManager $settings The settings manager instance.
 	 */
 	public function __construct( $importer = null, SettingsManager $settings = null ) {
-<<<<<<< Updated upstream
-		error_log( 'Humanitix Admin: AdminInterface constructor called' );
-
-		$this->importer = $importer;
-		$this->settings = $settings ?? new SettingsManager();
-		$this->logger   = new Logger();
-
-		$this->init_hooks();
-
-		error_log( 'Humanitix Admin: AdminInterface constructor completed' );
-=======
 		$this->importer = $importer;
 		$this->settings = $settings ?? new SettingsManager();
 		$this->logger   = new Logger();
 		$this->security_handler = new \SG\HumanitixApiImporter\Security\AjaxSecurityHandler();
 
 		$this->init_hooks();
->>>>>>> Stashed changes
 	}
 
 	/**
@@ -100,31 +85,12 @@ class AdminInterface {
 	 * @return void
 	 */
 	private function init_hooks() {
-<<<<<<< Updated upstream
-		error_log( 'Humanitix Admin: Setting up hooks' );
-
-=======
->>>>>>> Stashed changes
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 		add_action( 'wp_ajax_import_events', array( $this, 'handle_import_ajax' ) );
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
-<<<<<<< Updated upstream
-
-		// Add debugging for admin_enqueue_scripts hook.
-		add_action(
-			'admin_enqueue_scripts',
-			function ( $hook ) {
-				error_log( 'Humanitix Admin: admin_enqueue_scripts hook fired with: ' . $hook );
-			},
-			5
-		); // Lower priority to run before our function.
-
-		error_log( 'Humanitix Admin: Hooks registered' );
-=======
->>>>>>> Stashed changes
 	}
 
 	/**
@@ -134,11 +100,6 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function add_admin_menu() {
-<<<<<<< Updated upstream
-		error_log( 'Humanitix Admin: Adding admin menu' );
-
-=======
->>>>>>> Stashed changes
 		add_menu_page(
 			'Humanitix Importer',
 			'Humanitix',
@@ -187,11 +148,6 @@ class AdminInterface {
 			'humanitix-importer-dashboard',
 			array( $this, 'render_dashboard_page' )
 		);
-<<<<<<< Updated upstream
-
-		error_log( 'Humanitix Admin: Admin menu added' );
-=======
->>>>>>> Stashed changes
 	}
 
 	/**
@@ -200,43 +156,8 @@ class AdminInterface {
 	 * @return bool Whether debug mode is enabled.
 	 */
 	private function is_debug_enabled() {
-<<<<<<< Updated upstream
-		// Check for debug constant.
-		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
-			return true;
-		}
-
-		// Check for WordPress debug mode.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			return true;
-		}
-
-		// Check for specific user capabilities (plugin authors).
-		if ( current_user_can( 'manage_network_options' ) ) {
-			return true;
-		}
-
-		// Check for specific user roles (administrators with specific capabilities).
-		$user = wp_get_current_user();
-		if ( in_array( 'administrator', $user->roles, true ) && current_user_can( 'edit_plugins' ) ) {
-			return true;
-		}
-
-		// Check for specific user IDs (you can add your user ID here).
-		$debug_user_ids = array(
-			// Add your WordPress user ID here for development.
-			// 1, // Example user ID.
-		);
-
-		if ( in_array( $user->ID, $debug_user_ids, true ) ) {
-			return true;
-		}
-
-		return false;
-=======
 		// Only show debug when HUMANITIX_DEBUG constant is defined and true.
 		return defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG;
->>>>>>> Stashed changes
 	}
 
 	/**
@@ -260,10 +181,7 @@ class AdminInterface {
 		}
 
 		$is_configured = empty( $missing_credentials );
-<<<<<<< Updated upstream
-=======
 		$is_debug_mode = $this->is_debug_enabled();
->>>>>>> Stashed changes
 		?>
 		<div class="wrap">
 			<h1>Humanitix Event Importer</h1>
@@ -278,8 +196,6 @@ class AdminInterface {
 					</div>
 				<?php endif; ?>
 				
-<<<<<<< Updated upstream
-=======
 				<?php if ( $is_debug_mode ) : ?>
 					<div class="debug-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
 						<h4 style="margin-top: 0;">Debug Mode Options</h4>
@@ -302,7 +218,6 @@ class AdminInterface {
 					</div>
 				<?php endif; ?>
 				
->>>>>>> Stashed changes
 				<div class="import-controls">
 					<button id="start-import" class="button button-primary" <?php echo ! $is_configured ? 'disabled' : ''; ?>>
 						<?php echo $is_configured ? 'Start Import' : 'API Not Configured'; ?>
@@ -771,11 +686,7 @@ class AdminInterface {
 				<?php
 				$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
 				if ( file_exists( $log_file ) ) {
-<<<<<<< Updated upstream
-					$log_contents = wp_remote_get( $log_file );
-=======
 					$log_contents = file_get_contents( $log_file );
->>>>>>> Stashed changes
 					if ( ! empty( $log_contents ) ) {
 						echo '<p><strong>Custom Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
 						echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( filesize( $log_file ) ) ) . '</p>';
@@ -843,14 +754,6 @@ class AdminInterface {
 	 * Handling AJAX Imports
 	 */
 	public function handle_import_ajax() {
-<<<<<<< Updated upstream
-		error_log( 'Humanitix Import: AJAX handler called' );
-
-		check_ajax_referer( 'humanitix_import_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			error_log( 'Humanitix Import: User not authorized' );
-=======
 		// Add basic error logging for debugging
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( 'Humanitix Import: AJAX handler called' );
@@ -859,25 +762,11 @@ class AdminInterface {
 		check_ajax_referer( 'humanitix_import_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
->>>>>>> Stashed changes
 			wp_die( 'Unauthorized' );
 		}
 
 		// Check if importer is available.
 		if ( ! $this->importer ) {
-<<<<<<< Updated upstream
-			error_log( 'Humanitix Import: Importer not available' );
-			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
-		}
-
-		error_log( 'Humanitix Import: Starting import process' );
-		$start_time = microtime( true );
-
-		try {
-			error_log( 'Humanitix Import: Calling importer->import_events()' );
-			$result = $this->importer->import_events();
-			error_log( 'Humanitix Import: Import result: ' . print_r( $result, true ) );
-=======
 			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
 		}
 
@@ -899,34 +788,16 @@ class AdminInterface {
 			} else {
 				$result = $this->importer->import_events();
 			}
->>>>>>> Stashed changes
 
 			$end_time = microtime( true );
 			$duration = round( $end_time - $start_time, 2 );
 
-<<<<<<< Updated upstream
-			// Log the import.
-			$this->logger->log(
-				'import',
-				'Import completed',
-				array(
-					'events_imported' => $result['imported'],
-					'errors'          => count( $result['errors'] ),
-					'error_messages'  => $result['errors'],
-					'duration'        => $duration,
-					'status'          => $result['success'] ? 'success' : 'error',
-				)
-			);
-
-			error_log( 'Humanitix Import: Sending success response' );
-=======
 			// Clean up debug log if it's getting too large
 			$this->logger->cleanup_debug_log( 10 );
 
 			// Log the import with duration
 			$this->logger->log_import_summary( $result['imported'], $result['errors'], $duration );
 
->>>>>>> Stashed changes
 			wp_send_json_success(
 				array(
 					'message'        => $result['message'],
@@ -937,13 +808,9 @@ class AdminInterface {
 			);
 
 		} catch ( \Exception $e ) {
-<<<<<<< Updated upstream
-			error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
-=======
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
 			}
->>>>>>> Stashed changes
 			$this->logger->log( 'error', 'Import failed: ' . $e->getMessage() );
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
@@ -1196,8 +1063,6 @@ class AdminInterface {
 						var progressDiv = document.getElementById("import-progress");
 						var resultsDiv = document.getElementById("import-results");
 						
-<<<<<<< Updated upstream
-=======
 						// Get import limit if debug mode is enabled
 						var importLimit = "";
 						var importLimitSelect = document.getElementById("import-limit");
@@ -1205,7 +1070,6 @@ class AdminInterface {
 							importLimit = importLimitSelect.value;
 						}
 						
->>>>>>> Stashed changes
 						// Show progress and disable start button.
 						this.disabled = true;
 						this.textContent = "Importing...";
@@ -1214,8 +1078,6 @@ class AdminInterface {
 						if (resultsDiv) resultsDiv.style.display = "none";
 						if (statusDiv) statusDiv.innerHTML = "<span class=\"spinner is-active\"></span> Starting import...";
 						
-<<<<<<< Updated upstream
-=======
 						// Prepare request data
 						var requestData = {
 							action: "import_events",
@@ -1227,20 +1089,12 @@ class AdminInterface {
 							requestData.import_limit = importLimit;
 						}
 						
->>>>>>> Stashed changes
 						fetch(humanitixAdmin.ajaxUrl, {
 							method: "POST",
 							headers: {
 								"Content-Type": "application/x-www-form-urlencoded",
 							},
-<<<<<<< Updated upstream
-							body: new URLSearchParams({
-								action: "import_events",
-								nonce: humanitixAdmin.nonce
-							})
-=======
 							body: new URLSearchParams(requestData)
->>>>>>> Stashed changes
 						})
 						.then(response => response.json())
 						.then(data => {
@@ -1249,14 +1103,9 @@ class AdminInterface {
 								if (resultsDiv) {
 									var resultsContent = resultsDiv.querySelector("#results-content");
 									if (resultsContent) {
-<<<<<<< Updated upstream
-										resultsContent.innerHTML = 
-											"<p><strong>Events imported:</strong> " + data.data.imported_count + "</p>" +
-=======
 										var limitText = importLimit ? " (Limited to " + importLimit + " events)" : "";
 										resultsContent.innerHTML = 
 											"<p><strong>Events imported:</strong> " + data.data.imported_count + limitText + "</p>" +
->>>>>>> Stashed changes
 											"<p><strong>Duration:</strong> " + data.data.duration + " seconds</p>" +
 											(data.data.errors.length > 0 ? "<p><strong>Errors:</strong> " + data.data.errors.join(", ") + "</p>" : "");
 									}

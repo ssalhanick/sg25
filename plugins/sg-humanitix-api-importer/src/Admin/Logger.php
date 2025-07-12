@@ -238,8 +238,6 @@ class Logger {
 	}
 
 	/**
-<<<<<<< Updated upstream
-=======
 	 * Clean up debug log file
 	 *
 	 * @param int $max_size_mb Maximum size in MB before cleanup.
@@ -297,7 +295,6 @@ class Logger {
 	}
 
 	/**
->>>>>>> Stashed changes
 	 * Get total log count
 	 */
 	public function get_total_count() {

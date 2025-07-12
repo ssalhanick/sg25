@@ -70,15 +70,7 @@ class HumanitixAPI {
 	 * @return string The cleaned API key.
 	 */
 	private function clean_api_key( $api_key ) {
-<<<<<<< Updated upstream
-		$original_key = $api_key;
-		$api_key      = sanitize_text_field( $api_key );
-
-		$this->log_debug( 'HumanitixAPI: clean_api_key - Original key length: ' . strlen( $original_key ) );
-		$this->log_debug( 'HumanitixAPI: clean_api_key - Original key preview: ' . substr( $original_key, 0, 20 ) . '...' );
-=======
 		$api_key = sanitize_text_field( $api_key );
->>>>>>> Stashed changes
 
 		// Remove any whitespace.
 		$api_key = trim( $api_key );
@@ -89,33 +81,8 @@ class HumanitixAPI {
 		// Remove any quotes if they were included.
 		$api_key = trim( $api_key, '"\'`' );
 
-<<<<<<< Updated upstream
-		// Check for common issues.
-		if ( strlen( $api_key ) > 200 ) {
-			$this->log_debug( 'HumanitixAPI: clean_api_key - WARNING: API key is very long (' . strlen( $api_key ) . ' chars). This might be a JWT token or multi-line key.' );
-		}
-
-		if ( strpos( $api_key, "\n" ) !== false ) {
-			$this->log_debug( 'HumanitixAPI: clean_api_key - WARNING: API key contains newlines. Removing them.' );
-			$api_key = str_replace( array( "\n", "\r" ), '', $api_key );
-		}
-
-		if ( strpos( $api_key, ' ' ) !== false ) {
-			$this->log_debug( 'HumanitixAPI: clean_api_key - WARNING: API key contains spaces. This might be a multi-part key.' );
-		}
-
-		// Check if it looks like a JWT token (3 parts separated by dots).
-		$parts = explode( '.', $api_key );
-		if ( count( $parts ) === 3 ) {
-			$this->log_debug( 'HumanitixAPI: clean_api_key - INFO: API key appears to be a JWT token format.' );
-		}
-
-		$this->log_debug( 'HumanitixAPI: clean_api_key - Final key length: ' . strlen( $api_key ) );
-		$this->log_debug( 'HumanitixAPI: clean_api_key - Final key preview: ' . substr( $api_key, 0, 20 ) . '...' );
-=======
 		// Remove any newlines.
 		$api_key = str_replace( array( "\n", "\r" ), '', $api_key );
->>>>>>> Stashed changes
 
 		return $api_key;
 	}
@@ -176,11 +143,7 @@ class HumanitixAPI {
 			'issues'      => $issues,
 			'suggestions' => $suggestions,
 			'length'      => strlen( $cleaned_key ),
-<<<<<<< Updated upstream
-			'preview'     => substr( $cleaned_key, 0, 20 ) . '...',
-=======
 			'preview'     => '[REDACTED]', // Don't expose API key preview
->>>>>>> Stashed changes
 		);
 	}
 
@@ -190,25 +153,10 @@ class HumanitixAPI {
 	 * @param string $message The message to log.
 	 */
 	private function log_debug( $message ) {
-<<<<<<< Updated upstream
-		// Try WordPress error_log first.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( $message );
-		}
-
-		// Also try to write to a custom log file.
-		$log_file  = WP_CONTENT_DIR . '/humanitix-debug.log';
-		$timestamp = current_time( 'Y-m-d H:i:s' );
-		$log_entry = "[{$timestamp}] {$message}" . PHP_EOL;
-
-		// Try to write to custom log file.
-		@file_put_contents( $log_file, $log_entry, FILE_APPEND | LOCK_EX );
-=======
 		// Only log if WP_DEBUG is enabled.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( $message );
 		}
->>>>>>> Stashed changes
 	}
 
 	/**
@@ -565,12 +513,6 @@ class HumanitixAPI {
 	 * @return array|WP_Error Events data or error.
 	 */
 	public function get_events( $page = 1 ) {
-<<<<<<< Updated upstream
-		$this->log_debug( 'HumanitixAPI: get_events called with page: ' . $page );
-		$this->log_debug( 'HumanitixAPI: API endpoint: ' . $this->api_endpoint );
-		$this->log_debug( 'HumanitixAPI: Has API key: ' . ( ! empty( $this->api_key ) ? 'yes' : 'no' ) );
-		$this->log_debug( 'HumanitixAPI: Has org ID: ' . ( ! empty( $this->org_id ) ? 'yes' : 'no' ) );
-=======
 		// Initialize debug helper
 		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
@@ -580,7 +522,6 @@ class HumanitixAPI {
 			'has_api_key' => ! empty( $this->api_key ),
 			'has_org_id' => ! empty( $this->org_id ),
 		) );
->>>>>>> Stashed changes
 
 		$params = array(
 			'page' => max( 1, absint( $page ) ),
@@ -595,18 +536,6 @@ class HumanitixAPI {
 		);
 
 		foreach ( $possible_endpoints as $endpoint ) {
-<<<<<<< Updated upstream
-			$this->log_debug( 'HumanitixAPI: Trying endpoint: ' . $endpoint );
-			$this->log_debug( 'HumanitixAPI: Making request to ' . $endpoint . ' with params: ' . print_r( $params, true ) );
-
-			$response = $this->make_request( 'GET', $endpoint, $params );
-			$this->log_debug( 'HumanitixAPI: Response from ' . $endpoint . ': ' . print_r( $response, true ) );
-
-			if ( is_wp_error( $response ) ) {
-				$this->log_debug( 'HumanitixAPI: ' . $endpoint . ' returned WP_Error: ' . $response->get_error_message() );
-				continue; // Try next endpoint.
-			}
-=======
 			$debug_helper->log( 'API', "Trying endpoint: {$endpoint}" );
 
 			$response = $this->make_request( 'GET', $endpoint, $params );
@@ -618,25 +547,11 @@ class HumanitixAPI {
 			) );
 			continue; // Try next endpoint.
 		}
->>>>>>> Stashed changes
 
 			// Handle different response formats.
 			$events = array();
 			if ( isset( $response['data'] ) ) {
 				$events = $response['data'];
-<<<<<<< Updated upstream
-				$this->log_debug( 'HumanitixAPI: Found events in response[data]: ' . count( $events ) . ' events' );
-			} elseif ( isset( $response['events'] ) ) {
-				$events = $response['events'];
-				$this->log_debug( 'HumanitixAPI: Found events in response[events]: ' . count( $events ) . ' events' );
-			} elseif ( is_array( $response ) ) {
-				$events = $response;
-				$this->log_debug( 'HumanitixAPI: Response is array with ' . count( $events ) . ' items' );
-			}
-
-			if ( ! empty( $events ) ) {
-				$this->log_debug( 'HumanitixAPI: Successfully found events using endpoint: ' . $endpoint );
-=======
 				$debug_helper->log( 'API', "Found events in response[data]: " . count( $events ) . ' events' );
 			} elseif ( isset( $response['events'] ) ) {
 				$events = $response['events'];
@@ -648,16 +563,11 @@ class HumanitixAPI {
 
 			if ( ! empty( $events ) ) {
 				$debug_helper->log( 'API', "Successfully found events using endpoint: {$endpoint}" );
->>>>>>> Stashed changes
 				return $events;
 			}
 		}
 
-<<<<<<< Updated upstream
-		$this->log_debug( 'HumanitixAPI: No events found with any endpoint, returning empty array' );
-=======
 		$debug_helper->log( 'API', 'No events found with any endpoint, returning empty array' );
->>>>>>> Stashed changes
 		return array();
 	}
 
@@ -694,12 +604,6 @@ class HumanitixAPI {
 	 * @return array|WP_Error Response data or error.
 	 */
 	private function make_request( $method, $endpoint, $params = array(), $is_test = false ) {
-<<<<<<< Updated upstream
-		$url = trailingslashit( $this->api_endpoint ) . ltrim( $endpoint, '/' );
-		$this->log_debug( 'HumanitixAPI: make_request - URL: ' . $url );
-		$this->log_debug( 'HumanitixAPI: make_request - Method: ' . $method );
-		$this->log_debug( 'HumanitixAPI: make_request - Params: ' . print_r( $params, true ) );
-=======
 		// Initialize debug helper
 		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
@@ -712,7 +616,6 @@ class HumanitixAPI {
 			'params_count' => count( $params ),
 			'is_test' => $is_test,
 		) );
->>>>>>> Stashed changes
 
 		$headers = array(
 			'x-api-key'    => $this->api_key,  // Humanitix API expects x-api-key header.
@@ -725,13 +628,6 @@ class HumanitixAPI {
 			$headers['X-Organiser-ID'] = $this->org_id;
 		}
 
-<<<<<<< Updated upstream
-		$this->log_debug( 'HumanitixAPI: make_request - API Key length: ' . strlen( $this->api_key ) );
-		$this->log_debug( 'HumanitixAPI: make_request - API Key preview: ' . substr( $this->api_key, 0, 10 ) . '...' );
-		$this->log_debug( 'HumanitixAPI: make_request - Headers: ' . print_r( $headers, true ) );
-
-=======
->>>>>>> Stashed changes
 		$args = array(
 			'method'  => $method,
 			'headers' => $headers,
@@ -745,24 +641,12 @@ class HumanitixAPI {
 			$args['body'] = wp_json_encode( $params );
 		}
 
-<<<<<<< Updated upstream
-		$this->log_debug( 'HumanitixAPI: make_request - Final URL: ' . $url );
-		$this->log_debug( 'HumanitixAPI: make_request - Final args: ' . print_r( $args, true ) );
-
-=======
->>>>>>> Stashed changes
 		// For test requests, limit the response size.
 		if ( $is_test ) {
 			$args['timeout'] = 10;
 		}
 
 		$response = wp_remote_request( $url, $args );
-<<<<<<< Updated upstream
-		$this->log_debug( 'HumanitixAPI: make_request - wp_remote_request response: ' . print_r( $response, true ) );
-
-		if ( is_wp_error( $response ) ) {
-			$this->log_debug( 'HumanitixAPI: make_request - wp_remote_request returned WP_Error: ' . $response->get_error_message() );
-=======
 
 		if ( is_wp_error( $response ) ) {
 			$debug_helper->log_critical_error( 'API', 'wp_remote_request returned WP_Error: ' . $response->get_error_message(), array(
@@ -770,23 +654,17 @@ class HumanitixAPI {
 				'method' => $method,
 				'error_message' => $response->get_error_message(),
 			) );
->>>>>>> Stashed changes
 			return $response;
 		}
 
 		$status_code = wp_remote_retrieve_response_code( $response );
 		$body        = wp_remote_retrieve_body( $response );
 
-<<<<<<< Updated upstream
-		$this->log_debug( 'HumanitixAPI: make_request - Status code: ' . $status_code );
-		$this->log_debug( 'HumanitixAPI: make_request - Response body: ' . substr( $body, 0, 500 ) );
-=======
 		$debug_helper->log( 'API', "Response received", array(
 			'status_code' => $status_code,
 			'body_length' => strlen( $body ),
 			'body_preview' => substr( $body, 0, 200 ),
 		) );
->>>>>>> Stashed changes
 
 		// For test requests, return the full response for debugging.
 		if ( $is_test ) {
@@ -796,13 +674,6 @@ class HumanitixAPI {
 		$data = json_decode( $body, true );
 
 		if ( json_last_error() !== JSON_ERROR_NONE ) {
-<<<<<<< Updated upstream
-			$this->log_debug( 'HumanitixAPI: make_request - JSON decode error: ' . json_last_error_msg() );
-			return new \WP_Error( 'json_error', 'Invalid JSON response from API: ' . $body );
-		}
-
-		$this->log_debug( 'HumanitixAPI: make_request - Decoded data: ' . print_r( $data, true ) );
-=======
 			$debug_helper->log_critical_error( 'API', 'JSON decode error: ' . json_last_error_msg(), array(
 				'body_preview' => substr( $body, 0, 200 ),
 				'json_error' => json_last_error_msg(),
@@ -816,7 +687,6 @@ class HumanitixAPI {
 			'array_count' => is_array( $data ) ? count( $data ) : 0,
 		) );
 		
->>>>>>> Stashed changes
 		return $data;
 	}
 
@@ -868,10 +738,7 @@ class HumanitixAPI {
 			'/docs'         => 'Documentation endpoint',
 			'/openapi.json' => 'OpenAPI schema',
 			'/swagger.json' => 'Swagger schema',
-<<<<<<< Updated upstream
-=======
 			'/api-docs'     => 'API documentation',
->>>>>>> Stashed changes
 			'/'             => 'Root endpoint',
 		);
 
@@ -899,15 +766,11 @@ class HumanitixAPI {
 			}
 		}
 
-<<<<<<< Updated upstream
-		return new \WP_Error( 'schema_not_found', 'Could not retrieve API schema from any endpoint' );
-=======
 		// Humanitix API doesn't provide schema endpoints, so return a helpful error.
 		return new \WP_Error( 
 			'schema_not_found', 
 			'The Humanitix API does not provide OpenAPI/Swagger schema endpoints. This is normal and expected. The plugin will analyze the actual event data structure instead.'
 		);
->>>>>>> Stashed changes
 	}
 
 	/**
