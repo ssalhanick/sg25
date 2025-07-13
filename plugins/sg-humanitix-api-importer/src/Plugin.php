@@ -75,6 +75,9 @@ class Plugin {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Plugin constructor called' );
+		}
 		$this->init();
 	}
 

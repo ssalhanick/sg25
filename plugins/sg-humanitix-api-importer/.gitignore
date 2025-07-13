@@ -44,3 +44,6 @@ Thumbs.db
 # Cache directories
 .cache/
 node_modules/.cache/ 
+
+# Unit Test Scripts
+tests/

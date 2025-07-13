@@ -79,6 +79,71 @@ class Logger {
 	}
 
 	/**
+	 * Log an error with error code
+	 *
+	 * @param int    $error_code The error code from ErrorCode class.
+	 * @param string $context Optional - Additional context information.
+	 * @param array  $data Optional - Additional structured data.
+	 */
+	public function log_error_code( $error_code, $context = '', $data = array() ) {
+		// Check if HUMANITIX_DEBUG is enabled
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+			// Full debugging - log everything
+			$message = ErrorCode::format_error( $error_code, $context );
+			$log_data = array_merge( $data, array(
+				'error_code' => $error_code,
+				'category' => ErrorCode::get_category( $error_code ),
+				'is_critical' => ErrorCode::is_critical( $error_code ),
+				'context' => $context,
+			) );
+		} else {
+			// Minimal logging - just error code and basic message
+			$message = ErrorCode::format_error( $error_code, $context );
+			$log_data = array(
+				'error_code' => $error_code,
+				'category' => ErrorCode::get_category( $error_code ),
+				'is_critical' => ErrorCode::is_critical( $error_code ),
+			);
+		}
+
+		return $this->log( 'error', $message, $log_data );
+	}
+
+	/**
+	 * Log import summary with error codes
+	 *
+	 * @param int   $imported_count Number of events imported.
+	 * @param int   $updated_count Number of events updated.
+	 * @param int   $existing_count Number of events that already existed.
+	 * @param array $errors Array of error codes encountered.
+	 * @param float $duration Import duration in seconds.
+	 */
+	public function log_import_summary_with_codes( $imported_count, $updated_count, $existing_count, $errors = array(), $duration = 0 ) {
+		$summary = sprintf(
+			'Import completed: %d new events, %d updated events, %d existing events in %.2f seconds',
+			$imported_count,
+			$updated_count,
+			$existing_count,
+			$duration
+		);
+
+		$context = array(
+			'imported_count' => $imported_count,
+			'updated_count' => $updated_count,
+			'existing_count' => $existing_count,
+			'duration' => $duration,
+			'error_count' => count( $errors ),
+		);
+
+		// If HUMANITIX_DEBUG is enabled, include detailed error information
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG && ! empty( $errors ) ) {
+			$context['errors'] = $errors;
+		}
+
+		return $this->log( 'import', $summary, $context );
+	}
+
+	/**
 	 * Get logs with filtering
 	 *
 	 * @param string $level The urgency of the message (error, warning, urgent).

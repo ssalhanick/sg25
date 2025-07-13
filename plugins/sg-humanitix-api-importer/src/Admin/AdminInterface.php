@@ -60,6 +60,9 @@ class AdminInterface {
 	 * @param SettingsManager $settings The settings manager instance.
 	 */
 	public function __construct( $importer = null, SettingsManager $settings = null ) {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] AdminInterface constructor called' );
+		}
 		$this->importer         = $importer;
 		$this->settings         = $settings ?? new SettingsManager();
 		$this->logger           = new Logger();
@@ -100,6 +103,13 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function add_admin_menu() {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Adding admin menu' );
+			error_log( '[sg-humanitix-api-importer] Current user ID: ' . get_current_user_id() );
+			error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
+			error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
+		}
+		
 		add_menu_page(
 			'Humanitix Importer',
 			'Humanitix',
@@ -115,8 +125,9 @@ class AdminInterface {
 			'Settings',
 			'Settings',
 			'manage_options',
-			'humanitix-settings',
-			array( $this, 'render_settings_page' )
+			'humanitix-importer-settings',
+			array( $this, 'render_settings_page' ),
+			10
 		);
 
 		// Only show debug page to plugin authors or when debug is enabled.
@@ -127,7 +138,8 @@ class AdminInterface {
 				'Debug',
 				'manage_options',
 				'humanitix-debug',
-				array( $this, 'render_debug_page' )
+				array( $this, 'render_debug_page' ),
+				20
 			);
 		}
 
@@ -137,7 +149,8 @@ class AdminInterface {
 			'Import Logs',
 			'manage_options',
 			'humanitix-importer-logs',
-			array( $this, 'render_logs_page' )
+			array( $this, 'render_logs_page' ),
+			30
 		);
 
 		add_submenu_page(
@@ -146,8 +159,13 @@ class AdminInterface {
 			'Dashboard',
 			'manage_options',
 			'humanitix-importer-dashboard',
-			array( $this, 'render_dashboard_page' )
+			array( $this, 'render_dashboard_page' ),
+			40
 		);
+		
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
+		}
 	}
 
 	/**
@@ -684,11 +702,11 @@ class AdminInterface {
 			<div class="card">
 				<h2>Debug Logs</h2>
 				<?php
-				$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
+				$log_file = WP_CONTENT_DIR . '/debug.log';
 				if ( file_exists( $log_file ) ) {
-					$log_contents = wp_remote_get( $log_file );
+					$log_contents = file_get_contents( $log_file );
 					if ( ! empty( $log_contents ) ) {
-						echo '<p><strong>Custom Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
+						echo '<p><strong>WordPress Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
 						echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( filesize( $log_file ) ) ) . '</p>';
 						echo '<p><strong>Last Modified:</strong> ' . esc_html( gmdate( 'Y-m-d H:i:s', filemtime( $log_file ) ) ) . '</p>';
 						echo '<h3>Recent Log Entries (Last 50 lines):</h3>';
@@ -720,7 +738,8 @@ class AdminInterface {
 							echo '<td>' . esc_html( $log->created_at ) . '</td>';
 							echo '<td>' . esc_html( $log->level ) . '</td>';
 							echo '<td>' . esc_html( $log->message ) . '</td>';
-							echo '<td><pre style="max-height: 100px; overflow-y: auto;">' . esc_html( print_r( json_decode( $log->context, true ), true ) ) . '</pre></td>';
+							$context_data = !empty($log->context) ? json_decode( $log->context, true ) : array();
+							echo '<td><pre style="max-height: 100px; overflow-y: auto;">' . esc_html( print_r( $context_data, true ) ) . '</pre></td>';
 							echo '</tr>';
 						}
 
