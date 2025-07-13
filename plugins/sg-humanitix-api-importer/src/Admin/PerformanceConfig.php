@@ -32,6 +32,11 @@ class PerformanceConfig {
 			'batch_size'            => defined( 'HUMANITIX_BATCH_SIZE' ) ? HUMANITIX_BATCH_SIZE : 25,
 			'enable_caching'        => ! defined( 'HUMANITIX_DISABLE_CACHING' ) || HUMANITIX_DISABLE_CACHING,
 			'log_to_file'           => ! defined( 'HUMANITIX_DISABLE_FILE_LOGGING' ) || HUMANITIX_DISABLE_FILE_LOGGING,
+			'data_structure_optimization' => ! defined( 'HUMANITIX_DISABLE_DATA_OPTIMIZATION' ) || HUMANITIX_DISABLE_DATA_OPTIMIZATION,
+			'max_string_length'     => defined( 'HUMANITIX_MAX_STRING_LENGTH' ) ? HUMANITIX_MAX_STRING_LENGTH : 255,
+			'max_array_size'        => defined( 'HUMANITIX_MAX_ARRAY_SIZE' ) ? HUMANITIX_MAX_ARRAY_SIZE : 50,
+			'max_ticket_types'      => defined( 'HUMANITIX_MAX_TICKET_TYPES' ) ? HUMANITIX_MAX_TICKET_TYPES : 10,
+			'enable_memory_monitoring' => ! defined( 'HUMANITIX_DISABLE_MEMORY_MONITORING' ) || HUMANITIX_DISABLE_MEMORY_MONITORING,
 		);
 	}
 
@@ -235,5 +240,152 @@ class PerformanceConfig {
 			'HUMANITIX_DISABLE_FILE_LOGGING'  => false,
 			'HUMANITIX_MEMORY_TARGET'         => 128, // 128MB target
 		);
+	}
+
+	/**
+	 * Check if data structure optimization is enabled.
+	 *
+	 * @return bool Whether data structure optimization is enabled.
+	 */
+	public static function is_data_optimization_enabled() {
+		return ! defined( 'HUMANITIX_DISABLE_DATA_OPTIMIZATION' ) || HUMANITIX_DISABLE_DATA_OPTIMIZATION;
+	}
+
+	/**
+	 * Get maximum string length for truncation.
+	 *
+	 * @return int Maximum string length.
+	 */
+	public static function get_max_string_length() {
+		return defined( 'HUMANITIX_MAX_STRING_LENGTH' ) ? HUMANITIX_MAX_STRING_LENGTH : 255;
+	}
+
+	/**
+	 * Get maximum array size for processing.
+	 *
+	 * @return int Maximum array size.
+	 */
+	public static function get_max_array_size() {
+		return defined( 'HUMANITIX_MAX_ARRAY_SIZE' ) ? HUMANITIX_MAX_ARRAY_SIZE : 50;
+	}
+
+	/**
+	 * Get maximum ticket types to process.
+	 *
+	 * @return int Maximum ticket types.
+	 */
+	public static function get_max_ticket_types() {
+		return defined( 'HUMANITIX_MAX_TICKET_TYPES' ) ? HUMANITIX_MAX_TICKET_TYPES : 10;
+	}
+
+	/**
+	 * Check if memory monitoring is enabled.
+	 *
+	 * @return bool Whether memory monitoring is enabled.
+	 */
+	public static function is_memory_monitoring_enabled() {
+		return ! defined( 'HUMANITIX_DISABLE_MEMORY_MONITORING' ) || HUMANITIX_DISABLE_MEMORY_MONITORING;
+	}
+
+	/**
+	 * Get data structure optimization settings.
+	 *
+	 * @return array Optimization settings.
+	 */
+	public static function get_data_optimization_settings() {
+		return array(
+			'enabled' => self::is_data_optimization_enabled(),
+			'max_string_length' => self::get_max_string_length(),
+			'max_array_size' => self::get_max_array_size(),
+			'max_ticket_types' => self::get_max_ticket_types(),
+			'memory_monitoring' => self::is_memory_monitoring_enabled(),
+		);
+	}
+
+	/**
+	 * Get memory usage statistics for data processing.
+	 *
+	 * @return array Memory statistics.
+	 */
+	public static function get_data_processing_memory_stats() {
+		$memory_info = self::get_memory_info();
+		
+		return array(
+			'current_mb' => $memory_info['current_mb'],
+			'peak_mb' => $memory_info['peak_mb'],
+			'available_mb' => $memory_info['available_mb'],
+			'usage_percentage' => $memory_info['usage_percentage'],
+			'is_safe' => self::is_memory_safe(),
+			'optimization_enabled' => self::is_data_optimization_enabled(),
+		);
+	}
+
+	/**
+	 * Check if data processing should be optimized based on memory usage.
+	 *
+	 * @return bool True if optimization is needed.
+	 */
+	public static function should_optimize_data_processing() {
+		if ( ! self::is_data_optimization_enabled() ) {
+			return false;
+		}
+
+		$memory_info = self::get_memory_info();
+		$memory_usage_percentage = $memory_info['usage_percentage'];
+
+		// Optimize if memory usage is above 70%
+		return $memory_usage_percentage > 70;
+	}
+
+	/**
+	 * Get adaptive batch size based on data complexity and memory.
+	 *
+	 * @param int $total_events Total number of events.
+	 * @param array $memory_stats Memory statistics.
+	 * @return int Adaptive batch size.
+	 */
+	public static function get_adaptive_batch_size( $total_events = 0, $memory_stats = array() ) {
+		$base_batch_size = self::get_dynamic_batch_size( $total_events );
+		
+		if ( empty( $memory_stats ) ) {
+			$memory_stats = self::get_data_processing_memory_stats();
+		}
+
+		// Reduce batch size if memory usage is high
+		if ( $memory_stats['usage_percentage'] > 80 ) {
+			return max( 1, floor( $base_batch_size * 0.5 ) );
+		} elseif ( $memory_stats['usage_percentage'] > 60 ) {
+			return max( 1, floor( $base_batch_size * 0.75 ) );
+		}
+
+		return $base_batch_size;
+	}
+
+	/**
+	 * Get recommended data structure settings for current memory conditions.
+	 *
+	 * @return array Recommended settings.
+	 */
+	public static function get_recommended_data_settings() {
+		$memory_stats = self::get_data_processing_memory_stats();
+		
+		$settings = array(
+			'max_string_length' => 255,
+			'max_array_size' => 50,
+			'max_ticket_types' => 10,
+		);
+
+		// Adjust settings based on memory usage
+		if ( $memory_stats['usage_percentage'] > 80 ) {
+			$settings['max_string_length'] = 100;
+			$settings['max_array_size'] = 20;
+			$settings['max_ticket_types'] = 5;
+		} elseif ( $memory_stats['usage_percentage'] > 60 ) {
+			$settings['max_string_length'] = 150;
+			$settings['max_array_size'] = 30;
+			$settings['max_ticket_types'] = 7;
+		}
+
+		return $settings;
 	}
 }

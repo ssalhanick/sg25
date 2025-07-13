@@ -17,6 +17,31 @@ use SG\HumanitixApiImporter\Admin\ErrorCode;
 use SG\HumanitixApiImporter\Admin\PerformanceConfig;
 use SG\HumanitixApiImporter\Importer\DataMapper;
 
+// Ensure ErrorCode class is available
+if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\ErrorCode' ) ) {
+    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/ErrorCode.php';
+}
+
+// Ensure PerformanceConfig class is available
+if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\PerformanceConfig' ) ) {
+    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/PerformanceConfig.php';
+}
+
+// Ensure DebugHelper class is available
+if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\DebugHelper' ) ) {
+    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/DebugHelper.php';
+}
+
+// Ensure DataMapper class is available
+if ( ! class_exists( 'SG\HumanitixApiImporter\Importer\DataMapper' ) ) {
+    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Importer/DataMapper.php';
+}
+
+// Ensure HumanitixAPI class is available
+if ( ! class_exists( 'SG\HumanitixApiImporter\HumanitixAPI' ) ) {
+    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/HumanitixAPI.php';
+}
+
 /**
  * Events Importer Class.
  *
@@ -90,17 +115,61 @@ class EventsImporter {
 		// Start timing
 		$this->start_time = microtime( true );
 
+		// Log import start with detailed metrics when HUMANITIX_DEBUG is enabled
+		if ( $debug_helper->is_humanitix_debug_enabled() ) {
+			$debug_helper->log_detailed( 'Import', 'Starting import process', array(
+				'page' => $page,
+				'import_limit' => $import_limit,
+				'memory_usage' => $debug_helper->get_memory_usage_info(),
+			) );
+		}
+
 		// Debug: Check what Humanitix IDs are already stored.
-		$this->debug_check_stored_humanitix_ids();
+		try {
+			$this->debug_check_stored_humanitix_ids();
+		} catch ( Exception $e ) {
+			// Log the error but don't stop the import process
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Humanitix EventsImporter: Debug check failed: ' . $e->getMessage() );
+			}
+		}
 
 		try {
 			// Get events from Humanitix API.
 			$debug_helper->log( 'API', 'Calling get_events()' );
+			
+			// Log API call start when HUMANITIX_DEBUG is enabled
+			if ( $debug_helper->is_humanitix_debug_enabled() ) {
+				$debug_helper->log_detailed( 'API', 'Making API request', array(
+					'endpoint' => 'get_events',
+					'page' => $page,
+					'api_key_length' => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
+				) );
+			}
+			
+			$api_start_time = microtime( true );
+			
+			// Check if API is available
+			if ( ! $this->api ) {
+				throw new Exception( 'API not initialized. Please check your configuration.' );
+			}
+			
 			$events = $this->api->get_events( $page );
+			$api_duration = microtime( true ) - $api_start_time;
 
 			if ( is_wp_error( $events ) ) {
 				$error_code = ErrorCode::API_SERVER_ERROR;
 				$this->logger->log_error_code( $error_code, 'Failed to fetch events from API' );
+				
+				// Log detailed API error when HUMANITIX_DEBUG is enabled
+				if ( $debug_helper->is_humanitix_debug_enabled() ) {
+					$debug_helper->log_detailed_error( 'API', 'API request failed', null, array(
+						'error_message' => $events->get_error_message(),
+						'error_code' => $events->get_error_code(),
+						'api_duration' => $api_duration,
+					) );
+				}
+				
 				return array(
 					'success'  => false,
 					'message'  => 'Failed to fetch events: ' . $events->get_error_message(),
@@ -147,7 +216,28 @@ class EventsImporter {
 			foreach ( $batches as $batch_index => $batch ) {
 				$debug_helper->log( 'Batch', "Processing batch " . ( $batch_index + 1 ) . " of " . count( $batches ) );
 
-				foreach ( $batch as $event ) {
+				// Log batch start when HUMANITIX_DEBUG is enabled
+				if ( $debug_helper->is_humanitix_debug_enabled() ) {
+					$debug_helper->log_detailed( 'Batch', 'Starting batch processing', array(
+						'batch_index' => $batch_index + 1,
+						'total_batches' => count( $batches ),
+						'batch_size' => count( $batch ),
+						'progress' => round( ( ( $batch_index + 1 ) / count( $batches ) ) * 100, 2 ),
+					) );
+				}
+
+				foreach ( $batch as $event_index => $event ) {
+					$current_event_number = ( $batch_index * $batch_size ) + $event_index + 1;
+					
+					// Log progress when HUMANITIX_DEBUG is enabled
+					if ( $debug_helper->is_humanitix_debug_enabled() ) {
+						$debug_helper->log_import_progress( $current_event_number, $total_events, $event['name'] ?? 'Unknown', array(
+							'batch_index' => $batch_index + 1,
+							'event_index' => $event_index + 1,
+							'batch_size' => count( $batch ),
+						) );
+					}
+					
 					$result = $this->import_single_event( $event );
 					
 					if ( $result['success'] ) {
@@ -171,6 +261,15 @@ class EventsImporter {
 				if ( ! PerformanceConfig::is_memory_safe() ) {
 					$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
 					PerformanceConfig::force_garbage_collection();
+					
+					// Log memory cleanup when HUMANITIX_DEBUG is enabled
+					if ( $debug_helper->is_humanitix_debug_enabled() ) {
+						$debug_helper->log_detailed( 'Memory', 'Forced garbage collection', array(
+							'batch_index' => $batch_index + 1,
+							'memory_before' => memory_get_usage( true ),
+							'memory_after' => memory_get_usage( true ),
+						) );
+					}
 				}
 			}
 
@@ -258,10 +357,16 @@ class EventsImporter {
 
 			if ( $existing_event ) {
 				// Update existing event.
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Found existing event {$existing_event}, updating..." );
+				}
 				$post_id = wp_update_post( array_merge( $mapped_event, array( 'ID' => $existing_event ) ) );
 				$action  = 'updated';
 			} else {
 				// Create new event.
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( "Humanitix EventsImporter: No existing event found, creating new event..." );
+				}
 				$post_id = wp_insert_post( $mapped_event );
 				$action  = 'created';
 			}
@@ -301,7 +406,12 @@ class EventsImporter {
 			$this->update_event_meta( $post_id, $mapped_event['meta_input'] );
 
 			// Store Humanitix ID for future reference.
-			update_post_meta( $post_id, '_humanitix_event_id', $event_data['_id'] ?? '' );
+			$humanitix_id = $event_data['_id'] ?? '';
+			update_post_meta( $post_id, '_humanitix_event_id', $humanitix_id );
+			
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Stored humanitix_id '{$humanitix_id}' for post_id {$post_id}" );
+			}
 
 			// Link venue to event if venue was created/found.
 			if ( $venue_id ) {
@@ -378,7 +488,7 @@ class EventsImporter {
 
 			if ( $event_id ) {
 				// Store external ID for future reference.
-				update_post_meta( $event_id, '_humanitix_event_id', $event_data['id'] );
+				update_post_meta( $event_id, '_humanitix_event_id', $event_data['_id'] );
 				update_post_meta( $event_id, '_humanitix_last_import', current_time( 'mysql' ) );
 
 				// Set featured image if available.
@@ -413,7 +523,7 @@ class EventsImporter {
 					"Successfully created event: {$event_title}",
 					array(
 						'wordpress_id' => $event_id,
-						'humanitix_id' => $event_data['id'],
+						'humanitix_id' => $event_data['_id'],
 						'venue_id'     => $tec_event_data['Venue'][0] ?? null,
 						'organizer_id' => $tec_event_data['Organizer'][0] ?? null,
 						'has_image'    => ! empty( $featured_image_id ),
@@ -427,7 +537,7 @@ class EventsImporter {
 				'error',
 				"Failed to create event: {$event_title}",
 				array(
-					'humanitix_id' => $event_data['id'],
+					'humanitix_id' => $event_data['_id'],
 					'error'        => $e->getMessage(),
 				)
 			);
@@ -495,7 +605,7 @@ class EventsImporter {
 					"Successfully updated event: {$event_title}",
 					array(
 						'wordpress_id' => $existing_event_id,
-						'humanitix_id' => $event_data['id'],
+						'humanitix_id' => $event_data['_id'],
 						'has_image'    => ! empty( $featured_image_id ),
 					)
 				);
@@ -508,7 +618,7 @@ class EventsImporter {
 				"Failed to update event: {$event_title}",
 				array(
 					'wordpress_id' => $existing_event_id,
-					'humanitix_id' => $event_data['id'],
+					'humanitix_id' => $event_data['_id'],
 					'error'        => $e->getMessage(),
 				)
 			);
@@ -1144,6 +1254,18 @@ class EventsImporter {
 			error_log( "Humanitix EventsImporter: Searching for existing event with humanitix_id: {$humanitix_id}" );
 		}
 
+		// First, let's check what's actually stored in the database
+		global $wpdb;
+		$stored_ids = $wpdb->get_results(
+			"SELECT post_id, meta_value FROM {$wpdb->postmeta} 
+			 WHERE meta_key = '_humanitix_event_id' 
+			 ORDER BY post_id DESC"
+		);
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "Humanitix EventsImporter: All stored humanitix IDs: " . wp_json_encode( $stored_ids ) );
+		}
+
 		$args = array(
 			'post_type'      => 'tribe_events',
 			'post_status'    => 'any',
@@ -1158,8 +1280,16 @@ class EventsImporter {
 			'fields'         => 'ids',
 		);
 
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "Humanitix EventsImporter: WP_Query args: " . wp_json_encode( $args ) );
+		}
+
 		$query = new \WP_Query( $args );
 		$posts = $query->posts;
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "Humanitix EventsImporter: WP_Query found " . count( $posts ) . " posts" );
+		}
 
 		$existing_event_id = ! empty( $posts ) ? $posts[0] : false;
 

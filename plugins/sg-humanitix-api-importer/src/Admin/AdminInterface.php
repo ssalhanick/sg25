@@ -94,21 +94,6 @@ class AdminInterface {
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
-		
-		// Add a standalone test page
-		add_action( 'admin_menu', function() {
-			add_menu_page(
-				'Humanitix Test',
-				'Humanitix Test',
-				'manage_options',
-				'humanitix-test-standalone',
-				function() {
-					echo '<div class="wrap"><h1>Humanitix Test Page</h1><p>If you can see this, the plugin is working.</p></div>';
-				},
-				'dashicons-calendar-alt',
-				31
-			);
-		});
 	}
 
 	/**
@@ -176,19 +161,6 @@ class AdminInterface {
 			'humanitix-importer-dashboard',
 			array( $this, 'render_dashboard_page' ),
 			40
-		);
-		
-		// Add a test menu page with lower permissions for debugging
-		add_submenu_page(
-			'humanitix-importer',
-			'Test Page',
-			'Test Page',
-			'edit_posts',
-			'humanitix-test',
-			function() {
-				echo '<div class="wrap"><h1>Test Page</h1><p>If you can see this, menu registration is working.</p></div>';
-			},
-			50
 		);
 		
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -730,11 +702,11 @@ class AdminInterface {
 			<div class="card">
 				<h2>Debug Logs</h2>
 				<?php
-				$log_file = WP_CONTENT_DIR . '/humanitix-debug.log';
+				$log_file = WP_CONTENT_DIR . '/debug.log';
 				if ( file_exists( $log_file ) ) {
-					$log_contents = wp_remote_get( $log_file );
+					$log_contents = file_get_contents( $log_file );
 					if ( ! empty( $log_contents ) ) {
-						echo '<p><strong>Custom Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
+						echo '<p><strong>WordPress Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
 						echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( filesize( $log_file ) ) ) . '</p>';
 						echo '<p><strong>Last Modified:</strong> ' . esc_html( gmdate( 'Y-m-d H:i:s', filemtime( $log_file ) ) ) . '</p>';
 						echo '<h3>Recent Log Entries (Last 50 lines):</h3>';
@@ -766,7 +738,8 @@ class AdminInterface {
 							echo '<td>' . esc_html( $log->created_at ) . '</td>';
 							echo '<td>' . esc_html( $log->level ) . '</td>';
 							echo '<td>' . esc_html( $log->message ) . '</td>';
-							echo '<td><pre style="max-height: 100px; overflow-y: auto;">' . esc_html( print_r( json_decode( $log->context, true ), true ) ) . '</pre></td>';
+							$context_data = !empty($log->context) ? json_decode( $log->context, true ) : array();
+							echo '<td><pre style="max-height: 100px; overflow-y: auto;">' . esc_html( print_r( $context_data, true ) ) . '</pre></td>';
 							echo '</tr>';
 						}
 
