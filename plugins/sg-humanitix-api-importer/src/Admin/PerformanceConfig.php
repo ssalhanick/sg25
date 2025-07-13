@@ -28,7 +28,7 @@ class PerformanceConfig {
 	public static function get_settings() {
 		return array(
 			'optimized_logging'     => ! defined( 'HUMANITIX_OPTIMIZED_LOGGING' ) || HUMANITIX_OPTIMIZED_LOGGING,
-			'enable_image_download' => defined( 'HUMANITIX_ENABLE_IMAGE_DOWNLOAD' ) && HUMANITIX_ENABLE_IMAGE_DOWNLOAD,
+			'enable_image_download' => ! defined( 'HUMANITIX_DISABLE_IMAGE_DOWNLOAD' ) || ! HUMANITIX_DISABLE_IMAGE_DOWNLOAD,
 			'batch_size'            => defined( 'HUMANITIX_BATCH_SIZE' ) ? HUMANITIX_BATCH_SIZE : 25,
 			'enable_caching'        => ! defined( 'HUMANITIX_DISABLE_CACHING' ) || HUMANITIX_DISABLE_CACHING,
 			'log_to_file'           => ! defined( 'HUMANITIX_DISABLE_FILE_LOGGING' ) || HUMANITIX_DISABLE_FILE_LOGGING,
@@ -55,7 +55,8 @@ class PerformanceConfig {
 	 * @return bool Whether to enable image downloads.
 	 */
 	public static function should_enable_image_download() {
-		return defined( 'HUMANITIX_ENABLE_IMAGE_DOWNLOAD' ) && HUMANITIX_ENABLE_IMAGE_DOWNLOAD;
+		// Enable image downloads by default, but allow disabling for performance
+		return ! defined( 'HUMANITIX_DISABLE_IMAGE_DOWNLOAD' ) || ! HUMANITIX_DISABLE_IMAGE_DOWNLOAD;
 	}
 
 	/**

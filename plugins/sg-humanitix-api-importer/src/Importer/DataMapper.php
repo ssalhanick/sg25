@@ -535,16 +535,48 @@ class DataMapper {
 			}
 		}
 
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "DataMapper: Found images: " . wp_json_encode( $images ) );
+		}
+
 		if ( ! empty( $images ) ) {
 			$mapped_event['meta_input']['humanitix_images'] = wp_json_encode( $images );
 
-			// Set featured image if available
-			if ( isset( $images['feature'] ) ) {
-				$thumbnail_id = $this->process_event_image( $images['feature'] );
-				$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
-			} elseif ( isset( $images['banner'] ) ) {
-				$thumbnail_id = $this->process_event_image( $images['banner'] );
-				$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
+			// Set featured image if available - prioritize featureImage over bannerImage
+			if ( isset( $images['featureImage'] ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( "DataMapper: Processing featureImage: " . $images['featureImage'] );
+				}
+				$thumbnail_id = $this->process_event_image( $images['featureImage'] );
+				if ( $thumbnail_id ) {
+					$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "DataMapper: Set featured image ID: " . $thumbnail_id );
+					}
+				} else {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "DataMapper: Failed to process featureImage" );
+					}
+				}
+			} elseif ( isset( $images['bannerImage'] ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( "DataMapper: Processing bannerImage: " . $images['bannerImage'] );
+				}
+				$thumbnail_id = $this->process_event_image( $images['bannerImage'] );
+				if ( $thumbnail_id ) {
+					$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "DataMapper: Set featured image ID: " . $thumbnail_id );
+					}
+				} else {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "DataMapper: Failed to process bannerImage" );
+					}
+				}
+			}
+		} else {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "DataMapper: No images found in event data" );
 			}
 		}
 
@@ -950,7 +982,14 @@ class DataMapper {
 	 */
 	private function process_event_image( $image_url ) {
 		if ( empty( $image_url ) ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "DataMapper: process_event_image called with empty URL" );
+			}
 			return false;
+		}
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "DataMapper: Processing image URL: " . $image_url );
 		}
 
 		// Use static cache for this request.
@@ -958,26 +997,48 @@ class DataMapper {
 		$cache_key          = md5( $image_url );
 
 		if ( isset( $image_cache[ $cache_key ] ) ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "DataMapper: Using cached image ID: " . $image_cache[ $cache_key ] );
+			}
 			return $image_cache[ $cache_key ];
 		}
 
 		// Check if image already exists in database.
 		$existing_attachment = $this->find_existing_image( $image_url );
 		if ( $existing_attachment ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "DataMapper: Found existing image ID: " . $existing_attachment );
+			}
 			$image_cache[ $cache_key ] = $existing_attachment;
 			return $existing_attachment;
+		}
+
+		// Check if image download is enabled
+		$image_download_enabled = \SG\HumanitixApiImporter\Admin\PerformanceConfig::should_enable_image_download();
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "DataMapper: Image download enabled: " . ( $image_download_enabled ? 'true' : 'false' ) );
 		}
 
 		// For performance, skip image download by default during bulk imports.
 		// Images can be processed separately or on-demand.
 		// Only download images if explicitly enabled.
-		if ( ! \SG\HumanitixApiImporter\Admin\PerformanceConfig::should_enable_image_download() ) {
+		if ( ! $image_download_enabled ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "DataMapper: Image download disabled, skipping" );
+			}
 			$image_cache[ $cache_key ] = false;
 			return false;
 		}
 
 		// Download and attach image.
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "DataMapper: Downloading and attaching image" );
+		}
 		$attachment_id = $this->download_and_attach_image( $image_url );
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "DataMapper: Download result - attachment ID: " . ( $attachment_id ? $attachment_id : 'false' ) );
+		}
 
 		$image_cache[ $cache_key ] = $attachment_id;
 		return $attachment_id;
