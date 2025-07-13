@@ -13,6 +13,8 @@ namespace SG\HumanitixApiImporter\Importer;
 
 use SG\HumanitixApiImporter\HumanitixAPI;
 use SG\HumanitixApiImporter\Admin\Logger;
+use SG\HumanitixApiImporter\Admin\ErrorCode;
+use SG\HumanitixApiImporter\Admin\PerformanceConfig;
 use SG\HumanitixApiImporter\Importer\DataMapper;
 
 /**
@@ -73,7 +75,7 @@ class EventsImporter {
 	}
 
 	/**
-	 * Import events from Humanitix API.
+	 * Import events from Humanitix API with memory management and error codes.
 	 *
 	 * @param int      $page Page number to import (>= 1).
 	 * @param int|null $import_limit Optional limit on number of events to import (for debugging).
@@ -85,6 +87,9 @@ class EventsImporter {
 
 		$debug_helper->log( 'Importer', "Starting import_events with page: {$page}" . ( $import_limit ? ", limit: {$import_limit}" : '' ) );
 
+		// Start timing
+		$this->start_time = microtime( true );
+
 		// Debug: Check what Humanitix IDs are already stored.
 		$this->debug_check_stored_humanitix_ids();
 
@@ -94,12 +99,13 @@ class EventsImporter {
 			$events = $this->api->get_events( $page );
 
 			if ( is_wp_error( $events ) ) {
-				$debug_helper->log_error( 'API', 'API returned WP_Error: ' . $events->get_error_message() );
+				$error_code = ErrorCode::API_SERVER_ERROR;
+				$this->logger->log_error_code( $error_code, 'Failed to fetch events from API' );
 				return array(
 					'success'  => false,
 					'message'  => 'Failed to fetch events: ' . $events->get_error_message(),
 					'imported' => 0,
-					'errors'   => array( 'Failed to fetch events: ' . $events->get_error_message() ),
+					'errors'   => array( $error_code ),
 				);
 			}
 
@@ -109,6 +115,8 @@ class EventsImporter {
 					'success'  => true,
 					'message'  => 'No events found to import.',
 					'imported' => 0,
+					'updated'  => 0,
+					'existing' => 0,
 					'errors'   => array(),
 				);
 			}
@@ -122,54 +130,94 @@ class EventsImporter {
 
 			$debug_helper->log( 'Importer', 'Processing ' . count( $events ) . ' events' );
 
-			$imported_count = 0;
-			$errors         = array();
+			// Get dynamic batch size based on memory and event count
+			$total_events = count( $events );
+			$batch_size = PerformanceConfig::get_dynamic_batch_size( $total_events );
 
-			foreach ( $events as $event ) {
-				$result = $this->import_single_event( $event );
-				if ( $result['success'] ) {
-					++$imported_count;
-				} else {
-					$errors[] = $result['message'];
+			$debug_helper->log( 'Memory', "Using batch size: {$batch_size} for {$total_events} total events" );
+
+			$imported_count = 0;
+			$updated_count = 0;
+			$existing_count = 0;
+			$error_codes = array();
+
+			// Process events in batches
+			$batches = array_chunk( $events, $batch_size );
+			
+			foreach ( $batches as $batch_index => $batch ) {
+				$debug_helper->log( 'Batch', "Processing batch " . ( $batch_index + 1 ) . " of " . count( $batches ) );
+
+				foreach ( $batch as $event ) {
+					$result = $this->import_single_event( $event );
+					
+					if ( $result['success'] ) {
+						switch ( $result['action'] ) {
+							case 'created':
+								++$imported_count;
+								break;
+							case 'updated':
+								++$updated_count;
+								break;
+							case 'existing':
+								++$existing_count;
+								break;
+						}
+					} else {
+						$error_codes[] = $result['error_code'] ?? ErrorCode::IMPORT_MAPPING_FAILED;
+					}
+				}
+
+				// Memory management after each batch
+				if ( ! PerformanceConfig::is_memory_safe() ) {
+					$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
+					PerformanceConfig::force_garbage_collection();
 				}
 			}
 
+			$duration = microtime( true ) - $this->start_time;
+
+			// Log import summary with error codes
+			$this->logger->log_import_summary_with_codes( $imported_count, $updated_count, $existing_count, $error_codes, $duration );
+
 			$message = sprintf(
-				'Successfully imported %d events from page %d.',
+				'Import completed: %d new events, %d updated events, %d existing events in %.2f seconds',
 				$imported_count,
-				$page
+				$updated_count,
+				$existing_count,
+				$duration
 			);
 
-			if ( ! empty( $errors ) ) {
-				$message .= ' Errors: ' . implode( ', ', $errors );
-			}
-
-			// Log concise import summary.
-			$this->logger->log_import_summary( $imported_count, $errors );
-
 			return array(
-				'success'  => $imported_count > 0,
+				'success'  => $imported_count > 0 || $updated_count > 0,
 				'message'  => $message,
 				'imported' => $imported_count,
-				'errors'   => $errors,
+				'updated'  => $updated_count,
+				'existing' => $existing_count,
+				'errors'   => $error_codes,
+				'duration' => $duration,
 			);
 
 		} catch ( \Exception $e ) {
+			$error_code = ErrorCode::from_exception( $e );
+			$this->logger->log_error_code( $error_code, 'Exception during import: ' . $e->getMessage() );
+			
 			$debug_helper->log_error( 'Importer', 'Exception caught: ' . $e->getMessage() );
 			return array(
 				'success'  => false,
 				'message'  => 'Import failed: ' . $e->getMessage(),
 				'imported' => 0,
-				'errors'   => array( 'Import failed: ' . $e->getMessage() ),
+				'updated'  => 0,
+				'existing' => 0,
+				'errors'   => array( $error_code ),
 			);
 		}
 	}
 
 	/**
-	 * Import a single event.
+	 * Import a single event with error codes and action tracking.
 	 *
 	 * @param array $event_data Humanitix event data.
-	 * @return array Import result.
+	 * @return array Import result with action type and error codes.
 	 */
 	public function import_single_event( $event_data ) {
 		try {
@@ -186,10 +234,12 @@ class EventsImporter {
 			$mapped_event = $mapper->map_event( $event_data );
 
 			if ( empty( $mapped_event ) ) {
-				$debug_helper->log_error( 'DataMapper', 'DataMapper returned empty mapped event' );
+				$error_code = ErrorCode::IMPORT_MAPPING_FAILED;
+				$this->logger->log_error_code( $error_code, 'DataMapper returned empty mapped event for: ' . $event_name );
 				return array(
-					'success' => false,
-					'message' => 'Failed to map event data for event: ' . ( $event_data['name'] ?? 'Unknown' ),
+					'success'    => false,
+					'message'    => 'Failed to map event data for event: ' . $event_name,
+					'error_code' => $error_code,
 				);
 			}
 
@@ -217,6 +267,9 @@ class EventsImporter {
 			}
 
 			if ( is_wp_error( $post_id ) ) {
+				$error_code = $action === 'created' ? ErrorCode::WP_POST_CREATION_FAILED : ErrorCode::WP_POST_UPDATE_FAILED;
+				$this->logger->log_error_code( $error_code, "Failed to {$action} event: " . $post_id->get_error_message() );
+				
 				$debug_helper->log_critical_error(
 					'Importer',
 					"Failed to {$action} event: " . $post_id->get_error_message(),
@@ -227,8 +280,9 @@ class EventsImporter {
 					)
 				);
 				return array(
-					'success' => false,
-					'message' => 'Failed to ' . $action . ' event: ' . $post_id->get_error_message(),
+					'success'    => false,
+					'message'    => 'Failed to ' . $action . ' event: ' . $post_id->get_error_message(),
+					'error_code' => $error_code,
 				);
 			}
 
@@ -257,11 +311,6 @@ class EventsImporter {
 				}
 			}
 
-			// Link venue to event if venue was created/found.
-			if ( $venue_id ) {
-				update_post_meta( $post_id, '_EventVenueID', $venue_id );
-			}
-
 			// Log the import.
 			$this->logger->log(
 				'import',
@@ -282,6 +331,9 @@ class EventsImporter {
 			);
 
 		} catch ( \Exception $e ) {
+			$error_code = ErrorCode::from_exception( $e );
+			$this->logger->log_error_code( $error_code, 'Exception during single event import: ' . $e->getMessage() );
+			
 			$debug_helper->log_critical_error(
 				'Importer',
 				'Failed to import event: ' . $e->getMessage(),
@@ -293,8 +345,9 @@ class EventsImporter {
 			);
 
 			return array(
-				'success' => false,
-				'message' => 'Import failed: ' . $e->getMessage(),
+				'success'    => false,
+				'message'    => 'Import failed: ' . $e->getMessage(),
+				'error_code' => $error_code,
 			);
 		}
 	}
