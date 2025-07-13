@@ -154,7 +154,31 @@ class EventsImporter {
 				throw new Exception( 'API not initialized. Please check your configuration.' );
 			}
 			
-			$events = $this->api->get_events( $page );
+			// Add retry logic for API calls
+			$max_retries = 3;
+			$retry_count = 0;
+			$events = null;
+			
+			while ( $retry_count < $max_retries && is_null( $events ) ) {
+				try {
+					$events = $this->api->get_events( $page );
+					
+					// If we get a WP_Error, throw an exception
+					if ( is_wp_error( $events ) ) {
+						throw new Exception( $events->get_error_message() );
+					}
+					
+				} catch ( Exception $e ) {
+					$retry_count++;
+					if ( $retry_count < $max_retries ) {
+						$debug_helper->log( 'API', "API call failed, retrying ({$retry_count}/{$max_retries}): " . $e->getMessage() );
+						sleep( 2 ); // Wait 2 seconds before retry
+					} else {
+						throw $e; // Re-throw on final attempt
+					}
+				}
+			}
+			
 			$api_duration = microtime( true ) - $api_start_time;
 
 			if ( is_wp_error( $events ) ) {
@@ -257,20 +281,31 @@ class EventsImporter {
 					}
 				}
 
-				// Memory management after each batch
-				if ( ! PerformanceConfig::is_memory_safe() ) {
-					$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
-					PerformanceConfig::force_garbage_collection();
-					
-					// Log memory cleanup when HUMANITIX_DEBUG is enabled
-					if ( $debug_helper->is_humanitix_debug_enabled() ) {
-						$debug_helper->log_detailed( 'Memory', 'Forced garbage collection', array(
-							'batch_index' => $batch_index + 1,
-							'memory_before' => memory_get_usage( true ),
-							'memory_after' => memory_get_usage( true ),
-						) );
-					}
+							// Memory management after each batch
+			$memory_info = PerformanceConfig::get_memory_info();
+			$debug_helper->log( 'Memory', "Batch {$batch_index} complete - Memory: {$memory_info['current_mb']}MB / {$memory_info['limit_mb']}MB" );
+			
+			if ( ! PerformanceConfig::is_memory_safe() ) {
+				$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
+				PerformanceConfig::force_garbage_collection();
+				
+				// Log memory cleanup when HUMANITIX_DEBUG is enabled
+				if ( $debug_helper->is_humanitix_debug_enabled() ) {
+					$memory_after = PerformanceConfig::get_memory_info();
+					$debug_helper->log_detailed( 'Memory', 'Forced garbage collection', array(
+						'batch_index' => $batch_index + 1,
+						'memory_before_mb' => $memory_info['current_mb'],
+						'memory_after_mb' => $memory_after['current_mb'],
+						'memory_freed_mb' => $memory_info['current_mb'] - $memory_after['current_mb'],
+					) );
 				}
+			}
+			
+			// Force garbage collection every 3 batches regardless of memory usage
+			if ( ( $batch_index + 1 ) % 3 === 0 ) {
+				PerformanceConfig::force_garbage_collection();
+				$debug_helper->log( 'Memory', 'Periodic garbage collection performed' );
+			}
 			}
 
 			$duration = microtime( true ) - $this->start_time;

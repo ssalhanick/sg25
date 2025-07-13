@@ -126,8 +126,7 @@ class AdminInterface {
 			'Settings',
 			'manage_options',
 			'humanitix-importer-settings',
-			array( $this, 'render_settings_page' ),
-			10
+			array( $this, 'render_settings_page' )
 		);
 
 		// Only show debug page to plugin authors or when debug is enabled.
@@ -138,8 +137,7 @@ class AdminInterface {
 				'Debug',
 				'manage_options',
 				'humanitix-debug',
-				array( $this, 'render_debug_page' ),
-				20
+				array( $this, 'render_debug_page' )
 			);
 		}
 
@@ -149,8 +147,7 @@ class AdminInterface {
 			'Import Logs',
 			'manage_options',
 			'humanitix-importer-logs',
-			array( $this, 'render_logs_page' ),
-			30
+			array( $this, 'render_logs_page' )
 		);
 
 		add_submenu_page(
@@ -159,8 +156,7 @@ class AdminInterface {
 			'Dashboard',
 			'manage_options',
 			'humanitix-importer-dashboard',
-			array( $this, 'render_dashboard_page' ),
-			40
+			array( $this, 'render_dashboard_page' )
 		);
 		
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -829,9 +825,18 @@ class AdminInterface {
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
+				error_log( 'Humanitix Import: Exception trace: ' . $e->getTraceAsString() );
 			}
 			$this->logger->log( 'error', 'Import failed: ' . $e->getMessage() );
-			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+			
+			// Send more detailed error information
+			wp_send_json_error( array( 
+				'message' => $e->getMessage(),
+				'error_type' => get_class( $e ),
+				'file' => $e->getFile(),
+				'line' => $e->getLine(),
+				'trace' => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
+			) );
 		}
 	}
 
