@@ -116,7 +116,7 @@ class Plugin {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin deactivated' );
 		}
-		
+
 		// Clear any scheduled auto import cron jobs.
 		wp_clear_scheduled_hook( 'humanitix_auto_import' );
 	}
@@ -351,11 +351,11 @@ class Plugin {
 	 */
 	private function check_auto_import_schedule() {
 		$options = get_option( 'humanitix_importer_options', array() );
-		
+
 		if ( ! empty( $options['auto_import'] ) ) {
 			$frequency   = $options['import_frequency'] ?? 'daily';
 			$import_time = $options['import_time'] ?? '00:00';
-			
+
 			// Only schedule if not already scheduled.
 			if ( ! wp_next_scheduled( 'humanitix_auto_import' ) ) {
 				$this->schedule_auto_import( $frequency, $import_time );
@@ -367,8 +367,8 @@ class Plugin {
 	 * Handle settings updates to manage cron scheduling.
 	 *
 	 * @since 1.0.0
-	 * @param mixed $old_value The old option value.
-	 * @param mixed $new_value The new option value.
+	 * @param mixed  $old_value The old option value.
+	 * @param mixed  $new_value The new option value.
 	 * @param string $option The option name.
 	 * @return void
 	 */
@@ -414,9 +414,9 @@ class Plugin {
 				'info',
 				'Auto import scheduled',
 				array(
-					'frequency' => $frequency,
+					'frequency'   => $frequency,
 					'import_time' => $import_time,
-					'next_run' => date( 'Y-m-d H:i:s', $next_run ),
+					'next_run'    => date( 'Y-m-d H:i:s', $next_run ),
 				)
 			);
 		}
@@ -446,34 +446,34 @@ class Plugin {
 	 * @return int Unix timestamp for the next run.
 	 */
 	private function calculate_next_run_time( $frequency, $import_time ) {
-		$time_parts   = explode( ':', $import_time );
-		$hour         = intval( $time_parts[0] );
-		$minute       = intval( $time_parts[1] );
+		$time_parts = explode( ':', $import_time );
+		$hour       = intval( $time_parts[0] );
+		$minute     = intval( $time_parts[1] );
 
 		// Get WordPress timezone.
 		$timezone = wp_timezone();
-		
+
 		// Get current time in local timezone.
 		$now = new \DateTime( 'now', $timezone );
-		
+
 		// Create a DateTime object for today at the specified time in WordPress timezone.
 		$next_run = new \DateTime( 'today ' . $import_time, $timezone );
-		
+
 		// If the time has already passed today, schedule for tomorrow.
 		if ( $next_run <= $now ) {
 			$next_run = new \DateTime( 'tomorrow ' . $import_time, $timezone );
 		}
 
 		// For weekly frequency, adjust to the next occurrence.
-		if ( $frequency === 'weekly' ) {
+		if ( 'weekly' === $frequency ) {
 			$next_run = new \DateTime( 'next ' . $next_run->format( 'l' ) . ' ' . $import_time, $timezone );
 		}
 
 		// For hourly frequency, calculate the next hour.
-		if ( $frequency === 'hourly' ) {
+		if ( 'hourly' === $frequency ) {
 			$next_run = new \DateTime( 'now', $timezone );
 			$next_run->setTime( $hour, $minute, 0 );
-			
+
 			// If the time has passed this hour, go to next hour.
 			if ( $next_run <= $now ) {
 				$next_run->modify( '+1 hour' );
@@ -517,9 +517,9 @@ class Plugin {
 					$result['success'] ? 'info' : 'error',
 					'Auto import completed',
 					array(
-						'success' => $result['success'],
+						'success'  => $result['success'],
 						'imported' => $result['imported'],
-						'errors' => $result['errors'],
+						'errors'   => $result['errors'],
 					)
 				);
 			}
@@ -531,8 +531,8 @@ class Plugin {
 					'Auto import exception: ' . $e->getMessage(),
 					array(
 						'exception' => $e->getMessage(),
-						'file' => $e->getFile(),
-						'line' => $e->getLine(),
+						'file'      => $e->getFile(),
+						'line'      => $e->getLine(),
 					)
 				);
 			}

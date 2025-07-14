@@ -348,16 +348,16 @@ class SettingsManager {
 	 */
 	public function render_import_section() {
 		echo '<p>Configure import behavior and scheduling.</p>';
-		
+
 		// Display auto import status.
-		$options = get_option( $this->options_name, array() );
+		$options     = get_option( $this->options_name, array() );
 		$auto_import = $options['auto_import'] ?? false;
-		
+
 		if ( $auto_import ) {
 			$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
-			$frequency = $options['import_frequency'] ?? 'daily';
-			$import_time = $options['import_time'] ?? '00:00';
-			
+			$frequency      = $options['import_frequency'] ?? 'daily';
+			$import_time    = $options['import_time'] ?? '00:00';
+
 			if ( $next_scheduled ) {
 				$next_run = date( 'Y-m-d H:i:s', $next_scheduled );
 				echo '<div class="notice notice-success inline"><p><strong>Auto Import Status:</strong> Enabled (Next run: ' . esc_html( $next_run ) . ')</p></div>';

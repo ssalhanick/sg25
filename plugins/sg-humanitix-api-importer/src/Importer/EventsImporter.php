@@ -17,29 +17,29 @@ use SG\HumanitixApiImporter\Admin\ErrorCode;
 use SG\HumanitixApiImporter\Admin\PerformanceConfig;
 use SG\HumanitixApiImporter\Importer\DataMapper;
 
-// Ensure ErrorCode class is available
+// Ensure ErrorCode class is available.
 if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\ErrorCode' ) ) {
-    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/ErrorCode.php';
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/ErrorCode.php';
 }
 
-// Ensure PerformanceConfig class is available
+// Ensure PerformanceConfig class is available.
 if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\PerformanceConfig' ) ) {
-    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/PerformanceConfig.php';
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/PerformanceConfig.php';
 }
 
-// Ensure DebugHelper class is available
+// Ensure DebugHelper class is available.
 if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\DebugHelper' ) ) {
-    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/DebugHelper.php';
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/DebugHelper.php';
 }
 
-// Ensure DataMapper class is available
+// Ensure DataMapper class is available.
 if ( ! class_exists( 'SG\HumanitixApiImporter\Importer\DataMapper' ) ) {
-    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Importer/DataMapper.php';
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Importer/DataMapper.php';
 }
 
-// Ensure HumanitixAPI class is available
+// Ensure HumanitixAPI class is available.
 if ( ! class_exists( 'SG\HumanitixApiImporter\HumanitixAPI' ) ) {
-    require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/HumanitixAPI.php';
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/HumanitixAPI.php';
 }
 
 /**
@@ -105,6 +105,7 @@ class EventsImporter {
 	 * @param int      $page Page number to import (>= 1).
 	 * @param int|null $import_limit Optional limit on number of events to import (for debugging).
 	 * @return array Import result.
+	 * @throws \Exception When API is not initialized or API calls fail after retries.
 	 */
 	public function import_events( $page = 1, $import_limit = null ) {
 		// Initialize debug helper.
@@ -112,23 +113,27 @@ class EventsImporter {
 
 		$debug_helper->log( 'Importer', "Starting import_events with page: {$page}" . ( $import_limit ? ", limit: {$import_limit}" : '' ) );
 
-		// Start timing
+		// Start timing.
 		$this->start_time = microtime( true );
 
-		// Log import start with detailed metrics when HUMANITIX_DEBUG is enabled
+		// Log import start with detailed metrics when HUMANITIX_DEBUG is enabled.
 		if ( $debug_helper->is_humanitix_debug_enabled() ) {
-			$debug_helper->log_detailed( 'Import', 'Starting import process', array(
-				'page' => $page,
-				'import_limit' => $import_limit,
-				'memory_usage' => $debug_helper->get_memory_usage_info(),
-			) );
+			$debug_helper->log_detailed(
+				'Import',
+				'Starting import process',
+				array(
+					'page'         => $page,
+					'import_limit' => $import_limit,
+					'memory_usage' => $debug_helper->get_memory_usage_info(),
+				)
+			);
 		}
 
 		// Debug: Check what Humanitix IDs are already stored.
 		try {
 			$this->debug_check_stored_humanitix_ids();
 		} catch ( Exception $e ) {
-			// Log the error but don't stop the import process
+			// Log the error but don't stop the import process.
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: Debug check failed: ' . $e->getMessage() );
 			}
@@ -137,63 +142,71 @@ class EventsImporter {
 		try {
 			// Get events from Humanitix API.
 			$debug_helper->log( 'API', 'Calling get_events()' );
-			
-			// Log API call start when HUMANITIX_DEBUG is enabled
+
+			// Log API call start when HUMANITIX_DEBUG is enabled.
 			if ( $debug_helper->is_humanitix_debug_enabled() ) {
-				$debug_helper->log_detailed( 'API', 'Making API request', array(
-					'endpoint' => 'get_events',
-					'page' => $page,
-					'api_key_length' => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
-				) );
+				$debug_helper->log_detailed(
+					'API',
+					'Making API request',
+					array(
+						'endpoint'       => 'get_events',
+						'page'           => $page,
+						'api_key_length' => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
+					)
+				);
 			}
-			
+
 			$api_start_time = microtime( true );
-			
-			// Check if API is available
+
+			// Check if API is available.
 			if ( ! $this->api ) {
 				throw new Exception( 'API not initialized. Please check your configuration.' );
 			}
-			
-			// Add retry logic for API calls
+
+			// Add retry logic for API calls.
 			$max_retries = 3;
 			$retry_count = 0;
-			$events = null;
-			
+			$events      = null;
+
 			while ( $retry_count < $max_retries && is_null( $events ) ) {
 				try {
 					$events = $this->api->get_events( $page );
-					
-					// If we get a WP_Error, throw an exception
+
+					// If we get a WP_Error, throw an exception.
 					if ( is_wp_error( $events ) ) {
 						throw new Exception( $events->get_error_message() );
 					}
-					
 				} catch ( Exception $e ) {
-					$retry_count++;
+					++$retry_count;
 					if ( $retry_count < $max_retries ) {
 						$debug_helper->log( 'API', "API call failed, retrying ({$retry_count}/{$max_retries}): " . $e->getMessage() );
-						sleep( 2 ); // Wait 2 seconds before retry
+						sleep( 2 ); // Wait 2 seconds before retry.
 					} else {
-						throw $e; // Re-throw on final attempt
+						throw $e; // Re-throw on final attempt.
 					}
 				}
 			}
-			
+
 			$api_duration = microtime( true ) - $api_start_time;
 
 			if ( is_wp_error( $events ) ) {
 				$error_code = ErrorCode::API_SERVER_ERROR;
 				$this->logger->log_error_code( $error_code, 'Failed to fetch events from API' );
-				
-				// Log detailed API error when HUMANITIX_DEBUG is enabled
+
+				// Log detailed API error when HUMANITIX_DEBUG is enabled.
 				if ( $debug_helper->is_humanitix_debug_enabled() ) {
-					$debug_helper->log_detailed_error( 'API', 'API request failed', null, array(
-						'error_message' => $events->get_error_message(),
-						'error_code' => $events->get_error_code(),
-						'api_duration' => $api_duration,
-					) );
+					$debug_helper->log_detailed_error(
+						'API',
+						'API request failed',
+						null,
+						array(
+							'error_message' => $events->get_error_message(),
+							'error_code'    => $events->get_error_code(),
+							'api_duration'  => $api_duration,
+						)
+					);
 				}
-				
+
 				return array(
 					'success'  => false,
 					'message'  => 'Failed to fetch events: ' . $events->get_error_message(),
@@ -223,47 +236,56 @@ class EventsImporter {
 
 			$debug_helper->log( 'Importer', 'Processing ' . count( $events ) . ' events' );
 
-			// Get dynamic batch size based on memory and event count
+			// Get dynamic batch size based on memory and event count.
 			$total_events = count( $events );
-			$batch_size = PerformanceConfig::get_dynamic_batch_size( $total_events );
+			$batch_size   = PerformanceConfig::get_dynamic_batch_size( $total_events );
 
 			$debug_helper->log( 'Memory', "Using batch size: {$batch_size} for {$total_events} total events" );
 
 			$imported_count = 0;
-			$updated_count = 0;
+			$updated_count  = 0;
 			$existing_count = 0;
-			$error_codes = array();
+			$error_codes    = array();
 
-			// Process events in batches
+			// Process events in batches.
 			$batches = array_chunk( $events, $batch_size );
-			
-			foreach ( $batches as $batch_index => $batch ) {
-				$debug_helper->log( 'Batch', "Processing batch " . ( $batch_index + 1 ) . " of " . count( $batches ) );
 
-				// Log batch start when HUMANITIX_DEBUG is enabled
+			foreach ( $batches as $batch_index => $batch ) {
+				$debug_helper->log( 'Batch', 'Processing batch ' . ( $batch_index + 1 ) . ' of ' . count( $batches ) );
+
+				// Log batch start when HUMANITIX_DEBUG is enabled.
 				if ( $debug_helper->is_humanitix_debug_enabled() ) {
-					$debug_helper->log_detailed( 'Batch', 'Starting batch processing', array(
-						'batch_index' => $batch_index + 1,
-						'total_batches' => count( $batches ),
-						'batch_size' => count( $batch ),
-						'progress' => round( ( ( $batch_index + 1 ) / count( $batches ) ) * 100, 2 ),
-					) );
+					$debug_helper->log_detailed(
+						'Batch',
+						'Starting batch processing',
+						array(
+							'batch_index'   => $batch_index + 1,
+							'total_batches' => count( $batches ),
+							'batch_size'    => count( $batch ),
+							'progress'      => round( ( ( $batch_index + 1 ) / count( $batches ) ) * 100, 2 ),
+						)
+					);
 				}
 
 				foreach ( $batch as $event_index => $event ) {
 					$current_event_number = ( $batch_index * $batch_size ) + $event_index + 1;
-					
-					// Log progress when HUMANITIX_DEBUG is enabled
+
+					// Log progress when HUMANITIX_DEBUG is enabled.
 					if ( $debug_helper->is_humanitix_debug_enabled() ) {
-						$debug_helper->log_import_progress( $current_event_number, $total_events, $event['name'] ?? 'Unknown', array(
-							'batch_index' => $batch_index + 1,
-							'event_index' => $event_index + 1,
-							'batch_size' => count( $batch ),
-						) );
+						$debug_helper->log_import_progress(
+							$current_event_number,
+							$total_events,
+							$event['name'] ?? 'Unknown',
+							array(
+								'batch_index' => $batch_index + 1,
+								'event_index' => $event_index + 1,
+								'batch_size'  => count( $batch ),
+							)
+						);
 					}
-					
+
 					$result = $this->import_single_event( $event );
-					
+
 					if ( $result['success'] ) {
 						switch ( $result['action'] ) {
 							case 'created':
@@ -281,36 +303,40 @@ class EventsImporter {
 					}
 				}
 
-							// Memory management after each batch
-			$memory_info = PerformanceConfig::get_memory_info();
-			$debug_helper->log( 'Memory', "Batch {$batch_index} complete - Memory: {$memory_info['current_mb']}MB / {$memory_info['limit_mb']}MB" );
-			
-			if ( ! PerformanceConfig::is_memory_safe() ) {
-				$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
-				PerformanceConfig::force_garbage_collection();
-				
-				// Log memory cleanup when HUMANITIX_DEBUG is enabled
-				if ( $debug_helper->is_humanitix_debug_enabled() ) {
-					$memory_after = PerformanceConfig::get_memory_info();
-					$debug_helper->log_detailed( 'Memory', 'Forced garbage collection', array(
-						'batch_index' => $batch_index + 1,
-						'memory_before_mb' => $memory_info['current_mb'],
-						'memory_after_mb' => $memory_after['current_mb'],
-						'memory_freed_mb' => $memory_info['current_mb'] - $memory_after['current_mb'],
-					) );
+							// Memory management after each batch.
+				$memory_info = PerformanceConfig::get_memory_info();
+				$debug_helper->log( 'Memory', "Batch {$batch_index} complete - Memory: {$memory_info['current_mb']}MB / {$memory_info['limit_mb']}MB" );
+
+				if ( ! PerformanceConfig::is_memory_safe() ) {
+					$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
+					PerformanceConfig::force_garbage_collection();
+
+					// Log memory cleanup when HUMANITIX_DEBUG is enabled.
+					if ( $debug_helper->is_humanitix_debug_enabled() ) {
+						$memory_after = PerformanceConfig::get_memory_info();
+						$debug_helper->log_detailed(
+							'Memory',
+							'Forced garbage collection',
+							array(
+								'batch_index'      => $batch_index + 1,
+								'memory_before_mb' => $memory_info['current_mb'],
+								'memory_after_mb'  => $memory_after['current_mb'],
+								'memory_freed_mb'  => $memory_info['current_mb'] - $memory_after['current_mb'],
+							)
+						);
+					}
 				}
-			}
-			
-			// Force garbage collection every 3 batches regardless of memory usage
-			if ( ( $batch_index + 1 ) % 3 === 0 ) {
-				PerformanceConfig::force_garbage_collection();
-				$debug_helper->log( 'Memory', 'Periodic garbage collection performed' );
-			}
+
+				// Force garbage collection every 3 batches regardless of memory usage.
+				if ( ( $batch_index + 1 ) % 3 === 0 ) {
+					PerformanceConfig::force_garbage_collection();
+					$debug_helper->log( 'Memory', 'Periodic garbage collection performed' );
+				}
 			}
 
 			$duration = microtime( true ) - $this->start_time;
 
-			// Log import summary with error codes
+			// Log import summary with error codes.
 			$this->logger->log_import_summary_with_codes( $imported_count, $updated_count, $existing_count, $error_codes, $duration );
 
 			$message = sprintf(
@@ -334,7 +360,7 @@ class EventsImporter {
 		} catch ( \Exception $e ) {
 			$error_code = ErrorCode::from_exception( $e );
 			$this->logger->log_error_code( $error_code, 'Exception during import: ' . $e->getMessage() );
-			
+
 			$debug_helper->log_error( 'Importer', 'Exception caught: ' . $e->getMessage() );
 			return array(
 				'success'  => false,
@@ -400,16 +426,16 @@ class EventsImporter {
 			} else {
 				// Create new event.
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( "Humanitix EventsImporter: No existing event found, creating new event..." );
+					error_log( 'Humanitix EventsImporter: No existing event found, creating new event...' );
 				}
 				$post_id = wp_insert_post( $mapped_event );
 				$action  = 'created';
 			}
 
 			if ( is_wp_error( $post_id ) ) {
-				$error_code = $action === 'created' ? ErrorCode::WP_POST_CREATION_FAILED : ErrorCode::WP_POST_UPDATE_FAILED;
+				$error_code = 'created' === $action ? ErrorCode::WP_POST_CREATION_FAILED : ErrorCode::WP_POST_UPDATE_FAILED;
 				$this->logger->log_error_code( $error_code, "Failed to {$action} event: " . $post_id->get_error_message() );
-				
+
 				$debug_helper->log_critical_error(
 					'Importer',
 					"Failed to {$action} event: " . $post_id->get_error_message(),
@@ -443,7 +469,7 @@ class EventsImporter {
 			// Store Humanitix ID for future reference.
 			$humanitix_id = $event_data['_id'] ?? '';
 			update_post_meta( $post_id, '_humanitix_event_id', $humanitix_id );
-			
+
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Stored humanitix_id '{$humanitix_id}' for post_id {$post_id}" );
 			}
@@ -478,7 +504,7 @@ class EventsImporter {
 		} catch ( \Exception $e ) {
 			$error_code = ErrorCode::from_exception( $e );
 			$this->logger->log_error_code( $error_code, 'Exception during single event import: ' . $e->getMessage() );
-			
+
 			$debug_helper->log_critical_error(
 				'Importer',
 				'Failed to import event: ' . $e->getMessage(),
@@ -1289,7 +1315,7 @@ class EventsImporter {
 			error_log( "Humanitix EventsImporter: Searching for existing event with humanitix_id: {$humanitix_id}" );
 		}
 
-		// First, let's check what's actually stored in the database
+		// First, let's check what's actually stored in the database.
 		global $wpdb;
 		$stored_ids = $wpdb->get_results(
 			"SELECT post_id, meta_value FROM {$wpdb->postmeta} 
@@ -1298,7 +1324,7 @@ class EventsImporter {
 		);
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "Humanitix EventsImporter: All stored humanitix IDs: " . wp_json_encode( $stored_ids ) );
+			error_log( 'Humanitix EventsImporter: All stored humanitix IDs: ' . wp_json_encode( $stored_ids ) );
 		}
 
 		$args = array(
@@ -1316,14 +1342,14 @@ class EventsImporter {
 		);
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "Humanitix EventsImporter: WP_Query args: " . wp_json_encode( $args ) );
+			error_log( 'Humanitix EventsImporter: WP_Query args: ' . wp_json_encode( $args ) );
 		}
 
 		$query = new \WP_Query( $args );
 		$posts = $query->posts;
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "Humanitix EventsImporter: WP_Query found " . count( $posts ) . " posts" );
+			error_log( 'Humanitix EventsImporter: WP_Query found ' . count( $posts ) . ' posts' );
 		}
 
 		$existing_event_id = ! empty( $posts ) ? $posts[0] : false;

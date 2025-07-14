@@ -90,21 +90,21 @@ class DataMapper {
 	 * @return array Mapped event data for The Events Calendar.
 	 */
 	public function map_event( $humanitix_event ) {
-		// Initialize debug helper for detailed logging
-		$logger = new \SG\HumanitixApiImporter\Admin\Logger();
+		// Initialize debug helper for detailed logging.
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
-		
-		// Start memory monitoring
+
+		// Start memory monitoring.
 		$start_memory = memory_get_usage( true );
-		
-		// Get performance configuration
-		$performance_config = new \SG\HumanitixApiImporter\Admin\PerformanceConfig();
+
+		// Get performance configuration.
+		$performance_config    = new \SG\HumanitixApiImporter\Admin\PerformanceConfig();
 		$optimization_settings = $performance_config::get_data_optimization_settings();
-		
-		// Log raw Humanitix data when HUMANITIX_DEBUG is enabled
+
+		// Log raw Humanitix data when HUMANITIX_DEBUG is enabled.
 		$debug_helper->log_raw_api_data( 'event_mapping', $humanitix_event, 'request' );
-		
-		// Start performance timing
+
+		// Start performance timing.
 		$start_time = microtime( true );
 
 		if ( ! is_array( $humanitix_event ) ) {
@@ -112,7 +112,7 @@ class DataMapper {
 			return array();
 		}
 
-		// Validate required fields when HUMANITIX_DEBUG is enabled
+		// Validate required fields when HUMANITIX_DEBUG is enabled.
 		if ( $debug_helper->is_humanitix_debug_enabled() ) {
 			$this->validate_required_fields( $humanitix_event, $debug_helper );
 		}
@@ -132,13 +132,13 @@ class DataMapper {
 			}
 		}
 
-		// Map basic fields with memory optimization
+		// Map basic fields with memory optimization.
 		$mapped_event = $this->map_basic_fields_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
-		// Map custom Humanitix fields with memory optimization
+		// Map custom Humanitix fields with memory optimization.
 		$mapped_event = $this->map_custom_fields_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
-		// Handle nested objects and arrays with memory optimization
+		// Handle nested objects and arrays with memory optimization.
 		$mapped_event = $this->map_nested_data_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
 		// Set timezone information after we have the event dates.
@@ -147,21 +147,25 @@ class DataMapper {
 		// Set default values for required TEC fields.
 		$mapped_event = $this->set_default_values( $mapped_event );
 
-		// Calculate memory usage
-		$end_memory = memory_get_usage( true );
+		// Calculate memory usage.
+		$end_memory  = memory_get_usage( true );
 		$memory_used = $end_memory - $start_memory;
 
-		// Log performance timing and final result when HUMANITIX_DEBUG is enabled
-		$debug_helper->log_performance_timing( 'event_mapping', $start_time, array(
-			'event_name' => $humanitix_event['name'] ?? 'Unknown',
-			'event_id' => $humanitix_event['_id'] ?? 'unknown',
-			'mapped_fields_count' => count( $mapped_event['meta_input'] ),
-			'memory_used_kb' => round( $memory_used / 1024, 2 ),
-			'optimization_enabled' => $optimization_settings['enabled'],
-			'max_string_length' => $optimization_settings['max_string_length'],
-		) );
+		// Log performance timing and final result when HUMANITIX_DEBUG is enabled.
+		$debug_helper->log_performance_timing(
+			'event_mapping',
+			$start_time,
+			array(
+				'event_name'           => $humanitix_event['name'] ?? 'Unknown',
+				'event_id'             => $humanitix_event['_id'] ?? 'unknown',
+				'mapped_fields_count'  => count( $mapped_event['meta_input'] ),
+				'memory_used_kb'       => round( $memory_used / 1024, 2 ),
+				'optimization_enabled' => $optimization_settings['enabled'],
+				'max_string_length'    => $optimization_settings['max_string_length'],
+			)
+		);
 
-		// Log final mapped data when HUMANITIX_DEBUG is enabled
+		// Log final mapped data when HUMANITIX_DEBUG is enabled.
 		$debug_helper->log_raw_api_data( 'event_mapping', $mapped_event, 'response' );
 
 		return $mapped_event;
@@ -170,71 +174,71 @@ class DataMapper {
 	/**
 	 * Validate required fields when HUMANITIX_DEBUG is enabled.
 	 *
-	 * @param array $humanitix_event Humanitix event data.
+	 * @param array                                      $humanitix_event Humanitix event data.
 	 * @param \SG\HumanitixApiImporter\Admin\DebugHelper $debug_helper Debug helper instance.
 	 */
 	private function validate_required_fields( $humanitix_event, $debug_helper ) {
 		$required_fields = array(
 			'name' => 'Event name',
-			'_id' => 'Event ID',
+			'_id'  => 'Event ID',
 		);
 
 		$recommended_fields = array(
-			'startDate' => 'Start date',
-			'endDate' => 'End date',
+			'startDate'   => 'Start date',
+			'endDate'     => 'End date',
 			'description' => 'Event description',
 		);
 
 		$optional_fields = array(
-			'venue' => 'Venue information',
-			'image' => 'Featured image',
+			'venue'    => 'Venue information',
+			'image'    => 'Featured image',
 			'category' => 'Event category',
 		);
 
-		// Check required fields
+		// Check required fields.
 		foreach ( $required_fields as $field => $description ) {
 			if ( ! isset( $humanitix_event[ $field ] ) || empty( $humanitix_event[ $field ] ) ) {
-				$debug_helper->log_missing_field( 
-					$humanitix_event['name'] ?? 'Unknown', 
-					$field, 
-					'required', 
-					$humanitix_event 
+				$debug_helper->log_missing_field(
+					$humanitix_event['name'] ?? 'Unknown',
+					$field,
+					'required',
+					$humanitix_event
 				);
 			}
 		}
 
-		// Check recommended fields
+		// Check recommended fields.
 		foreach ( $recommended_fields as $field => $description ) {
 			if ( ! isset( $humanitix_event[ $field ] ) || empty( $humanitix_event[ $field ] ) ) {
-				$debug_helper->log_missing_field( 
-					$humanitix_event['name'] ?? 'Unknown', 
-					$field, 
-					'recommended', 
-					$humanitix_event 
+				$debug_helper->log_missing_field(
+					$humanitix_event['name'] ?? 'Unknown',
+					$field,
+					'recommended',
+					$humanitix_event
 				);
 			}
 		}
 
-		// Check optional fields
+		// Check optional fields.
 		foreach ( $optional_fields as $field => $description ) {
 			if ( ! isset( $humanitix_event[ $field ] ) || empty( $humanitix_event[ $field ] ) ) {
-				$debug_helper->log_missing_field( 
-					$humanitix_event['name'] ?? 'Unknown', 
-					$field, 
-					'optional', 
-					$humanitix_event 
+				$debug_helper->log_missing_field(
+					$humanitix_event['name'] ?? 'Unknown',
+					$field,
+					'optional',
+					$humanitix_event
 				);
 			}
 		}
 
-		// Log validation summary
+		// Log validation summary.
 		$validation_results = array();
 		foreach ( array_merge( $required_fields, $recommended_fields, $optional_fields ) as $field => $description ) {
 			$validation_results[] = array(
-				'field' => $field,
+				'field'       => $field,
 				'description' => $description,
-				'valid' => isset( $humanitix_event[ $field ] ) && ! empty( $humanitix_event[ $field ] ),
-				'value' => $humanitix_event[ $field ] ?? null,
+				'valid'       => isset( $humanitix_event[ $field ] ) && ! empty( $humanitix_event[ $field ] ),
+				'value'       => $humanitix_event[ $field ] ?? null,
 			);
 		}
 
@@ -250,14 +254,14 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function map_basic_fields_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
-		// Use a more memory-efficient approach by processing only essential fields
+		// Use a more memory-efficient approach by processing only essential fields.
 		$essential_fields = array(
-			'name' => 'post_title',
+			'name'        => 'post_title',
 			'description' => 'post_content',
-			'startDate' => '_EventStartDate',
-			'endDate' => '_EventEndDate',
-			'timezone' => '_EventTimezone',
-			'url' => '_EventURL',
+			'startDate'   => '_EventStartDate',
+			'endDate'     => '_EventEndDate',
+			'timezone'    => '_EventTimezone',
+			'url'         => '_EventURL',
 		);
 
 		$max_string_length = $optimization_settings['max_string_length'];
@@ -266,7 +270,7 @@ class DataMapper {
 			if ( isset( $humanitix_event[ $humanitix_field ] ) ) {
 				$value = $humanitix_event[ $humanitix_field ];
 
-				// Handle special field mappings with memory optimization
+				// Handle special field mappings with memory optimization.
 				switch ( $tec_field ) {
 					case 'post_title':
 						$mapped_event['post_title'] = $this->truncate_string( sanitize_text_field( $value ), min( 200, $max_string_length ) );
@@ -304,20 +308,18 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function map_custom_fields_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
-		// Map the Humanitix ID from _id field to the meta field
+		// Map the Humanitix ID from _id field to the meta field.
 		if ( isset( $humanitix_event['_id'] ) ) {
 			$mapped_event['meta_input']['_humanitix_event_id'] = $this->sanitize_custom_field_optimized( $humanitix_event['_id'], $optimization_settings );
-			
+
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( "DataMapper: Mapped _id '{$humanitix_event['_id']}' to _humanitix_event_id meta field" );
 			}
-		} else {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "DataMapper: No _id field found in humanitix_event data" );
-			}
+		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'DataMapper: No _id field found in humanitix_event data' );
 		}
 
-		// Map URL if available
+		// Map URL if available.
 		if ( isset( $humanitix_event['url'] ) ) {
 			$mapped_event['meta_input']['humanitix_event_url'] = $this->sanitize_custom_field_optimized( $humanitix_event['url'], $optimization_settings );
 		}
@@ -334,26 +336,26 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function map_nested_data_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
-		// Initialize debug helper
+		// Initialize debug helper.
 		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
 
-		// Handle venue data with memory optimization
+		// Handle venue data with memory optimization.
 		$mapped_event = $this->process_venue_data_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
-		// Handle ticket types with memory optimization
+		// Handle ticket types with memory optimization.
 		$mapped_event = $this->process_ticket_types_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
-		// Handle pricing with memory optimization
+		// Handle pricing with memory optimization.
 		$mapped_event = $this->process_pricing_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
-		// Handle images with memory optimization
+		// Handle images with memory optimization.
 		$mapped_event = $this->process_images_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
-		// Validate required fields
+		// Validate required fields.
 		$this->validate_mapped_event( $mapped_event, $humanitix_event, $debug_helper );
 
-		// Process additional data with memory limits
+		// Process additional data with memory limits.
 		$mapped_event = $this->process_additional_data_optimized( $humanitix_event, $mapped_event, $optimization_settings );
 
 		return $mapped_event;
@@ -368,7 +370,7 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function process_venue_data_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
-		// Check multiple possible field names for venue data
+		// Check multiple possible field names for venue data.
 		$venue = null;
 		if ( isset( $humanitix_event['venue'] ) && is_array( $humanitix_event['venue'] ) ) {
 			$venue = $humanitix_event['venue'];
@@ -379,10 +381,10 @@ class DataMapper {
 		}
 
 		if ( $venue ) {
-			// Store only essential venue data to reduce memory usage
+			// Store only essential venue data to reduce memory usage.
 			$essential_venue_data = array();
-			$max_string_length = $optimization_settings['max_string_length'];
-			
+			$max_string_length    = $optimization_settings['max_string_length'];
+
 			if ( isset( $venue['instructions'] ) ) {
 				$essential_venue_data['instructions'] = $this->truncate_string( $venue['instructions'], min( 500, $max_string_length * 2 ) );
 			}
@@ -395,12 +397,12 @@ class DataMapper {
 				$essential_venue_data['lat_lng'] = $venue['lat_lng'];
 			}
 
-			// Store essential venue data only
+			// Store essential venue data only.
 			if ( ! empty( $essential_venue_data ) ) {
 				$mapped_event['meta_input']['humanitix_venue_data'] = wp_json_encode( $essential_venue_data );
 			}
 
-			// Store individual fields for easier access
+			// Store individual fields for easier access.
 			if ( isset( $venue['instructions'] ) ) {
 				$mapped_event['meta_input']['humanitix_location_instructions'] = $this->truncate_string( sanitize_textarea_field( $venue['instructions'] ), min( 500, $max_string_length * 2 ) );
 			}
@@ -430,25 +432,25 @@ class DataMapper {
 			return $mapped_event;
 		}
 
-		// Limit ticket types processing to prevent memory issues
+		// Limit ticket types processing to prevent memory issues.
 		$max_ticket_types = $optimization_settings['max_ticket_types'];
-		$ticket_types = array_slice( $humanitix_event['ticketTypes'], 0, $max_ticket_types );
+		$ticket_types     = array_slice( $humanitix_event['ticketTypes'], 0, $max_ticket_types );
 
-		// Store essential ticket data only
+		// Store essential ticket data only.
 		$essential_ticket_data = array();
-		$total_capacity = 0;
-		$available_tickets = 0;
-		$min_price = null;
-		$max_price = null;
-		$max_string_length = $optimization_settings['max_string_length'];
+		$total_capacity        = 0;
+		$available_tickets     = 0;
+		$min_price             = null;
+		$max_price             = null;
+		$max_string_length     = $optimization_settings['max_string_length'];
 
 		foreach ( $ticket_types as $ticket ) {
 			if ( ! isset( $ticket['disabled'] ) || ! $ticket['disabled'] ) {
-				$quantity = isset( $ticket['quantity'] ) ? intval( $ticket['quantity'] ) : 0;
-				$total_capacity += $quantity;
+				$quantity           = isset( $ticket['quantity'] ) ? intval( $ticket['quantity'] ) : 0;
+				$total_capacity    += $quantity;
 				$available_tickets += $quantity;
 
-				// Track pricing
+				// Track pricing.
 				if ( isset( $ticket['price'] ) ) {
 					$price = floatval( $ticket['price'] );
 					if ( null === $min_price || $price < $min_price ) {
@@ -459,24 +461,24 @@ class DataMapper {
 					}
 				}
 
-				// Store only essential ticket data
+				// Store only essential ticket data.
 				$essential_ticket_data[] = array(
-					'name' => $this->truncate_string( $ticket['name'] ?? '', min( 100, $max_string_length ) ),
-					'price' => $ticket['price'] ?? 0,
+					'name'     => $this->truncate_string( $ticket['name'] ?? '', min( 100, $max_string_length ) ),
+					'price'    => $ticket['price'] ?? 0,
 					'quantity' => $quantity,
 				);
 			}
 		}
 
-		// Store essential ticket data
+		// Store essential ticket data.
 		if ( ! empty( $essential_ticket_data ) ) {
 			$mapped_event['meta_input']['humanitix_ticket_types'] = wp_json_encode( $essential_ticket_data );
 		}
 
-		$mapped_event['meta_input']['_EventCapacity'] = $total_capacity;
+		$mapped_event['meta_input']['_EventCapacity']              = $total_capacity;
 		$mapped_event['meta_input']['humanitix_available_tickets'] = $available_tickets;
 
-		// Set pricing information
+		// Set pricing information.
 		if ( null !== $min_price && ! isset( $mapped_event['meta_input']['_EventCost'] ) ) {
 			$mapped_event['meta_input']['_EventCost'] = $min_price;
 			if ( $max_price !== $min_price ) {
@@ -500,11 +502,11 @@ class DataMapper {
 			return $mapped_event;
 		}
 
-		// Store only essential pricing data
+		// Store only essential pricing data.
 		$essential_pricing_data = array();
-		
+
 		if ( isset( $humanitix_event['pricing']['maximumPrice'] ) ) {
-			$essential_pricing_data['maximumPrice'] = floatval( $humanitix_event['pricing']['maximumPrice'] );
+			$essential_pricing_data['maximumPrice']   = floatval( $humanitix_event['pricing']['maximumPrice'] );
 			$mapped_event['meta_input']['_EventCost'] = $essential_pricing_data['maximumPrice'];
 		}
 
@@ -525,10 +527,10 @@ class DataMapper {
 	 */
 	private function process_images_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
 		$images = array();
-		
-		// Only process essential image types
+
+		// Only process essential image types.
 		$image_fields = array( 'bannerImage', 'featureImage' );
-		
+
 		foreach ( $image_fields as $field ) {
 			if ( isset( $humanitix_event[ $field ]['url'] ) ) {
 				$images[ $field ] = $humanitix_event[ $field ]['url'];
@@ -536,48 +538,42 @@ class DataMapper {
 		}
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "DataMapper: Found images: " . wp_json_encode( $images ) );
+			error_log( 'DataMapper: Found images: ' . wp_json_encode( $images ) );
 		}
 
 		if ( ! empty( $images ) ) {
 			$mapped_event['meta_input']['humanitix_images'] = wp_json_encode( $images );
 
-			// Set featured image if available - prioritize featureImage over bannerImage
+			// Set featured image if available - prioritize featureImage over bannerImage.
 			if ( isset( $images['featureImage'] ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( "DataMapper: Processing featureImage: " . $images['featureImage'] );
+					error_log( 'DataMapper: Processing featureImage: ' . $images['featureImage'] );
 				}
 				$thumbnail_id = $this->process_event_image( $images['featureImage'] );
 				if ( $thumbnail_id ) {
 					$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( "DataMapper: Set featured image ID: " . $thumbnail_id );
+						error_log( 'DataMapper: Set featured image ID: ' . $thumbnail_id );
 					}
-				} else {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( "DataMapper: Failed to process featureImage" );
-					}
+				} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'DataMapper: Failed to process featureImage' );
 				}
 			} elseif ( isset( $images['bannerImage'] ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( "DataMapper: Processing bannerImage: " . $images['bannerImage'] );
+					error_log( 'DataMapper: Processing bannerImage: ' . $images['bannerImage'] );
 				}
 				$thumbnail_id = $this->process_event_image( $images['bannerImage'] );
 				if ( $thumbnail_id ) {
 					$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( "DataMapper: Set featured image ID: " . $thumbnail_id );
+						error_log( 'DataMapper: Set featured image ID: ' . $thumbnail_id );
 					}
-				} else {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( "DataMapper: Failed to process bannerImage" );
-					}
+				} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'DataMapper: Failed to process bannerImage' );
 				}
 			}
-		} else {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "DataMapper: No images found in event data" );
-			}
+		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'DataMapper: No images found in event data' );
 		}
 
 		return $mapped_event;
@@ -592,9 +588,9 @@ class DataMapper {
 	 * @return array Updated mapped event data.
 	 */
 	private function process_additional_data_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
-		// Process only essential additional data to reduce memory usage
+		// Process only essential additional data to reduce memory usage.
 		$additional_fields = array(
-			'dates' => 'humanitix_dates',
+			'dates'         => 'humanitix_dates',
 			'accessibility' => 'humanitix_accessibility',
 		);
 
@@ -602,8 +598,8 @@ class DataMapper {
 
 		foreach ( $additional_fields as $field => $meta_key ) {
 			if ( isset( $humanitix_event[ $field ] ) && is_array( $humanitix_event[ $field ] ) ) {
-				// Limit array size to prevent memory issues
-				$limited_data = array_slice( $humanitix_event[ $field ], 0, $max_array_size );
+				// Limit array size to prevent memory issues.
+				$limited_data                            = array_slice( $humanitix_event[ $field ], 0, $max_array_size );
 				$mapped_event['meta_input'][ $meta_key ] = wp_json_encode( $limited_data );
 			}
 		}
@@ -614,12 +610,12 @@ class DataMapper {
 	/**
 	 * Validate mapped event data.
 	 *
-	 * @param array $mapped_event Mapped event data.
-	 * @param array $humanitix_event Original Humanitix event data.
+	 * @param array                                      $mapped_event Mapped event data.
+	 * @param array                                      $humanitix_event Original Humanitix event data.
 	 * @param \SG\HumanitixApiImporter\Admin\DebugHelper $debug_helper Debug helper instance.
 	 */
 	private function validate_mapped_event( $mapped_event, $humanitix_event, $debug_helper ) {
-		// Validate required fields
+		// Validate required fields.
 		if ( empty( $mapped_event['post_title'] ) ) {
 			$debug_helper->log_critical_error(
 				'DataMapper',
@@ -647,7 +643,7 @@ class DataMapper {
 	 * Truncate string to specified length to prevent memory issues.
 	 *
 	 * @param string $string The string to truncate.
-	 * @param int $max_length Maximum length.
+	 * @param int    $max_length Maximum length.
 	 * @return string Truncated string.
 	 */
 	private function truncate_string( $string, $max_length ) {
@@ -666,9 +662,9 @@ class DataMapper {
 	 */
 	private function sanitize_custom_field_optimized( $value, $optimization_settings ) {
 		if ( is_array( $value ) ) {
-			// Limit array size to prevent memory issues
+			// Limit array size to prevent memory issues.
 			$max_array_size = $optimization_settings['max_array_size'];
-			$limited_value = array_slice( $value, 0, $max_array_size );
+			$limited_value  = array_slice( $value, 0, $max_array_size );
 			return wp_json_encode( $limited_value );
 		} elseif ( is_string( $value ) ) {
 			$max_string_length = $optimization_settings['max_string_length'];
@@ -983,13 +979,13 @@ class DataMapper {
 	private function process_event_image( $image_url ) {
 		if ( empty( $image_url ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "DataMapper: process_event_image called with empty URL" );
+				error_log( 'DataMapper: process_event_image called with empty URL' );
 			}
 			return false;
 		}
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "DataMapper: Processing image URL: " . $image_url );
+			error_log( 'DataMapper: Processing image URL: ' . $image_url );
 		}
 
 		// Use static cache for this request.
@@ -998,7 +994,7 @@ class DataMapper {
 
 		if ( isset( $image_cache[ $cache_key ] ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "DataMapper: Using cached image ID: " . $image_cache[ $cache_key ] );
+				error_log( 'DataMapper: Using cached image ID: ' . $image_cache[ $cache_key ] );
 			}
 			return $image_cache[ $cache_key ];
 		}
@@ -1007,16 +1003,16 @@ class DataMapper {
 		$existing_attachment = $this->find_existing_image( $image_url );
 		if ( $existing_attachment ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "DataMapper: Found existing image ID: " . $existing_attachment );
+				error_log( 'DataMapper: Found existing image ID: ' . $existing_attachment );
 			}
 			$image_cache[ $cache_key ] = $existing_attachment;
 			return $existing_attachment;
 		}
 
-		// Check if image download is enabled
+		// Check if image download is enabled.
 		$image_download_enabled = \SG\HumanitixApiImporter\Admin\PerformanceConfig::should_enable_image_download();
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "DataMapper: Image download enabled: " . ( $image_download_enabled ? 'true' : 'false' ) );
+			error_log( 'DataMapper: Image download enabled: ' . ( $image_download_enabled ? 'true' : 'false' ) );
 		}
 
 		// For performance, skip image download by default during bulk imports.
@@ -1024,7 +1020,7 @@ class DataMapper {
 		// Only download images if explicitly enabled.
 		if ( ! $image_download_enabled ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "DataMapper: Image download disabled, skipping" );
+				error_log( 'DataMapper: Image download disabled, skipping' );
 			}
 			$image_cache[ $cache_key ] = false;
 			return false;
@@ -1032,12 +1028,12 @@ class DataMapper {
 
 		// Download and attach image.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "DataMapper: Downloading and attaching image" );
+			error_log( 'DataMapper: Downloading and attaching image' );
 		}
 		$attachment_id = $this->download_and_attach_image( $image_url );
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "DataMapper: Download result - attachment ID: " . ( $attachment_id ? $attachment_id : 'false' ) );
+			error_log( 'DataMapper: Download result - attachment ID: ' . ( $attachment_id ? $attachment_id : 'false' ) );
 		}
 
 		$image_cache[ $cache_key ] = $attachment_id;

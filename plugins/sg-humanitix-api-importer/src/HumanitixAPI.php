@@ -534,7 +534,7 @@ class HumanitixAPI {
 
 		// Use the correct Humanitix API endpoint for events.
 		$possible_endpoints = array(
-			'/events', // Primary endpoint according to Humanitix API docs
+			'/events', // Primary endpoint according to Humanitix API docs.
 		);
 
 		foreach ( $possible_endpoints as $endpoint ) {
@@ -639,11 +639,11 @@ class HumanitixAPI {
 		}
 
 		$args = array(
-			'method'  => $method,
-			'headers' => $headers,
-			'timeout' => 60, // Increased timeout for better reliability
+			'method'      => $method,
+			'headers'     => $headers,
+			'timeout'     => 60, // Increased timeout for better reliability.
 			'httpversion' => '1.1',
-			'user-agent' => 'Humanitix-API-Importer/1.0',
+			'user-agent'  => 'Humanitix-API-Importer/1.0',
 		);
 
 		// Add parameters based on method.
@@ -686,15 +686,15 @@ class HumanitixAPI {
 			)
 		);
 
-		// Handle specific HTTP error codes
+		// Handle specific HTTP error codes.
 		if ( $status_code >= 500 ) {
 			$debug_helper->log_critical_error(
 				'API',
 				'Server error received',
 				array(
 					'status_code' => $status_code,
-					'url' => $url,
-					'method' => $method,
+					'url'         => $url,
+					'method'      => $method,
 				)
 			);
 			return new \WP_Error( 'server_error', "Server error: HTTP {$status_code}" );
@@ -706,9 +706,9 @@ class HumanitixAPI {
 				'Client error received',
 				array(
 					'status_code' => $status_code,
-					'url' => $url,
-					'method' => $method,
-					'body' => $body,
+					'url'         => $url,
+					'method'      => $method,
+					'body'        => $body,
 				)
 			);
 			return new \WP_Error( 'client_error', "Client error: HTTP {$status_code}" );

@@ -109,7 +109,7 @@ class AdminInterface {
 			error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
 			error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
 		}
-		
+
 		add_menu_page(
 			'Humanitix Importer',
 			'Humanitix',
@@ -158,7 +158,7 @@ class AdminInterface {
 			'humanitix-importer-dashboard',
 			array( $this, 'render_dashboard_page' )
 		);
-		
+
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
 		}
@@ -734,7 +734,7 @@ class AdminInterface {
 							echo '<td>' . esc_html( $log->created_at ) . '</td>';
 							echo '<td>' . esc_html( $log->level ) . '</td>';
 							echo '<td>' . esc_html( $log->message ) . '</td>';
-							$context_data = !empty($log->context) ? json_decode( $log->context, true ) : array();
+							$context_data = ! empty( $log->context ) ? json_decode( $log->context, true ) : array();
 							echo '<td><pre style="max-height: 100px; overflow-y: auto;">' . esc_html( print_r( $context_data, true ) ) . '</pre></td>';
 							echo '</tr>';
 						}
@@ -828,15 +828,17 @@ class AdminInterface {
 				error_log( 'Humanitix Import: Exception trace: ' . $e->getTraceAsString() );
 			}
 			$this->logger->log( 'error', 'Import failed: ' . $e->getMessage() );
-			
-			// Send more detailed error information
-			wp_send_json_error( array( 
-				'message' => $e->getMessage(),
-				'error_type' => get_class( $e ),
-				'file' => $e->getFile(),
-				'line' => $e->getLine(),
-				'trace' => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
-			) );
+
+			// Send more detailed error information.
+			wp_send_json_error(
+				array(
+					'message'    => $e->getMessage(),
+					'error_type' => get_class( $e ),
+					'file'       => $e->getFile(),
+					'line'       => $e->getLine(),
+					'trace'      => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
+				)
+			);
 		}
 	}
 
