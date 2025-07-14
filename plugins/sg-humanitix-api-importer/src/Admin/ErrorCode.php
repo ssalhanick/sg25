@@ -177,7 +177,7 @@ class ErrorCode {
 	/**
 	 * Check if error code is critical (should stop import)
 	 *
-	 * @param int $code Error code
+	 * @param int $code Error code.
 	 * @return bool True if critical error
 	 */
 	public static function is_critical( $code ) {
@@ -196,7 +196,7 @@ class ErrorCode {
 	/**
 	 * Get error code from exception
 	 *
-	 * @param \Exception $exception.
+	 * @param \Exception $exception The exception to analyze.
 	 * @return int Error code
 	 */
 	public static function from_exception( $exception ) {

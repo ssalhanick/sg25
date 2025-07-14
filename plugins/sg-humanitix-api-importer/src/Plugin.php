@@ -495,44 +495,114 @@ class Plugin {
 	 * @return void
 	 */
 	public function run_auto_import() {
+		$start_time = microtime( true );
+
+		// Log the start of scheduled auto import.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log(
+				'info',
+				'Scheduled auto import started',
+				array(
+					'category'       => 'Scheduled',
+					'timestamp'      => current_time( 'mysql' ),
+					'next_scheduled' => wp_next_scheduled( 'humanitix_auto_import' ),
+				)
+			);
+		}
+
 		if ( ! isset( $this->importer ) ) {
 			if ( isset( $this->logger ) ) {
-				$this->logger->log( 'error', 'Auto import failed: Importer not available' );
+				$this->logger->log(
+					'error',
+					'Scheduled auto import failed: Importer not available',
+					array( 'category' => 'Scheduled' )
+				);
 			}
 			return;
 		}
 
-		// Log the start of auto import.
-		if ( isset( $this->logger ) ) {
-			$this->logger->log( 'info', 'Auto import started' );
-		}
-
 		try {
 			// Run the import.
-			$result = $this->importer->import_events();
+			$result   = $this->importer->import_events();
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
 
-			// Log the results.
-			if ( isset( $this->logger ) ) {
-				$this->logger->log(
-					$result['success'] ? 'info' : 'error',
-					'Auto import completed',
-					array(
-						'success'  => $result['success'],
-						'imported' => $result['imported'],
-						'errors'   => $result['errors'],
-					)
+			// Prepare detailed logging information.
+			$imported_count  = $result['imported'] ?? 0;
+			$updated_count   = $result['updated'] ?? 0;
+			$existing_count  = $result['existing'] ?? 0;
+			$error_count     = count( $result['errors'] ?? array() );
+			$total_processed = $imported_count + $updated_count + $existing_count;
+
+			// Determine the appropriate log level and message.
+			if ( $result['success'] ) {
+				if ( 0 === $total_processed ) {
+					// No events found or processed.
+					$log_level   = 'info';
+					$log_message = 'Scheduled auto import completed successfully - No events found to import';
+					$log_context = array(
+						'category'         => 'Scheduled',
+						'duration'         => $duration,
+						'events_processed' => 0,
+						'status'           => 'no_events',
+					);
+				} else {
+					// Events were processed successfully.
+					$log_level   = 'info';
+					$log_message = sprintf(
+						'Scheduled auto import completed successfully - Processed %d events (%d new, %d updated, %d existing)',
+						$total_processed,
+						$imported_count,
+						$updated_count,
+						$existing_count
+					);
+					$log_context = array(
+						'category'         => 'Scheduled',
+						'duration'         => $duration,
+						'events_processed' => $total_processed,
+						'events_imported'  => $imported_count,
+						'events_updated'   => $updated_count,
+						'events_existing'  => $existing_count,
+						'errors'           => $result['errors'] ?? array(),
+						'status'           => 'success',
+					);
+				}
+			} else {
+				// Import failed.
+				$log_level   = 'error';
+				$log_message = sprintf(
+					'Scheduled auto import failed - %s',
+					$result['message'] ?? 'Unknown error'
+				);
+				$log_context = array(
+					'category' => 'Scheduled',
+					'duration' => $duration,
+					'errors'   => $result['errors'] ?? array(),
+					'status'   => 'failed',
 				);
 			}
+
+			// Log the detailed results.
+			if ( isset( $this->logger ) ) {
+				$this->logger->log( $log_level, $log_message, $log_context );
+			}
 		} catch ( \Exception $e ) {
-			// Log any exceptions.
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
+
+			// Log any exceptions with detailed information.
 			if ( isset( $this->logger ) ) {
 				$this->logger->log(
 					'error',
-					'Auto import exception: ' . $e->getMessage(),
+					sprintf( 'Scheduled auto import exception: %s', $e->getMessage() ),
 					array(
+						'category'  => 'Scheduled',
+						'duration'  => $duration,
 						'exception' => $e->getMessage(),
 						'file'      => $e->getFile(),
 						'line'      => $e->getLine(),
+						'trace'     => $e->getTraceAsString(),
+						'status'    => 'exception',
 					)
 				);
 			}
