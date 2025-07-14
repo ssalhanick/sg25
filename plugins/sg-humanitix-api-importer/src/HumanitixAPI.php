@@ -524,6 +524,7 @@ class HumanitixAPI {
 				'endpoint'    => $this->api_endpoint,
 				'has_api_key' => ! empty( $this->api_key ),
 				'has_org_id'  => ! empty( $this->org_id ),
+				'api_url'     => trailingslashit( $this->api_endpoint ) . 'events',
 			)
 		);
 
@@ -531,12 +532,9 @@ class HumanitixAPI {
 			'page' => max( 1, absint( $page ) ),
 		);
 
-		// Try different possible endpoint structures.
+		// Use the correct Humanitix API endpoint for events.
 		$possible_endpoints = array(
-			'/events',
-			'/event',
-			'/organiser/events',
-			'/organiser/' . $this->org_id . '/events',
+			'/events', // Primary endpoint according to Humanitix API docs
 		);
 
 		foreach ( $possible_endpoints as $endpoint ) {
