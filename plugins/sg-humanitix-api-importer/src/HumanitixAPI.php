@@ -643,7 +643,9 @@ class HumanitixAPI {
 		$args = array(
 			'method'  => $method,
 			'headers' => $headers,
-			'timeout' => 30,
+			'timeout' => 60, // Increased timeout for better reliability
+			'httpversion' => '1.1',
+			'user-agent' => 'Humanitix-API-Importer/1.0',
 		);
 
 		// Add parameters based on method.
@@ -655,7 +657,7 @@ class HumanitixAPI {
 
 		// For test requests, limit the response size.
 		if ( $is_test ) {
-			$args['timeout'] = 10;
+			$args['timeout'] = 15;
 		}
 
 		$response = wp_remote_request( $url, $args );
@@ -685,6 +687,34 @@ class HumanitixAPI {
 				'body_preview' => substr( $body, 0, 200 ),
 			)
 		);
+
+		// Handle specific HTTP error codes
+		if ( $status_code >= 500 ) {
+			$debug_helper->log_critical_error(
+				'API',
+				'Server error received',
+				array(
+					'status_code' => $status_code,
+					'url' => $url,
+					'method' => $method,
+				)
+			);
+			return new \WP_Error( 'server_error', "Server error: HTTP {$status_code}" );
+		}
+
+		if ( $status_code >= 400 ) {
+			$debug_helper->log_critical_error(
+				'API',
+				'Client error received',
+				array(
+					'status_code' => $status_code,
+					'url' => $url,
+					'method' => $method,
+					'body' => $body,
+				)
+			);
+			return new \WP_Error( 'client_error', "Client error: HTTP {$status_code}" );
+		}
 
 		// For test requests, return the full response for debugging.
 		if ( $is_test ) {
