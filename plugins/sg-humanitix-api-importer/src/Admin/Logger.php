@@ -86,22 +86,25 @@ class Logger {
 	 * @param array  $data Optional - Additional structured data.
 	 */
 	public function log_error_code( $error_code, $context = '', $data = array() ) {
-		// Check if HUMANITIX_DEBUG is enabled
+		// Check if HUMANITIX_DEBUG is enabled.
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
-			// Full debugging - log everything
-			$message = ErrorCode::format_error( $error_code, $context );
-			$log_data = array_merge( $data, array(
-				'error_code' => $error_code,
-				'category' => ErrorCode::get_category( $error_code ),
-				'is_critical' => ErrorCode::is_critical( $error_code ),
-				'context' => $context,
-			) );
+			// Full debugging - log everything.
+			$message  = ErrorCode::format_error( $error_code, $context );
+			$log_data = array_merge(
+				$data,
+				array(
+					'error_code'  => $error_code,
+					'category'    => ErrorCode::get_category( $error_code ),
+					'is_critical' => ErrorCode::is_critical( $error_code ),
+					'context'     => $context,
+				)
+			);
 		} else {
-			// Minimal logging - just error code and basic message
-			$message = ErrorCode::format_error( $error_code, $context );
+			// Minimal logging - just error code and basic message.
+			$message  = ErrorCode::format_error( $error_code, $context );
 			$log_data = array(
-				'error_code' => $error_code,
-				'category' => ErrorCode::get_category( $error_code ),
+				'error_code'  => $error_code,
+				'category'    => ErrorCode::get_category( $error_code ),
 				'is_critical' => ErrorCode::is_critical( $error_code ),
 			);
 		}
@@ -129,13 +132,13 @@ class Logger {
 
 		$context = array(
 			'imported_count' => $imported_count,
-			'updated_count' => $updated_count,
+			'updated_count'  => $updated_count,
 			'existing_count' => $existing_count,
-			'duration' => $duration,
-			'error_count' => count( $errors ),
+			'duration'       => $duration,
+			'error_count'    => count( $errors ),
 		);
 
-		// If HUMANITIX_DEBUG is enabled, include detailed error information
+		// If HUMANITIX_DEBUG is enabled, include detailed error information.
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG && ! empty( $errors ) ) {
 			$context['errors'] = $errors;
 		}

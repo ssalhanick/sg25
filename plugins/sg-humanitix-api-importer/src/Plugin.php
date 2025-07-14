@@ -94,6 +94,14 @@ class Plugin {
 			error_log( '[sg-humanitix-api-importer] Plugin activated' );
 		}
 		$this->create_logs_table();
+
+		// Check if auto import should be scheduled on activation.
+		$options = get_option( 'humanitix_importer_options', array() );
+		if ( ! empty( $options['auto_import'] ) ) {
+			$frequency   = $options['import_frequency'] ?? 'daily';
+			$import_time = $options['import_time'] ?? '00:00';
+			$this->schedule_auto_import( $frequency, $import_time );
+		}
 	}
 
 	/**
@@ -108,6 +116,9 @@ class Plugin {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin deactivated' );
 		}
+
+		// Clear any scheduled auto import cron jobs.
+		wp_clear_scheduled_hook( 'humanitix_auto_import' );
 	}
 
 	/**
@@ -146,6 +157,9 @@ class Plugin {
 
 		// Check database version and update if needed.
 		$this->check_database_version();
+
+		// Initialize WordPress hooks.
+		$this->init_hooks();
 	}
 
 	/**
@@ -305,6 +319,224 @@ class Plugin {
 				echo '<script>console.log("sg-humanitix-api-importer:", window.sgHumanitixApiImporter);</script>';
 			}
 		);
+
+		// Initialize auto import functionality.
+		$this->init_auto_import();
+	}
+
+	/**
+	 * Initialize auto import functionality.
+	 *
+	 * Sets up cron jobs and hooks for automatic event imports.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function init_auto_import() {
+		// Register the auto import hook.
+		add_action( 'humanitix_auto_import', array( $this, 'run_auto_import' ) );
+
+		// Handle settings changes to schedule/unschedule cron jobs.
+		add_action( 'update_option_humanitix_importer_options', array( $this, 'handle_settings_update' ), 10, 3 );
+
+		// Check if auto import should be scheduled on plugin load.
+		$this->check_auto_import_schedule();
+	}
+
+	/**
+	 * Check and schedule auto import if enabled.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function check_auto_import_schedule() {
+		$options = get_option( 'humanitix_importer_options', array() );
+
+		if ( ! empty( $options['auto_import'] ) ) {
+			$frequency   = $options['import_frequency'] ?? 'daily';
+			$import_time = $options['import_time'] ?? '00:00';
+
+			// Only schedule if not already scheduled.
+			if ( ! wp_next_scheduled( 'humanitix_auto_import' ) ) {
+				$this->schedule_auto_import( $frequency, $import_time );
+			}
+		}
+	}
+
+	/**
+	 * Handle settings updates to manage cron scheduling.
+	 *
+	 * @since 1.0.0
+	 * @param mixed  $old_value The old option value.
+	 * @param mixed  $new_value The new option value.
+	 * @param string $option The option name.
+	 * @return void
+	 */
+	public function handle_settings_update( $old_value, $new_value, $option ) {
+		$old_auto_import = $old_value['auto_import'] ?? false;
+		$new_auto_import = $new_value['auto_import'] ?? false;
+		$old_frequency   = $old_value['import_frequency'] ?? 'daily';
+		$new_frequency   = $new_value['import_frequency'] ?? 'daily';
+		$old_import_time = $old_value['import_time'] ?? '00:00';
+		$new_import_time = $new_value['import_time'] ?? '00:00';
+
+		// Check if auto import was enabled/disabled or settings changed.
+		if ( $old_auto_import !== $new_auto_import || $old_frequency !== $new_frequency || $old_import_time !== $new_import_time ) {
+			if ( $new_auto_import ) {
+				$this->schedule_auto_import( $new_frequency, $new_import_time );
+			} else {
+				$this->unschedule_auto_import();
+			}
+		}
+	}
+
+	/**
+	 * Schedule the auto import cron job.
+	 *
+	 * @since 1.0.0
+	 * @param string $frequency The import frequency (hourly, daily, weekly).
+	 * @param string $import_time The time to run the import (HH:MM format).
+	 * @return void
+	 */
+	private function schedule_auto_import( $frequency, $import_time ) {
+		// Clear any existing schedule first.
+		$this->unschedule_auto_import();
+
+		// Calculate the next run time based on the specified time.
+		$next_run = $this->calculate_next_run_time( $frequency, $import_time );
+
+		// Schedule the event.
+		wp_schedule_event( $next_run, $frequency, 'humanitix_auto_import' );
+
+		// Log the scheduling.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log(
+				'info',
+				'Auto import scheduled',
+				array(
+					'frequency'   => $frequency,
+					'import_time' => $import_time,
+					'next_run'    => date( 'Y-m-d H:i:s', $next_run ),
+				)
+			);
+		}
+	}
+
+	/**
+	 * Unschedule the auto import cron job.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function unschedule_auto_import() {
+		wp_clear_scheduled_hook( 'humanitix_auto_import' );
+
+		// Log the unscheduling.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log( 'info', 'Auto import unscheduled' );
+		}
+	}
+
+	/**
+	 * Calculate the next run time for the cron job.
+	 *
+	 * @since 1.0.0
+	 * @param string $frequency The import frequency.
+	 * @param string $import_time The time to run (HH:MM format).
+	 * @return int Unix timestamp for the next run.
+	 */
+	private function calculate_next_run_time( $frequency, $import_time ) {
+		$time_parts = explode( ':', $import_time );
+		$hour       = intval( $time_parts[0] );
+		$minute     = intval( $time_parts[1] );
+
+		// Get WordPress timezone.
+		$timezone = wp_timezone();
+
+		// Get current time in local timezone.
+		$now = new \DateTime( 'now', $timezone );
+
+		// Create a DateTime object for today at the specified time in WordPress timezone.
+		$next_run = new \DateTime( 'today ' . $import_time, $timezone );
+
+		// If the time has already passed today, schedule for tomorrow.
+		if ( $next_run <= $now ) {
+			$next_run = new \DateTime( 'tomorrow ' . $import_time, $timezone );
+		}
+
+		// For weekly frequency, adjust to the next occurrence.
+		if ( 'weekly' === $frequency ) {
+			$next_run = new \DateTime( 'next ' . $next_run->format( 'l' ) . ' ' . $import_time, $timezone );
+		}
+
+		// For hourly frequency, calculate the next hour.
+		if ( 'hourly' === $frequency ) {
+			$next_run = new \DateTime( 'now', $timezone );
+			$next_run->setTime( $hour, $minute, 0 );
+
+			// If the time has passed this hour, go to next hour.
+			if ( $next_run <= $now ) {
+				$next_run->modify( '+1 hour' );
+			}
+		}
+
+		// Convert to UTC for WordPress cron (WordPress cron uses UTC).
+		$next_run->setTimezone( new \DateTimeZone( 'UTC' ) );
+
+		return $next_run->getTimestamp();
+	}
+
+	/**
+	 * Run the auto import process.
+	 *
+	 * This method is called by the WordPress cron system.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function run_auto_import() {
+		if ( ! isset( $this->importer ) ) {
+			if ( isset( $this->logger ) ) {
+				$this->logger->log( 'error', 'Auto import failed: Importer not available' );
+			}
+			return;
+		}
+
+		// Log the start of auto import.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log( 'info', 'Auto import started' );
+		}
+
+		try {
+			// Run the import.
+			$result = $this->importer->import_events();
+
+			// Log the results.
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					$result['success'] ? 'info' : 'error',
+					'Auto import completed',
+					array(
+						'success'  => $result['success'],
+						'imported' => $result['imported'],
+						'errors'   => $result['errors'],
+					)
+				);
+			}
+		} catch ( \Exception $e ) {
+			// Log any exceptions.
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'error',
+					'Auto import exception: ' . $e->getMessage(),
+					array(
+						'exception' => $e->getMessage(),
+						'file'      => $e->getFile(),
+						'line'      => $e->getLine(),
+					)
+				);
+			}
+		}
 	}
 
 	/**

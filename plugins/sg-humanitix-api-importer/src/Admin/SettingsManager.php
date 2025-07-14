@@ -123,6 +123,14 @@ class SettingsManager {
 		);
 
 		add_settings_field(
+			'import_time',
+			'Import Time',
+			array( $this, 'render_import_time_field' ),
+			'humanitix-importer-settings',
+			'import_settings'
+		);
+
+		add_settings_field(
 			'update_existing',
 			'Update Existing Events',
 			array( $this, 'render_update_field' ),
@@ -340,6 +348,25 @@ class SettingsManager {
 	 */
 	public function render_import_section() {
 		echo '<p>Configure import behavior and scheduling.</p>';
+
+		// Display auto import status.
+		$options     = get_option( $this->options_name, array() );
+		$auto_import = $options['auto_import'] ?? false;
+
+		if ( $auto_import ) {
+			$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
+			$frequency      = $options['import_frequency'] ?? 'daily';
+			$import_time    = $options['import_time'] ?? '00:00';
+
+			if ( $next_scheduled ) {
+				$next_run = date( 'Y-m-d H:i:s', $next_scheduled );
+				echo '<div class="notice notice-success inline"><p><strong>Auto Import Status:</strong> Enabled (Next run: ' . esc_html( $next_run ) . ')</p></div>';
+			} else {
+				echo '<div class="notice notice-warning inline"><p><strong>Auto Import Status:</strong> Enabled but not scheduled. Please save settings to schedule.</p></div>';
+			}
+		} else {
+			echo '<div class="notice notice-info inline"><p><strong>Auto Import Status:</strong> Disabled</p></div>';
+		}
 	}
 
 	/**
@@ -381,6 +408,29 @@ class SettingsManager {
 			<option value="daily" <?php selected( $frequency, 'daily' ); ?>>Daily</option>
 			<option value="weekly" <?php selected( $frequency, 'weekly' ); ?>>Weekly</option>
 		</select>
+		<p class="description">Select how often the automatic import should run.</p>
+		<?php
+	}
+
+	/**
+	 * Render the import time input field.
+	 *
+	 * Outputs a time input field for scheduling the import time.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_import_time_field() {
+		$options     = get_option( $this->options_name, array() );
+		$import_time = $options['import_time'] ?? '00:00';
+		?>
+		<input type="time" 
+				name="<?php echo esc_attr( $this->options_name ); ?>[import_time]" 
+				value="<?php echo esc_attr( $import_time ); ?>" />
+		<p class="description">
+			Select the time when the automatic import should run. This time is in your WordPress timezone.<br>
+			<strong>Note:</strong> For hourly imports, this time will be used as the starting point.
+		</p>
 		<?php
 	}
 
@@ -541,6 +591,7 @@ class SettingsManager {
 		$sanitized['api_endpoint']      = sanitize_text_field( $input['api_endpoint'] ?? '' );
 		$sanitized['auto_import']       = isset( $input['auto_import'] );
 		$sanitized['import_frequency']  = sanitize_text_field( $input['import_frequency'] ?? 'daily' );
+		$sanitized['import_time']       = sanitize_text_field( $input['import_time'] ?? '00:00' );
 		$sanitized['update_existing']   = isset( $input['update_existing'] );
 		$sanitized['create_venues']     = isset( $input['create_venues'] );
 		$sanitized['create_organizers'] = isset( $input['create_organizers'] );

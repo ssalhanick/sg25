@@ -49,8 +49,8 @@ class DebugHelper {
 	 * @param Logger $logger The logger instance.
 	 */
 	public function __construct( Logger $logger ) {
-		$this->logger        = $logger;
-		$this->debug_enabled = defined( 'WP_DEBUG' ) && WP_DEBUG;
+		$this->logger                  = $logger;
+		$this->debug_enabled           = defined( 'WP_DEBUG' ) && WP_DEBUG;
 		$this->humanitix_debug_enabled = defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG;
 	}
 
@@ -87,9 +87,9 @@ class DebugHelper {
 
 		$message = sprintf( '[DETAILED-%s] %s', strtoupper( $component ), $action );
 
-		// Include memory usage in detailed logs
+		// Include memory usage in detailed logs.
 		$context['memory_usage'] = $this->get_memory_usage_info();
-		$context['timestamp'] = microtime( true );
+		$context['timestamp']    = microtime( true );
 
 		$this->logger->log( $level, $message, $context );
 	}
@@ -107,10 +107,10 @@ class DebugHelper {
 		}
 
 		$context = array(
-			'endpoint' => $endpoint,
+			'endpoint'  => $endpoint,
 			'direction' => $direction,
 			'data_size' => is_array( $raw_data ) ? count( $raw_data ) : strlen( json_encode( $raw_data ) ),
-			'raw_data' => $this->sanitize_sensitive_data( $raw_data ),
+			'raw_data'  => $this->sanitize_sensitive_data( $raw_data ),
 		);
 
 		$this->log_detailed( 'API', "Raw {$direction} data for {$endpoint}", $context );
@@ -119,10 +119,10 @@ class DebugHelper {
 	/**
 	 * Log detailed error traces.
 	 *
-	 * @param string $component The component where error occurred.
-	 * @param string $error_message The error message.
+	 * @param string     $component The component where error occurred.
+	 * @param string     $error_message The error message.
 	 * @param \Exception $exception The exception object.
-	 * @param array $context Additional context.
+	 * @param array      $context Additional context.
 	 */
 	public function log_detailed_error( $component, $error_message, $exception = null, $context = array() ) {
 		if ( ! $this->humanitix_debug_enabled ) {
@@ -130,11 +130,11 @@ class DebugHelper {
 		}
 
 		$context['error_message'] = $error_message;
-		$context['error_type'] = get_class( $exception );
-		$context['error_file'] = $exception ? $exception->getFile() : null;
-		$context['error_line'] = $exception ? $exception->getLine() : null;
-		$context['error_trace'] = $exception ? $exception->getTraceAsString() : null;
-		$context['memory_usage'] = $this->get_memory_usage_info();
+		$context['error_type']    = get_class( $exception );
+		$context['error_file']    = $exception ? $exception->getFile() : null;
+		$context['error_line']    = $exception ? $exception->getLine() : null;
+		$context['error_trace']   = $exception ? $exception->getTraceAsString() : null;
+		$context['memory_usage']  = $this->get_memory_usage_info();
 
 		$this->log_detailed( $component, "Detailed error: {$error_message}", $context, 'error' );
 	}
@@ -145,7 +145,7 @@ class DebugHelper {
 	 * @param string $event_name The event name.
 	 * @param string $field_name The missing field name.
 	 * @param string $field_type The field type (required, recommended, optional).
-	 * @param array $event_data The event data for context.
+	 * @param array  $event_data The event data for context.
 	 */
 	public function log_missing_field( $event_name, $field_name, $field_type = 'required', $event_data = array() ) {
 		if ( ! $this->humanitix_debug_enabled ) {
@@ -153,11 +153,11 @@ class DebugHelper {
 		}
 
 		$context = array(
-			'event_name' => $event_name,
-			'field_name' => $field_name,
-			'field_type' => $field_type,
+			'event_name'       => $event_name,
+			'field_name'       => $field_name,
+			'field_type'       => $field_type,
 			'available_fields' => array_keys( $event_data ),
-			'event_id' => $event_data['_id'] ?? 'unknown',
+			'event_id'         => $event_data['_id'] ?? 'unknown',
 		);
 
 		$this->log_detailed( 'Validation', "Missing {$field_type} field: {$field_name} for event: {$event_name}", $context, 'warning' );
@@ -166,9 +166,9 @@ class DebugHelper {
 	/**
 	 * Log API key validation status.
 	 *
-	 * @param bool $is_valid Whether the API key is valid.
+	 * @param bool   $is_valid Whether the API key is valid.
 	 * @param string $error_message Error message if invalid.
-	 * @param array $response_data Response data for debugging.
+	 * @param array  $response_data Response data for debugging.
 	 */
 	public function log_api_key_validation( $is_valid, $error_message = '', $response_data = array() ) {
 		if ( ! $this->humanitix_debug_enabled ) {
@@ -176,23 +176,23 @@ class DebugHelper {
 		}
 
 		$context = array(
-			'is_valid' => $is_valid,
-			'error_message' => $error_message,
+			'is_valid'        => $is_valid,
+			'error_message'   => $error_message,
 			'response_status' => $response_data['status'] ?? null,
-			'response_code' => $response_data['code'] ?? null,
-			'api_key_length' => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
+			'response_code'   => $response_data['code'] ?? null,
+			'api_key_length'  => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
 		);
 
-		$this->log_detailed( 'API', "API key validation: " . ( $is_valid ? 'VALID' : 'INVALID' ), $context );
+		$this->log_detailed( 'API', 'API key validation: ' . ( $is_valid ? 'VALID' : 'INVALID' ), $context );
 	}
 
 	/**
 	 * Log import progress with detailed metrics.
 	 *
-	 * @param int $current The current event number.
-	 * @param int $total The total number of events.
+	 * @param int    $current The current event number.
+	 * @param int    $total The total number of events.
 	 * @param string $event_name The current event name.
-	 * @param array $metrics Additional metrics.
+	 * @param array  $metrics Additional metrics.
 	 */
 	public function log_import_progress( $current, $total, $event_name, $metrics = array() ) {
 		if ( ! $this->humanitix_debug_enabled ) {
@@ -200,13 +200,13 @@ class DebugHelper {
 		}
 
 		$progress = round( ( $current / $total ) * 100, 2 );
-		$context = array(
-			'current' => $current,
-			'total' => $total,
+		$context  = array(
+			'current'             => $current,
+			'total'               => $total,
 			'progress_percentage' => $progress,
-			'event_name' => $event_name,
-			'memory_usage' => $this->get_memory_usage_info(),
-			'metrics' => $metrics,
+			'event_name'          => $event_name,
+			'memory_usage'        => $this->get_memory_usage_info(),
+			'metrics'             => $metrics,
 		);
 
 		$this->log_detailed( 'Progress', "Import progress: {$current}/{$total} ({$progress}%) - {$event_name}", $context );
@@ -216,7 +216,7 @@ class DebugHelper {
 	 * Log data validation results.
 	 *
 	 * @param string $event_name The event name.
-	 * @param array $validation_results Array of validation results.
+	 * @param array  $validation_results Array of validation results.
 	 */
 	public function log_data_validation( $event_name, $validation_results = array() ) {
 		if ( ! $this->humanitix_debug_enabled ) {
@@ -224,10 +224,22 @@ class DebugHelper {
 		}
 
 		$context = array(
-			'event_name' => $event_name,
+			'event_name'         => $event_name,
 			'validation_results' => $validation_results,
-			'passed_count' => count( array_filter( $validation_results, function( $result ) { return $result['valid']; } ) ),
-			'failed_count' => count( array_filter( $validation_results, function( $result ) { return ! $result['valid']; } ) ),
+			'passed_count'       => count(
+				array_filter(
+					$validation_results,
+					function ( $result ) {
+						return $result['valid']; }
+				)
+			),
+			'failed_count'       => count(
+				array_filter(
+					$validation_results,
+					function ( $result ) {
+						return ! $result['valid']; }
+				)
+			),
 		);
 
 		$this->log_detailed( 'Validation', "Data validation for event: {$event_name}", $context );
@@ -237,17 +249,17 @@ class DebugHelper {
 	 * Log performance timing for each processing step.
 	 *
 	 * @param string $step_name The step name.
-	 * @param float $start_time The start time.
-	 * @param array $context Additional context.
+	 * @param float  $start_time The start time.
+	 * @param array  $context Additional context.
 	 */
 	public function log_performance_timing( $step_name, $start_time, $context = array() ) {
 		if ( ! $this->humanitix_debug_enabled ) {
 			return;
 		}
 
-		$duration = microtime( true ) - $start_time;
-		$context['step_name'] = $step_name;
-		$context['duration'] = $duration;
+		$duration                = microtime( true ) - $start_time;
+		$context['step_name']    = $step_name;
+		$context['duration']     = $duration;
 		$context['memory_usage'] = $this->get_memory_usage_info();
 
 		$this->log_detailed( 'Performance', "Step timing: {$step_name} took {$duration}s", $context );
@@ -526,11 +538,11 @@ class DebugHelper {
 	 */
 	public function get_memory_usage_info() {
 		return array(
-			'current' => memory_get_usage( true ),
-			'peak' => memory_get_peak_usage( true ),
-			'limit' => ini_get( 'memory_limit' ),
+			'current'    => memory_get_usage( true ),
+			'peak'       => memory_get_peak_usage( true ),
+			'limit'      => ini_get( 'memory_limit' ),
 			'current_mb' => round( memory_get_usage( true ) / 1024 / 1024, 2 ),
-			'peak_mb' => round( memory_get_peak_usage( true ) / 1024 / 1024, 2 ),
+			'peak_mb'    => round( memory_get_peak_usage( true ) / 1024 / 1024, 2 ),
 		);
 	}
 
@@ -546,10 +558,10 @@ class DebugHelper {
 		}
 
 		$sensitive_keys = array( 'api_key', 'token', 'password', 'secret', 'key' );
-		$sanitized = array();
+		$sanitized      = array();
 
 		foreach ( $data as $key => $value ) {
-			$key_lower = strtolower( $key );
+			$key_lower    = strtolower( $key );
 			$is_sensitive = false;
 
 			foreach ( $sensitive_keys as $sensitive_key ) {
