@@ -31,6 +31,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 1.0.0
  */
 class Plugin {
+	/**
+	 * The plugin instance.
+	 *
+	 * @var Plugin
+	 */
+	private static $instance = null;
 
 	/**
 	 * The Humanitix API instance.
@@ -68,6 +74,16 @@ class Plugin {
 	private $logger;
 
 	/**
+	 * Get the plugin instance.
+	 *
+	 * @since 1.0.0
+	 * @return Plugin|null The plugin instance or null if not initialized.
+	 */
+	public static function get_instance() {
+		return self::$instance;
+	}
+
+	/**
 	 * Constructor.
 	 *
 	 * Initializes the plugin and sets up all necessary components.
@@ -78,6 +94,7 @@ class Plugin {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin constructor called' );
 		}
+		self::$instance = $this;
 		$this->init();
 	}
 
@@ -586,6 +603,10 @@ class Plugin {
 			if ( isset( $this->logger ) ) {
 				$this->logger->log( $log_level, $log_message, $log_context );
 			}
+
+			// Ensure the next run is properly scheduled after this execution.
+			$this->ensure_next_run_scheduled();
+
 		} catch ( \Exception $e ) {
 			$end_time = microtime( true );
 			$duration = round( $end_time - $start_time, 2 );
@@ -603,6 +624,89 @@ class Plugin {
 						'line'      => $e->getLine(),
 						'trace'     => $e->getTraceAsString(),
 						'status'    => 'exception',
+					)
+				);
+			}
+
+			// Ensure the next run is scheduled even if there was an exception.
+			$this->ensure_next_run_scheduled();
+		}
+	}
+
+	/**
+	 * Ensure the next run is properly scheduled after each execution.
+	 *
+	 * This method checks if the next run is scheduled and reschedules it if needed.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function ensure_next_run_scheduled() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		
+		// Only reschedule if auto import is enabled.
+		if ( empty( $options['auto_import'] ) ) {
+			return;
+		}
+
+		$frequency   = $options['import_frequency'] ?? 'daily';
+		$import_time = $options['import_time'] ?? '00:00';
+
+		// Check if the next run is scheduled and if it's in the future.
+		$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
+		
+		// If no next run is scheduled or the scheduled time is in the past, reschedule.
+		if ( ! $next_scheduled || $next_scheduled <= time() ) {
+			$this->schedule_auto_import( $frequency, $import_time );
+			
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'info',
+					'Auto import rescheduled after execution',
+					array(
+						'frequency'   => $frequency,
+						'import_time' => $import_time,
+						'next_run'    => date( 'Y-m-d H:i:s', wp_next_scheduled( 'humanitix_auto_import' ) ),
+					)
+				);
+			}
+		}
+	}
+
+	/**
+	 * Public method to reschedule auto import.
+	 *
+	 * This method can be called from other classes to ensure the auto import is properly scheduled.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function reschedule_auto_import() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		
+		// Only reschedule if auto import is enabled.
+		if ( empty( $options['auto_import'] ) ) {
+			return;
+		}
+
+		$frequency   = $options['import_frequency'] ?? 'daily';
+		$import_time = $options['import_time'] ?? '00:00';
+
+		// Check if the next run is scheduled and if it's in the future.
+		$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
+		
+		// If no next run is scheduled or the scheduled time is in the past, reschedule.
+		if ( ! $next_scheduled || $next_scheduled <= time() ) {
+			$this->schedule_auto_import( $frequency, $import_time );
+			
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'info',
+					'Auto import rescheduled',
+					array(
+						'frequency'   => $frequency,
+						'import_time' => $import_time,
+						'next_run'    => date( 'Y-m-d H:i:s', wp_next_scheduled( 'humanitix_auto_import' ) ),
 					)
 				);
 			}

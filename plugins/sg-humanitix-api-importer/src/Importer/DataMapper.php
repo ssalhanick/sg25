@@ -50,6 +50,10 @@ class DataMapper {
 		'keywords'        => 'humanitix_keywords',
 		'createdAt'       => 'humanitix_created_at',
 		'updatedAt'       => 'humanitix_updated_at',
+		// Date-specific fields for recurring events
+		'_humanitix_date_id'     => '_humanitix_date_id',
+		'_humanitix_date_index'  => '_humanitix_date_index',
+		'_humanitix_total_dates' => '_humanitix_total_dates',
 	);
 
 	/**
@@ -70,6 +74,13 @@ class DataMapper {
 		'humanitix_dates'         => 'humanitix_dates',
 		'humanitix_pricing'       => 'humanitix_pricing',
 		'humanitix_accessibility' => 'humanitix_accessibility',
+		// Recurring event fields
+		'humanitix_date_id'       => '_humanitix_date_id',
+		'humanitix_date_index'    => '_humanitix_date_index',
+		'humanitix_total_dates'   => '_humanitix_total_dates',
+		'humanitix_series_id'     => '_humanitix_series_id',
+		'humanitix_series_instance' => '_humanitix_series_instance',
+		'humanitix_series_total'  => '_humanitix_series_total',
 	);
 
 	/**

@@ -297,6 +297,15 @@ class EventsImporter {
 							case 'existing':
 								++$existing_count;
 								break;
+							case 'recurring':
+								// Handle recurring event results
+								$imported_count += $result['created'] ?? 0;
+								$updated_count += $result['updated'] ?? 0;
+								$existing_count += $result['existing'] ?? 0;
+								if ( ! empty( $result['error_codes'] ) ) {
+									$error_codes = array_merge( $error_codes, $result['error_codes'] );
+								}
+								break;
 						}
 					} else {
 						$error_codes[] = $result['error_code'] ?? ErrorCode::IMPORT_MAPPING_FAILED;
@@ -380,6 +389,191 @@ class EventsImporter {
 	 * @return array Import result with action type and error codes.
 	 */
 	public function import_single_event( $event_data ) {
+		try {
+			$humanitix_id = $event_data['_id'] ?? 'unknown';
+			$event_name   = $event_data['name'] ?? 'Unknown';
+
+			// Initialize debug helper.
+			$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $this->logger );
+
+			$debug_helper->log_event_processing( $event_name, $humanitix_id, $event_data, 'process' );
+
+			// Check if this is a recurring event with multiple dates
+			$dates = $event_data['dates'] ?? array();
+			
+			if ( count( $dates ) > 1 ) {
+				// This is a recurring event - create separate events for each date
+				$debug_helper->log( 'Importer', "Detected recurring event '{$event_name}' with " . count( $dates ) . " dates" );
+				return $this->import_recurring_event( $event_data, $dates );
+			} else {
+				// Single event - use the original logic
+				$debug_helper->log( 'Importer', "Processing single event '{$event_name}'" );
+				return $this->import_single_event_instance( $event_data );
+			}
+
+		} catch ( \Exception $e ) {
+			$error_code = ErrorCode::from_exception( $e );
+			$this->logger->log_error_code( $error_code, 'Exception during single event import: ' . $e->getMessage() );
+
+			$debug_helper->log_critical_error(
+				'Importer',
+				'Failed to import event: ' . $e->getMessage(),
+				array(
+					'event_name'   => $event_name ?? 'Unknown',
+					'humanitix_id' => $humanitix_id ?? 'unknown',
+					'error'        => $e->getMessage(),
+				)
+			);
+
+			return array(
+				'success'    => false,
+				'message'    => 'Import failed: ' . $e->getMessage(),
+				'error_code' => $error_code,
+			);
+		}
+	}
+
+	/**
+	 * Import a recurring event by creating separate TEC events for each date.
+	 *
+	 * @param array $event_data Humanitix event data.
+	 * @param array $dates Array of date objects from Humanitix.
+	 * @return array Import result with action type and error codes.
+	 */
+	private function import_recurring_event( $event_data, $dates ) {
+		$humanitix_id = $event_data['_id'] ?? 'unknown';
+		$event_name   = $event_data['name'] ?? 'Unknown';
+		
+		// Initialize debug helper.
+		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $this->logger );
+
+		$debug_helper->log( 'Importer', "Processing recurring event '{$event_name}' with " . count( $dates ) . " dates" );
+
+		$imported_count = 0;
+		$updated_count  = 0;
+		$existing_count = 0;
+		$error_codes    = array();
+		$created_events = array();
+
+		foreach ( $dates as $date_index => $date_data ) {
+			$date_id = $date_data['_id'] ?? "date_{$date_index}";
+			
+			$debug_helper->log( 'Importer', "Processing date " . ( $date_index + 1 ) . " of " . count( $dates ) . " (ID: {$date_id})" );
+
+			// Create a modified event data with this specific date
+			$single_event_data = $this->prepare_single_event_from_recurring( $event_data, $date_data, $date_index );
+
+			// Import this single event instance
+			$result = $this->import_single_event_instance( $single_event_data );
+
+			if ( $result['success'] ) {
+				switch ( $result['action'] ) {
+					case 'created':
+						$imported_count++;
+						$created_events[] = $result['post_id'];
+						break;
+					case 'updated':
+						$updated_count++;
+						break;
+					case 'existing':
+						$existing_count++;
+						break;
+
+				}
+			} else {
+				$error_codes[] = $result['error_code'] ?? ErrorCode::IMPORT_MAPPING_FAILED;
+			}
+		}
+
+		// Log recurring event summary
+		$debug_helper->log( 'Importer', "Recurring event '{$event_name}' completed: {$imported_count} created, {$updated_count} updated, {$existing_count} existing" );
+
+		// Store series information for all created events
+		if ( ! empty( $created_events ) ) {
+			$this->link_recurring_events( $created_events, $event_data, $dates );
+		}
+
+		return array(
+			'success'    => $imported_count > 0 || $updated_count > 0,
+			'message'    => "Recurring event processed: {$imported_count} created, {$updated_count} updated, {$existing_count} existing",
+			'post_id'    => $created_events, // Array of created post IDs
+			'action'     => 'recurring',
+			'created'    => $imported_count,
+			'updated'    => $updated_count,
+			'existing'   => $existing_count,
+			'error_codes' => $error_codes,
+		);
+	}
+
+	/**
+	 * Prepare a single event instance from recurring event data.
+	 *
+	 * @param array $event_data Original Humanitix event data.
+	 * @param array $date_data Date-specific data from the dates array.
+	 * @param int   $date_index Index of this date in the dates array.
+	 * @return array Modified event data for single instance.
+	 */
+	private function prepare_single_event_from_recurring( $event_data, $date_data, $date_index ) {
+		// Create a copy of the event data
+		$single_event = $event_data;
+
+		// Replace the main dates with the specific date instance
+		$single_event['startDate'] = $date_data['startDate'] ?? $date_data['start'] ?? '';
+		$single_event['endDate']   = $date_data['endDate'] ?? $date_data['end'] ?? '';
+
+		// Add date-specific metadata
+		$single_event['_humanitix_date_id'] = $date_data['_id'] ?? "date_{$date_index}";
+		$single_event['_humanitix_date_index'] = $date_index;
+		$single_event['_humanitix_total_dates'] = count( $event_data['dates'] ?? array() );
+
+		// Remove the dates array to prevent infinite recursion
+		unset( $single_event['dates'] );
+
+		return $single_event;
+	}
+
+	/**
+	 * Link recurring events together with series metadata.
+	 *
+	 * @param array $created_events Array of created post IDs.
+	 * @param array $event_data Original Humanitix event data.
+	 * @param array $dates Array of date objects.
+	 */
+	private function link_recurring_events( $created_events, $event_data, $dates ) {
+		$series_id = $event_data['_id'] ?? 'unknown';
+		$total_dates = count( $dates );
+
+		foreach ( $created_events as $index => $post_id ) {
+			// Store series information
+			update_post_meta( $post_id, '_humanitix_series_id', $series_id );
+			update_post_meta( $post_id, '_humanitix_series_instance', $index + 1 );
+			update_post_meta( $post_id, '_humanitix_series_total', $total_dates );
+			update_post_meta( $post_id, '_humanitix_date_id', $dates[ $index ]['_id'] ?? "date_{$index}" );
+
+			// Store all series event IDs for easy lookup
+			update_post_meta( $post_id, '_humanitix_series_event_ids', $created_events );
+
+			$this->logger->log(
+				'info',
+				'Linked recurring event instance',
+				array(
+					'post_id'         => $post_id,
+					'series_id'       => $series_id,
+					'instance_number' => $index + 1,
+					'total_instances' => $total_dates,
+					'date_id'         => $dates[ $index ]['_id'] ?? "date_{$index}",
+				)
+			);
+		}
+	}
+
+	/**
+	 * Import a single event instance (original logic).
+	 *
+	 * @param array $event_data Humanitix event data.
+	 * @return array Import result with action type and error codes.
+	 */
+	private function import_single_event_instance( $event_data ) {
 		try {
 			$humanitix_id = $event_data['_id'] ?? 'unknown';
 			$event_name   = $event_data['name'] ?? 'Unknown';
