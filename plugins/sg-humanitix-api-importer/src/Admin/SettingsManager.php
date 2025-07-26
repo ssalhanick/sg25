@@ -349,24 +349,119 @@ class SettingsManager {
 	public function render_import_section() {
 		echo '<p>Configure import behavior and scheduling.</p>';
 
+		// Refresh the cron schedule to ensure it's up to date.
+		$this->refresh_cron_schedule();
+
 		// Display auto import status.
 		$options     = get_option( $this->options_name, array() );
 		$auto_import = $options['auto_import'] ?? false;
 
 		if ( $auto_import ) {
-			$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
-			$frequency      = $options['import_frequency'] ?? 'daily';
-			$import_time    = $options['import_time'] ?? '00:00';
+			$frequency   = $options['import_frequency'] ?? 'daily';
+			$import_time = $options['import_time'] ?? '00:00';
 
+			// Check if cron job is scheduled
+			$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
+			
 			if ( $next_scheduled ) {
-				$next_run = date( 'Y-m-d H:i:s', $next_scheduled );
-				echo '<div class="notice notice-success inline"><p><strong>Auto Import Status:</strong> Enabled (Next run: ' . esc_html( $next_run ) . ')</p></div>';
+				// Calculate the next run time dynamically to ensure it's always in the future
+				$next_run = $this->calculate_next_run_time( $frequency, $import_time );
+				
+				// If the scheduled time is in the past, use the calculated future time
+				if ( $next_scheduled <= time() ) {
+					$next_run_display = date( 'Y-m-d H:i:s', $next_run );
+					$status_message = 'Enabled (Next run: ' . esc_html( $next_run_display ) . ') - Rescheduled';
+				} else {
+					$next_run_display = date( 'Y-m-d H:i:s', $next_scheduled );
+					$status_message = 'Enabled (Next run: ' . esc_html( $next_run_display ) . ')';
+				}
+				
+				echo '<div class="notice notice-success inline"><p><strong>Auto Import Status:</strong> ' . $status_message . '</p></div>';
+				
+				// Add debug information if WP_DEBUG is enabled
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					echo '<div class="notice notice-info inline"><p><strong>Debug Info:</strong> Current time: ' . date( 'Y-m-d H:i:s' ) . ' | Scheduled time: ' . date( 'Y-m-d H:i:s', $next_scheduled ) . ' | Calculated time: ' . date( 'Y-m-d H:i:s', $next_run ) . '</p></div>';
+				}
 			} else {
 				echo '<div class="notice notice-warning inline"><p><strong>Auto Import Status:</strong> Enabled but not scheduled. Please save settings to schedule.</p></div>';
 			}
 		} else {
 			echo '<div class="notice notice-info inline"><p><strong>Auto Import Status:</strong> Disabled</p></div>';
 		}
+	}
+
+	/**
+	 * Refresh the cron schedule to ensure it's properly set up.
+	 *
+	 * This method checks if the auto import is enabled and ensures the cron job is scheduled.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function refresh_cron_schedule() {
+		$options = get_option( $this->options_name, array() );
+		
+		// Only proceed if auto import is enabled.
+		if ( empty( $options['auto_import'] ) ) {
+			return;
+		}
+
+		// Get the plugin instance and call the public reschedule method.
+		$plugin = \SG\HumanitixApiImporter\Plugin::get_instance();
+		if ( $plugin ) {
+			$plugin->reschedule_auto_import();
+		}
+	}
+
+	/**
+	 * Calculate the next run time for the cron job.
+	 *
+	 * This method replicates the logic from Plugin.php to ensure consistent calculation.
+	 *
+	 * @since 1.0.0
+	 * @param string $frequency The import frequency.
+	 * @param string $import_time The time to run (HH:MM format).
+	 * @return int Unix timestamp for the next run.
+	 */
+	private function calculate_next_run_time( $frequency, $import_time ) {
+		$time_parts = explode( ':', $import_time );
+		$hour       = intval( $time_parts[0] );
+		$minute     = intval( $time_parts[1] );
+
+		// Get WordPress timezone.
+		$timezone = wp_timezone();
+
+		// Get current time in local timezone.
+		$now = new \DateTime( 'now', $timezone );
+
+		// Create a DateTime object for today at the specified time in WordPress timezone.
+		$next_run = new \DateTime( 'today ' . $import_time, $timezone );
+
+		// If the time has already passed today, schedule for tomorrow.
+		if ( $next_run <= $now ) {
+			$next_run = new \DateTime( 'tomorrow ' . $import_time, $timezone );
+		}
+
+		// For weekly frequency, adjust to the next occurrence.
+		if ( 'weekly' === $frequency ) {
+			$next_run = new \DateTime( 'next ' . $next_run->format( 'l' ) . ' ' . $import_time, $timezone );
+		}
+
+		// For hourly frequency, calculate the next hour.
+		if ( 'hourly' === $frequency ) {
+			$next_run = new \DateTime( 'now', $timezone );
+			$next_run->setTime( $hour, $minute, 0 );
+
+			// If the time has passed this hour, go to next hour.
+			if ( $next_run <= $now ) {
+				$next_run->modify( '+1 hour' );
+			}
+		}
+
+		// Convert to UTC for WordPress cron (WordPress cron uses UTC).
+		$next_run->setTimezone( new \DateTimeZone( 'UTC' ) );
+
+		return $next_run->getTimestamp();
 	}
 
 	/**
