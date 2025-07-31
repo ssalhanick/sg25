@@ -170,7 +170,7 @@ class EventsImporter {
 
 			while ( $retry_count < $max_retries && is_null( $events ) ) {
 				try {
-					$events = $this->api->get_events( $page );
+					$events = $this->api->get_events( $page, $date_range );
 
 					// If we get a WP_Error, throw an exception.
 					if ( is_wp_error( $events ) ) {
@@ -379,6 +379,51 @@ class EventsImporter {
 				'existing' => 0,
 				'errors'   => array( $error_code ),
 			);
+		}
+	}
+
+	/**
+	 * Import a single event by ID.
+	 *
+	 * @param string $event_id The Humanitix event ID.
+	 * @return array Import result.
+	 */
+	public function import_single_event_by_id( $event_id ) {
+		// Initialize debug helper.
+		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $this->logger );
+
+		$debug_helper->log( 'Importer', "Starting import_single_event_by_id with event_id: {$event_id}" );
+
+		// Start timing.
+		$this->start_time = microtime( true );
+
+		try {
+			// Get the specific event from Humanitix API.
+			$debug_helper->log( 'API', "Calling get_event() for event_id: {$event_id}" );
+
+			$event_data = $this->api->get_event( $event_id );
+
+			if ( is_wp_error( $event_data ) ) {
+				throw new \Exception( 'Failed to fetch event from API: ' . $event_data->get_error_message() );
+			}
+
+			if ( empty( $event_data ) ) {
+				throw new \Exception( 'Event not found or empty response from API.' );
+			}
+
+			$debug_helper->log( 'Importer', "Successfully fetched event data for event_id: {$event_id}" );
+
+			// Import the single event.
+			$result = $this->import_single_event( $event_data );
+
+			// Add event title to result for display.
+			$result['event_title'] = $event_data['title'] ?? $event_data['name'] ?? 'Unknown Event';
+
+			return $result;
+
+		} catch ( \Exception $e ) {
+			$debug_helper->log_critical_error( 'Importer', 'Single event import failed: ' . $e->getMessage() );
+			throw $e;
 		}
 	}
 

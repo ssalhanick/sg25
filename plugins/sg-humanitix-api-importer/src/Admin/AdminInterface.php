@@ -91,6 +91,7 @@ class AdminInterface {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 		add_action( 'wp_ajax_import_events', array( $this, 'handle_import_ajax' ) );
+		add_action( 'wp_ajax_import_single_event', array( $this, 'handle_single_event_import_ajax' ) );
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
@@ -150,14 +151,7 @@ class AdminInterface {
 			array( $this, 'render_logs_page' )
 		);
 
-		add_submenu_page(
-			'humanitix-importer',
-			'Dashboard',
-			'Dashboard',
-			'manage_options',
-			'humanitix-importer-dashboard',
-			array( $this, 'render_dashboard_page' )
-		);
+
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
@@ -200,9 +194,46 @@ class AdminInterface {
 		<div class="wrap">
 			<h1>Humanitix Event Importer</h1>
 			
+			<!-- Import Section -->
 			<div class="card">
-				<h2>Quick Import</h2>
+				<h2>Import Events</h2>
 				<p>Import events from Humanitix to The Events Calendar.</p>
+				
+				<div class="import-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+					<h4 style="margin-top: 0;">Import Options</h4>
+					<label for="import-limit" style="display: inline-block; margin-right: 10px;">
+						<strong>Limit Import to:</strong>
+					</label>
+					<select id="import-limit" name="import_limit" style="margin-right: 10px;">
+						<option value="">All Events (No Limit)</option>
+						<option value="1">1 Event</option>
+						<option value="5">5 Events</option>
+						<option value="10">10 Events</option>
+						<option value="25">25 Events</option>
+						<option value="50">50 Events</option>
+						<option value="100">100 Events</option>
+					</select>
+					
+					<div class="import-controls" style="margin-top: 15px;">
+						<button id="start-import" class="button button-primary" <?php echo ! $is_configured ? 'disabled' : ''; ?>>
+							<?php echo $is_configured ? 'Start Import All Events' : 'API Not Configured'; ?>
+						</button>
+						<button id="stop-import" class="button button-secondary" style="display:none;">Stop Import</button>
+						<span id="import-status"></span>
+					</div>
+					
+					<div id="import-progress" style="display:none;">
+						<div class="progress-bar">
+							<div class="progress-fill"></div>
+						</div>
+						<div class="progress-text">Processing events...</div>
+					</div>
+					
+					<div id="import-results" style="display:none;">
+						<h3>Import Results</h3>
+						<div id="results-content"></div>
+					</div>
+				</div>
 				
 				<?php if ( ! $is_configured ) : ?>
 					<div class="notice notice-warning">
@@ -211,45 +242,103 @@ class AdminInterface {
 				<?php endif; ?>
 				
 				<?php if ( $is_debug_mode ) : ?>
-					<div class="debug-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
-						<h4 style="margin-top: 0;">Debug Mode Options</h4>
-						<label for="import-limit" style="display: inline-block; margin-right: 10px;">
-							<strong>Limit Import to:</strong>
-						</label>
-						<select id="import-limit" name="import_limit" style="margin-right: 10px;">
-							<option value="">All Events (No Limit)</option>
-							<option value="1">1 Event</option>
-							<option value="5">5 Events</option>
-							<option value="10">10 Events</option>
-							<option value="25">25 Events</option>
-							<option value="50">50 Events</option>
-							<option value="100">100 Events</option>
-						</select>
-						<span style="color: #666; font-size: 12px;">
-							<i class="dashicons dashicons-info"></i> 
-							This option is only available in debug mode to help with testing.
-						</span>
+					<!-- Date Range Import Section -->
+					<div class="date-range-import" style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+						<h3 style="margin-top: 0;">Import by Date Range</h3>
+						<p>Select a date range to import specific events:</p>
+						
+						<div class="date-inputs" style="display: flex; gap: 20px; margin-bottom: 15px; align-items: center;">
+							<label for="start-date" style="font-weight: bold; min-width: 80px;">Start Date:</label>
+							<input type="date" id="start-date" name="start_date" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
+							
+							<label for="end-date" style="font-weight: bold; min-width: 80px;">End Date:</label>
+							<input type="date" id="end-date" name="end_date" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
+						</div>
+						
+						<div class="import-controls" style="margin-top: 15px;">
+							<button id="start-import-range" class="button button-primary">
+								Import Events by Date Range
+							</button>
+							<button id="stop-import-range" class="button button-secondary" style="display:none;">Stop Import</button>
+							<span id="import-range-status"></span>
+						</div>
+						
+						<div id="import-range-progress" style="display:none;">
+							<div class="progress-bar" style="width: 100%; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 10px 0;">
+								<div class="progress-fill" style="height: 100%; background-color: #0073aa; width: 0%; transition: width 0.3s ease;"></div>
+							</div>
+							<div class="progress-text" style="text-align: center; font-style: italic; color: #666;">Processing events...</div>
+						</div>
+						
+						<div id="import-range-results" style="display:none;">
+							<h3>Import Results</h3>
+							<div id="range-results-content"></div>
+						</div>
 					</div>
 				<?php endif; ?>
 				
-				<div class="import-controls">
-					<button id="start-import" class="button button-primary" <?php echo ! $is_configured ? 'disabled' : ''; ?>>
-						<?php echo $is_configured ? 'Start Import' : 'API Not Configured'; ?>
-					</button>
-					<button id="stop-import" class="button button-secondary" style="display:none;">Stop Import</button>
-					<span id="import-status"></span>
-				</div>
+							<!-- Single Event Import Section -->
+			<div class="single-event-import" style="margin: 20px 0; padding: 15px; background: #f0f8ff; border-left: 4px solid #0066cc;">
+				<h3 style="margin-top: 0;">Import Single Event</h3>
+				<p>To find Humanitix Event ID:</p>
+				<pre>https://console.humanitix.com/console/events/{event_id}/overview</pre>
+				<p>Import a specific event by Humanitix Event ID:</p>
 				
-				<div id="import-progress" style="display:none;">
-					<div class="progress-bar">
-						<div class="progress-fill"></div>
+				<div class="event-inputs" style="margin-bottom: 15px;">
+					<div>
+						<label for="event-id" style="font-weight: bold; display: block; margin-bottom: 5px;">Event ID:</label>
+						<input type="text" id="event-id" name="event_id" placeholder="Enter the Humanitix event ID" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
 					</div>
-					<div class="progress-text">Processing events...</div>
 				</div>
-				
-				<div id="import-results" style="display:none;">
-					<h3>Import Results</h3>
-					<div id="results-content"></div>
+					
+					<div class="import-controls" style="margin-top: 15px;">
+						<button id="start-import-single" class="button button-primary">
+							Import Single Event
+						</button>
+						<button id="stop-import-single" class="button button-secondary" style="display:none;">Stop Import</button>
+						<span id="import-single-status"></span>
+					</div>
+					
+					<div id="import-single-progress" style="display:none;">
+						<div class="progress-bar" style="width: 100%; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 10px 0;">
+							<div class="progress-fill" style="height: 100%; background-color: #0066cc; width: 0%; transition: width 0.3s ease;"></div>
+						</div>
+						<div class="progress-text" style="text-align: center; font-style: italic; color: #666;">Processing event...</div>
+					</div>
+					
+					<div id="import-single-results" style="display:none;">
+						<h3>Import Results</h3>
+						<div id="single-results-content"></div>
+					</div>
+				</div>
+			</div>
+			
+			<!-- Dashboard Stats Section -->
+			<div class="card">
+				<h2>Import Statistics</h2>
+				<?php
+				$stats = $this->get_dashboard_stats();
+				?>
+				<div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Total Events Imported</h3>
+						<div class="stat-number" style="font-size: 2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['total_events'] ); ?></div>
+					</div>
+					
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Total Venues</h3>
+						<div class="stat-number" style="font-size: 2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['total_venues'] ); ?></div>
+					</div>
+					
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Total Organizers</h3>
+						<div class="stat-number" style="font-size: 2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['total_organizers'] ); ?></div>
+					</div>
+					
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Last Import</h3>
+						<div class="stat-number" style="font-size: 1.2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['last_import'] ); ?></div>
+					</div>
 				</div>
 			</div>
 			
@@ -396,10 +485,89 @@ class AdminInterface {
 			color: #a00;
 			text-decoration: underline;
 		}
+		
+		/* Date Range Import Styles */
+		.date-range-import {
+			margin: 20px 0;
+		}
+		.date-inputs {
+			display: flex;
+			gap: 20px;
+			margin-bottom: 15px;
+			align-items: center;
+		}
+		.date-inputs label {
+			font-weight: bold;
+			min-width: 80px;
+		}
+		.date-inputs input[type="date"] {
+			padding: 8px;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			font-size: 14px;
+		}
+		.import-controls {
+			margin-top: 15px;
+		}
+		.progress-bar {
+			width: 100%;
+			height: 20px;
+			background-color: #f0f0f0;
+			border-radius: 10px;
+			overflow: hidden;
+			margin: 10px 0;
+		}
+		.progress-fill {
+			height: 100%;
+			background-color: #0073aa;
+			width: 0%;
+			transition: width 0.3s ease;
+		}
+		.progress-text {
+			text-align: center;
+			font-style: italic;
+			color: #666;
+		}
 		</style>
 		
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			
+			<!-- Date Range Import Section -->
+			<div class="card">
+				<h2>Import Events by Date Range</h2>
+				<p>Select a date range to import events from Humanitix API.</p>
+				
+				<div class="date-range-import">
+					<div class="date-inputs">
+						<label for="start-date">Start Date:</label>
+						<input type="date" id="start-date" name="start_date" />
+						
+						<label for="end-date">End Date:</label>
+						<input type="date" id="end-date" name="end_date" />
+					 </div>
+					
+					<div class="import-controls">
+						<button id="start-import-range" class="button button-primary">
+							Import Events
+						</button>
+						<button id="stop-import-range" class="button button-secondary" style="display:none;">Stop Import</button>
+						<span id="import-range-status"></span>
+					</div>
+					
+					<div id="import-range-progress" style="display:none;">
+						<div class="progress-bar">
+							<div class="progress-fill"></div>
+						</div>
+						<div class="progress-text">Processing events...</div>
+					</div>
+					
+					<div id="import-range-results" style="display:none;">
+						<h3>Import Results</h3>
+						<div id="range-results-content"></div>
+					</div>
+				</div>
+			</div>
 			
 			<div class="dashboard-stats">
 				<div class="stat-card">
@@ -667,7 +835,11 @@ class AdminInterface {
 
 								// Debug: Show the actual structure.
 								echo esc_html( '<p><strong>Events Type:</strong> ' . gettype( $events ) . '</p>' );
-								echo '<p><strong>Events Structure:</strong></p><pre style="max-height: 200px; overflow-y: auto;">' . esc_html( print_r( $events, true ) ) . '</pre>';
+								echo '<p><strong>Events Structure:</strong></p>';
+								echo '<div style="position: relative;">';
+								echo '<button type="button" class="button button-secondary select-all-btn" data-target="events-structure" style="position: absolute; top: 5px; right: 5px; z-index: 10;">Select All</button>';
+								echo '<pre id="events-structure" style="max-height: 200px; overflow-y: auto; position: relative;">' . esc_html( print_r( $events, true ) ) . '</pre>';
+								echo '</div>';
 
 								if ( ! empty( $events ) && is_array( $events ) ) {
 									$first_event = reset( $events ); // Get the first element.
@@ -675,7 +847,11 @@ class AdminInterface {
 									echo '<p><strong>First Event Value:</strong> ' . ( $first_event ? 'NOT NULL' : 'NULL/FALSE' ) . '</p>';
 
 									if ( $first_event ) {
-										echo '<p><strong>First Event:</strong></p><pre style="max-height: 300px; overflow-y: auto;">' . esc_html( print_r( $first_event, true ) ) . '</pre>';
+										echo '<p><strong>First Event:</strong></p>';
+										echo '<div style="position: relative;">';
+										echo '<button type="button" class="button button-secondary select-all-btn" data-target="first-event" style="position: absolute; top: 5px; right: 5px; z-index: 10;">Select All</button>';
+										echo '<pre id="first-event" style="max-height: 300px; overflow-y: auto; position: relative;">' . esc_html( print_r( $first_event, true ) ) . '</pre>';
+										echo '</div>';
 									} else {
 										echo '<p><strong>First Event:</strong> No events available to display</p>';
 									}
@@ -785,23 +961,32 @@ class AdminInterface {
 			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
 		}
 
-		// Get import limit if provided (only in debug mode).
+		// Get import limit if provided.
 		$import_limit = null;
-		if ( $this->is_debug_enabled() && isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
+		if ( isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
 			$import_limit = intval( $_POST['import_limit'] );
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( 'Humanitix Import: Import limit set to: ' . $import_limit );
 			}
 		}
 
+		// Get date range if provided.
+		$date_range = array();
+		if ( isset( $_POST['start_date'] ) && ! empty( $_POST['start_date'] ) ) {
+			$date_range['start_date'] = sanitize_text_field( $_POST['start_date'] );
+		}
+		if ( isset( $_POST['end_date'] ) && ! empty( $_POST['end_date'] ) ) {
+			$date_range['end_date'] = sanitize_text_field( $_POST['end_date'] );
+		}
+
 		$start_time = microtime( true );
 
 		try {
-			// Pass import limit to the importer if set.
+			// Pass import limit and date range to the importer if set.
 			if ( $import_limit ) {
-				$result = $this->importer->import_events( 1, $import_limit );
+				$result = $this->importer->import_events( 1, $import_limit, $date_range );
 			} else {
-				$result = $this->importer->import_events();
+				$result = $this->importer->import_events( 1, null, $date_range );
 			}
 
 			$end_time = microtime( true );
@@ -864,6 +1049,84 @@ class AdminInterface {
 		$stats = $this->get_dashboard_stats();
 		wp_send_json_success( $stats );
 	}
+
+	/**
+	 * Handle single event import AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_single_event_import_ajax() {
+		// Add basic error logging for debugging.
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Humanitix Import: Single event AJAX handler called' );
+		}
+
+		check_ajax_referer( 'humanitix_import_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		// Check if importer is available.
+		if ( ! $this->importer ) {
+			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
+		}
+
+		// Get event ID
+		$event_id = isset( $_POST['event_id'] ) ? sanitize_text_field( $_POST['event_id'] ) : '';
+
+		if ( empty( $event_id ) ) {
+			wp_send_json_error( array( 'message' => 'Please provide an event ID.' ) );
+		}
+
+		$start_time = microtime( true );
+
+		try {
+
+			// Import the single event
+			$result = $this->importer->import_single_event_by_id( $event_id );
+
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
+
+			// Handle the result structure from single event import
+			$imported_count = $result['success'] ? 1 : 0;
+			$errors = $result['success'] ? array() : array( $result['message'] );
+
+			// Log the import with duration.
+			$this->logger->log_import_summary( $imported_count, $errors, $duration );
+
+			wp_send_json_success(
+				array(
+					'message'     => $result['message'],
+					'event_title' => $result['event_title'] ?? 'Unknown Event',
+					'imported_count' => $imported_count,
+					'errors'      => $errors,
+					'duration'    => $duration,
+				)
+			);
+
+		} catch ( \Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Humanitix Import: Single event exception caught: ' . $e->getMessage() );
+				error_log( 'Humanitix Import: Single event exception trace: ' . $e->getTraceAsString() );
+			}
+			$this->logger->log( 'error', 'Single event import failed: ' . $e->getMessage() );
+
+			wp_send_json_error(
+				array(
+					'message'    => $e->getMessage(),
+					'error_type' => get_class( $e ),
+					'file'       => $e->getFile(),
+					'line'       => $e->getLine(),
+					'trace'      => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
+				)
+			);
+		}
+	}
+
+
 
 	/**
 	 * Handle API test AJAX request.
@@ -985,7 +1248,7 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( strpos( $hook, 'humanitix-importer' ) === false ) {
+		if ( strpos( $hook, 'humanitix-importer' ) === false && strpos( $hook, 'humanitix-debug' ) === false ) {
 			return;
 		}
 
@@ -1074,6 +1337,243 @@ class AdminInterface {
 		'
 		);
 
+		// Add Select All functionality for debug page.
+		wp_add_inline_script(
+			'humanitix-admin',
+			'
+			// Function for selecting all text in a container
+			function selectAllInContainer(elementId) {
+				var element = document.getElementById(elementId);
+				if (element) {
+					// Create a range
+					var range = document.createRange();
+					range.selectNodeContents(element);
+					
+					// Create a selection
+					var selection = window.getSelection();
+					selection.removeAllRanges();
+					selection.addRange(range);
+					
+					// Optional: Copy to clipboard
+					try {
+						document.execCommand("copy");
+						return true;
+					} catch (e) {
+						// Copy failed, but selection still works
+						console.log("Copy to clipboard failed, but text is selected");
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			// Add event listeners for select all buttons
+			document.addEventListener("DOMContentLoaded", function() {
+				var selectAllButtons = document.querySelectorAll(".select-all-btn");
+				selectAllButtons.forEach(function(button) {
+					button.addEventListener("click", function(e) {
+						e.preventDefault();
+						
+						var targetId = this.getAttribute("data-target");
+						if (targetId) {
+							var copied = selectAllInContainer(targetId);
+							
+							// Show visual feedback
+							var originalText = this.textContent;
+							var originalBg = this.style.backgroundColor;
+							var originalColor = this.style.color;
+							
+							if (copied) {
+								this.textContent = "Copied!";
+								this.style.backgroundColor = "#46b450";
+								this.style.color = "white";
+							} else {
+								this.textContent = "Selected!";
+								this.style.backgroundColor = "#0073aa";
+								this.style.color = "white";
+							}
+							
+							setTimeout(function() {
+								button.textContent = originalText;
+								button.style.backgroundColor = originalBg;
+								button.style.color = originalColor;
+							}, 1000);
+						}
+					});
+				});
+			});
+		'
+		);
+
+		// Add Date Range Import functionality.
+		wp_add_inline_script(
+			'humanitix-admin',
+			'
+			setTimeout(function() {
+				var startImportRangeButton = document.getElementById("start-import-range");
+				if (startImportRangeButton) {
+					startImportRangeButton.addEventListener("click", function(e) {
+						e.preventDefault();
+						
+						var stopButton = document.getElementById("stop-import-range");
+						var statusDiv = document.getElementById("import-range-status");
+						var progressDiv = document.getElementById("import-range-progress");
+						var resultsDiv = document.getElementById("import-range-results");
+						var startDate = document.getElementById("start-date");
+						var endDate = document.getElementById("end-date");
+						
+						// Validate date inputs
+						if (!startDate.value && !endDate.value) {
+							alert("Please select at least one date (start or end date)");
+							return;
+						}
+						
+						// Show progress and disable start button.
+						this.disabled = true;
+						this.textContent = "Importing...";
+						if (stopButton) stopButton.style.display = "inline-block";
+						if (progressDiv) progressDiv.style.display = "block";
+						if (resultsDiv) resultsDiv.style.display = "none";
+						if (statusDiv) statusDiv.innerHTML = "<span class=\"spinner is-active\"></span> Starting import...";
+						
+						// Prepare request data
+						var requestData = {
+							action: "import_events",
+							nonce: humanitixAdmin.nonce
+						};
+						
+						// Add date range if provided
+						if (startDate.value) {
+							requestData.start_date = startDate.value;
+						}
+						if (endDate.value) {
+							requestData.end_date = endDate.value;
+						}
+						
+						fetch(humanitixAdmin.ajaxUrl, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/x-www-form-urlencoded",
+							},
+							body: new URLSearchParams(requestData)
+						})
+						.then(response => response.json())
+						.then(data => {
+							if (data.success) {
+								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-yes-alt\"></span> Import completed successfully";
+								if (resultsDiv) {
+									var resultsContent = resultsDiv.querySelector("#range-results-content");
+									if (resultsContent) {
+										var dateRangeText = "";
+										if (startDate.value || endDate.value) {
+											dateRangeText = " (Date range: " + (startDate.value || "any") + " to " + (endDate.value || "any") + ")";
+										}
+										resultsContent.innerHTML = 
+											"<p><strong>Events imported:</strong> " + data.data.imported_count + dateRangeText + "</p>" +
+											"<p><strong>Duration:</strong> " + data.data.duration + " seconds</p>" +
+											(data.data.errors.length > 0 ? "<p><strong>Errors:</strong> " + data.data.errors.join(", ") + "</p>" : "");
+									}
+									resultsDiv.style.display = "block";
+								}
+							} else {
+								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Import failed: " + data.data.message;
+							}
+						})
+						.catch(error => {
+							console.error("Import error:", error);
+							if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Import failed. Please try again.";
+						})
+						.finally(() => {
+							this.disabled = false;
+							this.textContent = "Import Events by Date Range";
+							if (stopButton) stopButton.style.display = "none";
+							if (progressDiv) progressDiv.style.display = "none";
+						});
+					});
+				}
+			}, 1000);
+		'
+		);
+
+		// Add Single Event Import functionality.
+		wp_add_inline_script(
+			'humanitix-admin',
+			'
+			setTimeout(function() {
+				var startImportSingleButton = document.getElementById("start-import-single");
+				if (startImportSingleButton) {
+					startImportSingleButton.addEventListener("click", function(e) {
+						e.preventDefault();
+						
+						var stopButton = document.getElementById("stop-import-single");
+						var statusDiv = document.getElementById("import-single-status");
+						var progressDiv = document.getElementById("import-single-progress");
+						var resultsDiv = document.getElementById("import-single-results");
+						var eventId = document.getElementById("event-id");
+						
+						// Validate inputs
+						if (!eventId.value) {
+							alert("Please enter an Event ID");
+							return;
+						}
+						
+						// Show progress and disable start button.
+						this.disabled = true;
+						this.textContent = "Importing...";
+						if (stopButton) stopButton.style.display = "inline-block";
+						if (progressDiv) progressDiv.style.display = "block";
+						if (resultsDiv) resultsDiv.style.display = "none";
+						if (statusDiv) statusDiv.innerHTML = "<span class=\"spinner is-active\"></span> Starting import...";
+						
+						// Prepare request data
+						var requestData = {
+							action: "import_single_event",
+							nonce: humanitixAdmin.nonce,
+							event_id: eventId.value
+						};
+						
+						fetch(humanitixAdmin.ajaxUrl, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/x-www-form-urlencoded",
+							},
+							body: new URLSearchParams(requestData)
+						})
+						.then(response => response.json())
+						.then(data => {
+							if (data.success) {
+								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-yes-alt\"></span> Import completed successfully";
+								if (resultsDiv) {
+									var resultsContent = resultsDiv.querySelector("#single-results-content");
+									if (resultsContent) {
+										var eventInfo = " (ID: " + eventId.value + ")";
+										resultsContent.innerHTML = 
+											"<p><strong>Event imported:</strong> " + data.data.event_title + eventInfo + "</p>" +
+											"<p><strong>Duration:</strong> " + data.data.duration + " seconds</p>" +
+											(data.data.errors.length > 0 ? "<p><strong>Errors:</strong> " + data.data.errors.join(", ") + "</p>" : "");
+									}
+									resultsDiv.style.display = "block";
+								}
+							} else {
+								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Import failed: " + data.data.message;
+							}
+						})
+						.catch(error => {
+							console.error("Import error:", error);
+							if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Import failed. Please try again.";
+						})
+						.finally(() => {
+							this.disabled = false;
+							this.textContent = "Import Single Event";
+							if (stopButton) stopButton.style.display = "none";
+							if (progressDiv) progressDiv.style.display = "none";
+						});
+					});
+				}
+			}, 1000);
+		'
+		);
+
 		// Add working Start Import functionality.
 		wp_add_inline_script(
 			'humanitix-admin',
@@ -1089,7 +1589,7 @@ class AdminInterface {
 						var progressDiv = document.getElementById("import-progress");
 						var resultsDiv = document.getElementById("import-results");
 						
-						// Get import limit if debug mode is enabled
+						// Get import limit if set
 						var importLimit = "";
 						var importLimitSelect = document.getElementById("import-limit");
 						if (importLimitSelect && importLimitSelect.value) {
