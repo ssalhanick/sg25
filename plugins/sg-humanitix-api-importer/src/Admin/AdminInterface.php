@@ -280,8 +280,7 @@ class AdminInterface {
 							<!-- Single Event Import Section -->
 			<div class="single-event-import" style="margin: 20px 0; padding: 15px; background: #f0f8ff; border-left: 4px solid #0066cc;">
 				<h3 style="margin-top: 0;">Import Single Event</h3>
-				<p>To find Humanitix Event ID:</p>
-				<pre>https://console.humanitix.com/console/events/{event_id}/overview</pre>
+	
 				<p>Import a specific event by Humanitix Event ID:</p>
 				
 				<div class="event-inputs" style="margin-bottom: 15px;">
@@ -290,7 +289,8 @@ class AdminInterface {
 						<input type="text" id="event-id" name="event_id" placeholder="Enter the Humanitix event ID" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
 					</div>
 				</div>
-					
+				<p>To find Humanitix Event ID:</p>
+				<small><pre>https://console.humanitix.com/console/events/{event_id}/overview</pre></small>
 					<div class="import-controls" style="margin-top: 15px;">
 						<button id="start-import-single" class="button button-primary">
 							Import Single Event
