@@ -95,6 +95,7 @@ class AdminInterface {
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
+		add_action( 'wp_ajax_validate_event_id', array( $this, 'handle_event_id_validation_ajax' ) );
 	}
 
 	/**
@@ -280,37 +281,51 @@ class AdminInterface {
 							<!-- Single Event Import Section -->
 			<div class="single-event-import" style="margin: 20px 0; padding: 15px; background: #f0f8ff; border-left: 4px solid #0066cc;">
 				<h3 style="margin-top: 0;">Import Single Event</h3>
-	
+
 				<p>Import a specific event by Humanitix Event ID:</p>
 				
 				<div class="event-inputs" style="margin-bottom: 15px;">
 					<div>
 						<label for="event-id" style="font-weight: bold; display: block; margin-bottom: 5px;">Event ID:</label>
 						<input type="text" id="event-id" name="event_id" placeholder="Enter the Humanitix event ID" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
+						<div id="event-id-validation" style="margin-top: 5px; font-size: 12px;"></div>
 					</div>
 				</div>
-				<p>To find Humanitix Event ID:</p>
-				<small><pre>https://console.humanitix.com/console/events/{event_id}/overview</pre></small>
-					<div class="import-controls" style="margin-top: 15px;">
-						<button id="start-import-single" class="button button-primary">
-							Import Single Event
-						</button>
-						<button id="stop-import-single" class="button button-secondary" style="display:none;">Stop Import</button>
-						<span id="import-single-status"></span>
-					</div>
-					
-					<div id="import-single-progress" style="display:none;">
-						<div class="progress-bar" style="width: 100%; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 10px 0;">
-							<div class="progress-fill" style="height: 100%; background-color: #0066cc; width: 0%; transition: width 0.3s ease;"></div>
-						</div>
-						<div class="progress-text" style="text-align: center; font-style: italic; color: #666;">Processing event...</div>
-					</div>
-					
-					<div id="import-single-results" style="display:none;">
-						<h3>Import Results</h3>
-						<div id="single-results-content"></div>
-					</div>
+				
+				<div id="event-id-help" style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 15px; display: none;">
+					<h4 style="margin-top: 0;">How to Find Your Event ID</h4>
+					<ol style="margin: 0; padding-left: 20px;">
+						<li>Log into your <a href="https://console.humanitix.com" target="_blank">Humanitix console</a></li>
+						<li>Navigate to the event you want to import</li>
+						<li>Look at the URL in your browser - it will look like: <code>https://console.humanitix.com/console/events/{event_id}/overview</code></li>
+						<li>Copy the <code>{event_id}</code> part (the string of letters and numbers)</li>
+						<li>Paste it into the Event ID field above</li>
+					</ol>
+					<p style="margin: 10px 0 0 0; font-size: 11px; color: #666;">
+						<strong>Example:</strong> If your URL is <code>https://console.humanitix.com/console/events/507f1f77bcf86cd799439011/overview</code>, then your Event ID is: <code>507f1f77bcf86cd799439011</code>
+					</p>
 				</div>
+				
+				<div class="import-controls" style="margin-top: 15px;">
+					<button id="start-import-single" class="button button-primary">
+						Import Single Event
+					</button>
+					<button id="stop-import-single" class="button button-secondary" style="display:none;">Stop Import</button>
+					<span id="import-single-status"></span>
+				</div>
+				
+				<div id="import-single-progress" style="display:none;">
+					<div class="progress-bar" style="width: 100%; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 10px 0;">
+						<div class="progress-fill" style="height: 100%; background-color: #0066cc; width: 0%; transition: width 0.3s ease;"></div>
+					</div>
+					<div class="progress-text" style="text-align: center; font-style: italic; color: #666;">Processing event...</div>
+				</div>
+				
+				<div id="import-single-results" style="display:none;">
+					<h3>Import Results</h3>
+					<div id="single-results-content"></div>
+				</div>
+			</div>
 			</div>
 			
 			<!-- Dashboard Stats Section -->
@@ -1501,6 +1516,61 @@ class AdminInterface {
 			'
 			setTimeout(function() {
 				var startImportSingleButton = document.getElementById("start-import-single");
+				var eventIdInput = document.getElementById("event-id");
+				var validationDiv = document.getElementById("event-id-validation");
+				var helpDiv = document.getElementById("event-id-help");
+				
+				// Real-time validation
+				if (eventIdInput) {
+					eventIdInput.addEventListener("input", function() {
+						var eventId = this.value.trim();
+						
+						if (eventId.length === 0) {
+							validationDiv.innerHTML = "";
+							helpDiv.style.display = "none";
+							return;
+						}
+						
+						// Show help on first input
+						if (helpDiv.style.display === "none") {
+							helpDiv.style.display = "block";
+						}
+						
+						// Basic validation
+						var isValid = true;
+						var message = "";
+						var color = "#666";
+						
+						if (eventId.indexOf(" ") !== -1) {
+							isValid = false;
+							message = "Event ID contains spaces. Please remove them.";
+							color = "#d63638";
+						} else if (eventId.indexOf("http") !== -1) {
+							isValid = false;
+							message = "Please enter only the event ID, not the full URL.";
+							color = "#d63638";
+						} else if (!/^[a-zA-Z0-9_-]+$/.test(eventId)) {
+							isValid = false;
+							message = "Invalid characters detected. Event ID should contain only letters, numbers, hyphens, and underscores.";
+							color = "#d63638";
+						} else if (eventId.length < 10) {
+							isValid = false;
+							message = "Event ID seems too short. Humanitix event IDs are typically longer.";
+							color = "#d63638";
+						} else {
+							message = "Event ID format looks valid ✓";
+							color = "#00a32a";
+						}
+						
+						validationDiv.innerHTML = "<span style=\"color: " + color + ";\">" + message + "</span>";
+						
+						// Enable/disable import button based on validation
+						if (startImportSingleButton) {
+							startImportSingleButton.disabled = !isValid;
+						}
+					});
+				}
+				
 				if (startImportSingleButton) {
 					startImportSingleButton.addEventListener("click", function(e) {
 						e.preventDefault();
@@ -1512,7 +1582,7 @@ class AdminInterface {
 						var eventId = document.getElementById("event-id");
 						
 						// Validate inputs
-						if (!eventId.value) {
+						if (!eventId.value.trim()) {
 							alert("Please enter an Event ID");
 							return;
 						}
@@ -1529,7 +1599,7 @@ class AdminInterface {
 						var requestData = {
 							action: "import_single_event",
 							nonce: humanitixAdmin.nonce,
-							event_id: eventId.value
+							event_id: eventId.value.trim()
 						};
 						
 						fetch(humanitixAdmin.ajaxUrl, {
@@ -1542,31 +1612,62 @@ class AdminInterface {
 						.then(response => response.json())
 						.then(data => {
 							if (data.success) {
-								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-yes-alt\"></span> Import completed successfully";
-								if (resultsDiv) {
-									var resultsContent = resultsDiv.querySelector("#single-results-content");
-									if (resultsContent) {
-										var eventInfo = " (ID: " + eventId.value + ")";
-										resultsContent.innerHTML = 
-											"<p><strong>Event imported:</strong> " + data.data.event_title + eventInfo + "</p>" +
-											"<p><strong>Duration:</strong> " + data.data.duration + " seconds</p>" +
-											(data.data.errors.length > 0 ? "<p><strong>Errors:</strong> " + data.data.errors.join(", ") + "</p>" : "");
-									}
-									resultsDiv.style.display = "block";
-								}
+								var resultsContent = document.getElementById("single-results-content");
+								var eventTitle = data.data.event_title || "Unknown Event";
+								var message = data.data.message || "Import completed successfully";
+								var duration = data.data.duration || 0;
+								
+								resultsContent.innerHTML = `
+									<div style="background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+										<h4 style="margin-top: 0; color: #0c5460;">✓ Import Successful</h4>
+										<p><strong>Event:</strong> ${eventTitle}</p>
+										<p><strong>Message:</strong> ${message}</p>
+										<p><strong>Duration:</strong> ${duration} seconds</p>
+									</div>
+								`;
+								
+								if (statusDiv) statusDiv.innerHTML = "<span style=\"color: #00a32a;\">✓ Import completed successfully</span>";
 							} else {
-								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Import failed: " + data.data.message;
+								var resultsContent = document.getElementById("single-results-content");
+								var errorMessage = data.data.message || "Import failed";
+								
+								resultsContent.innerHTML = `
+									<div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+										<h4 style="margin-top: 0; color: #721c24;">✗ Import Failed</h4>
+										<p><strong>Error:</strong> ${errorMessage}</p>
+										${data.data.suggestion ? "<p><strong>Suggestion:</strong> " + data.data.suggestion + "</p>" : ""}
+									</div>
+								`;
+								
+								if (statusDiv) statusDiv.innerHTML = "<span style=\"color: #d63638;\">✗ Import failed</span>";
 							}
+							
+							// Show results and reset UI
+							if (resultsDiv) resultsDiv.style.display = "block";
+							if (progressDiv) progressDiv.style.display = "none";
+							if (stopButton) stopButton.style.display = "none";
+							
+							this.disabled = false;
+							this.textContent = "Import Single Event";
 						})
 						.catch(error => {
 							console.error("Import error:", error);
-							if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Import failed. Please try again.";
-						})
-						.finally(() => {
+							
+							var resultsContent = document.getElementById("single-results-content");
+							resultsContent.innerHTML = `
+								<div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+									<h4 style="margin-top: 0; color: #721c24;">✗ Import Failed</h4>
+									<p><strong>Error:</strong> Network error occurred. Please check your connection and try again.</p>
+								</div>
+							`;
+							
+							if (resultsDiv) resultsDiv.style.display = "block";
+							if (progressDiv) progressDiv.style.display = "none";
+							if (stopButton) stopButton.style.display = "none";
+							if (statusDiv) statusDiv.innerHTML = "<span style=\"color: #d63638;\">✗ Network error</span>";
+							
 							this.disabled = false;
 							this.textContent = "Import Single Event";
-							if (stopButton) stopButton.style.display = "none";
-							if (progressDiv) progressDiv.style.display = "none";
 						});
 					});
 				}
@@ -1820,5 +1921,62 @@ class AdminInterface {
 			}
 		'
 		);
+	}
+
+	/**
+	 * Handle event ID validation AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_event_id_validation_ajax() {
+		check_ajax_referer( 'humanitix_api_test_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$event_id = sanitize_text_field( $_POST['event_id'] ?? '' );
+
+		if ( empty( $event_id ) ) {
+			wp_send_json_error( array( 'message' => 'Event ID is required.' ) );
+		}
+
+		// Get API settings for validation
+		$options      = get_option( 'humanitix_importer_options', array() );
+		$api_key      = $options['api_key'] ?? '';
+		$org_id       = $options['org_id'] ?? '';
+		$api_endpoint = $options['api_endpoint'] ?? '';
+
+		if ( empty( $api_key ) || empty( $org_id ) ) {
+			wp_send_json_error( array( 
+				'message' => 'API configuration incomplete.',
+				'suggestion' => 'Please configure your API key and organization ID in the settings first.'
+			) );
+		}
+
+		try {
+			// Create API instance and validate event ID
+			$api    = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+			$result = $api->validate_event_id( $event_id );
+
+			if ( $result['success'] ) {
+				wp_send_json_success( array(
+					'message' => $result['message'],
+					'suggestion' => $result['suggestion']
+				) );
+			} else {
+				wp_send_json_error( array(
+					'message' => $result['message'],
+					'suggestion' => $result['suggestion']
+				) );
+			}
+
+		} catch ( \Exception $e ) {
+			wp_send_json_error( array(
+				'message' => 'Validation failed: ' . $e->getMessage(),
+				'suggestion' => 'Please check your API configuration and try again.'
+			) );
+		}
 	}
 }

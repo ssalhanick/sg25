@@ -111,6 +111,16 @@ sg-humanitix-api-importer/
 │   ├── Importer/
 │   │   ├── DataMapper.php
 │   │   └── EventsImporter.php
+│   ├── Templates/
+│   │   ├── Assets/
+│   │   │   ├── css/
+│   │   │   │   └── templates.css
+│   │   │   └── js/
+│   │   │       └── templates.js
+│   │   ├── Hooks/
+│   │   │   └── TemplateHooks.php
+│   │   ├── Overrides/
+│   │   └── TemplateManager.php
 │   ├── Security/
 │   │   ├── AjaxSecurityHandler.php
 │   │   ├── RestApiSecurityHandler.php
@@ -118,10 +128,138 @@ sg-humanitix-api-importer/
 │   ├── Assets.php
 │   ├── HumanitixAPI.php
 │   └── Plugin.php
+├── tests/
+│   ├── test_template_module.php
+│   ├── test_template_validation.php
+│   ├── run_template_tests.php
+│   └── execute_template_tests.php
 ├── assets/
 ├── composer.json
 └── README.md
 ```
+
+### Template Module
+
+The plugin includes a comprehensive TEC (The Events Calendar) template customization module that allows you to:
+
+- **Customize TEC Templates**: Override default TEC templates with custom versions
+- **Hook into TEC Events**: Add custom functionality to event displays
+- **Manage Assets**: Load custom CSS/JS only on TEC pages
+- **Conditional Loading**: Module only activates when TEC is present
+
+#### Template Module Components
+
+- **TemplateManager**: Main entry point for template functionality
+- **TemplateHooks**: Handles all TEC-specific hooks and filters
+- **TemplateAssets**: Manages CSS/JS assets for template customizations
+- **Template Overrides**: Custom template files in `src/Templates/Overrides/`
+
+#### Template Customization Features
+
+- **Event Title Customization**: Modify event titles via hooks
+- **Event Meta Customization**: Customize event metadata display
+- **Venue Customization**: Customize venue information display
+- **Organizer Customization**: Customize organizer information display
+- **Asset Management**: Load custom CSS/JS conditionally
+- **Template Overrides**: Override TEC template files
+
+### Testing Framework
+
+The plugin includes a comprehensive testing framework for the template module:
+
+#### Test Files
+
+- **`test_template_module.php`**: Unit tests for core template functionality
+- **`test_template_validation.php`**: Real-world validation tests
+- **`run_template_tests.php`**: Comprehensive test runner
+- **`execute_template_tests.php`**: Automated test executor
+
+#### Running Tests
+
+##### Method 1: Individual Test Files
+```php
+// Run unit tests only
+include 'tests/test_template_module.php';
+
+// Run validation tests only
+include 'tests/test_template_validation.php';
+
+// Run comprehensive tests only
+include 'tests/run_template_tests.php';
+```
+
+##### Method 2: Automated Test Runner
+```php
+// Run all tests automatically
+include 'tests/execute_template_tests.php';
+```
+
+##### Method 3: WordPress Admin
+1. Enable `WP_DEBUG` in `wp-config.php`
+2. Navigate to WordPress admin
+3. Tests run automatically when plugin loads
+
+#### Test Coverage
+
+The testing framework covers:
+
+- **Module Initialization**: TemplateManager singleton pattern and TEC detection
+- **Hook System**: All TEC-specific hooks registration and functionality
+- **Asset Management**: CSS/JS file loading and conditional loading
+- **Template Overrides**: Template path system and file existence
+- **Plugin Integration**: Integration with main plugin and module independence
+- **Performance**: Memory usage and initialization time validation
+
+#### Test Categories
+
+1. **Unit Tests**: Core functionality testing
+   - TemplateManager initialization
+   - TemplateHooks method existence
+   - TemplateAssets functionality
+
+2. **Validation Tests**: Real-world scenario testing
+   - Module initialization in WordPress environment
+   - Conditional loading with/without TEC
+   - Asset file existence and readability
+
+3. **Integration Tests**: Plugin integration testing
+   - Template module integration with main plugin
+   - Module independence from importer
+   - Template override system functionality
+
+4. **Performance Tests**: Performance impact testing
+   - Initialization time (target: < 100ms)
+   - Memory usage (target: < 1MB)
+   - Asset loading performance (target: < 50ms)
+
+#### Expected Test Results
+
+All tests should pass with:
+- ✅ **Module Initialization**: TemplateManager creates successfully
+- ✅ **TEC Detection**: Properly detects TEC availability
+- ✅ **Hook Registration**: All TEC hooks registered correctly
+- ✅ **Asset Loading**: CSS/JS files load conditionally
+- ✅ **Template Overrides**: Template path system works
+- ✅ **Plugin Integration**: Integrates with main plugin
+- ✅ **Module Independence**: Works without importer
+- ✅ **Performance**: Acceptable memory and time usage
+
+#### Test Output
+
+Tests provide detailed output including:
+- Pass/fail status for each test
+- Detailed error messages for failed tests
+- Performance metrics (execution time, memory usage)
+- Summary statistics (total tests, success rate)
+
+#### Debugging Failed Tests
+
+If tests fail:
+1. Check that all required files exist
+2. Verify TEC plugin is installed (if testing TEC functionality)
+3. Review error messages for specific issues
+4. Check WordPress debug log for additional information
+5. Ensure proper file permissions on test files
 
 ### Adding Debug Information
 
@@ -137,6 +275,73 @@ $this->logger->log( 'error', 'Error message', array( 'error_details' => $error )
 // Success logging
 $this->logger->log( 'success', 'Operation completed', array( 'results' => $results ) );
 ```
+
+## Development Roadmap
+
+### Step 4: Advanced Template Customization (Next Phase)
+
+The next phase of development will focus on advanced template customization features:
+
+#### Planned Features
+
+1. **Template Builder Interface**
+   - Visual template editor in WordPress admin
+   - Drag-and-drop template customization
+   - Real-time preview of template changes
+   - Template version control and rollback
+
+2. **Advanced Hook System**
+   - Custom hook creation for specific events
+   - Hook priority management
+   - Conditional hook execution based on event properties
+   - Hook performance monitoring
+
+3. **Template Library**
+   - Pre-built template designs
+   - Template import/export functionality
+   - Template sharing between sites
+   - Template marketplace integration
+
+4. **Advanced Asset Management**
+   - CSS/JS minification and optimization
+   - Asset versioning and cache busting
+   - Conditional asset loading based on event properties
+   - Asset performance monitoring
+
+5. **Template Analytics**
+   - Template usage tracking
+   - Performance metrics for custom templates
+   - User interaction analytics
+   - A/B testing for template variations
+
+6. **Developer Tools**
+   - Template debugging tools
+   - Hook inspection and monitoring
+   - Performance profiling
+   - Code generation for common customizations
+
+#### Technical Implementation
+
+- **Admin Interface**: New admin pages for template management
+- **Database Schema**: Tables for template storage and versioning
+- **API Endpoints**: REST API for template operations
+- **Caching System**: Template and asset caching
+- **Security**: Template validation and sanitization
+
+#### Testing Strategy
+
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Template system integration
+- **Performance Tests**: Template rendering performance
+- **User Acceptance Tests**: End-to-end template customization workflows
+
+### Future Enhancements
+
+- **Multi-site Support**: Template sharing across WordPress networks
+- **Third-party Integrations**: Integration with popular page builders
+- **Mobile Optimization**: Responsive template customization
+- **Accessibility**: WCAG compliance tools for templates
+- **Internationalization**: Multi-language template support
 
 ## Support
 

@@ -383,12 +383,13 @@ class EventsImporter {
 	}
 
 	/**
-	 * Import a single event by ID.
+	 * Import a single event by ID with improved error handling.
 	 *
 	 * @param string $event_id The Humanitix event ID.
+	 * @param int    $retry_attempts Number of retry attempts for API calls.
 	 * @return array Import result.
 	 */
-	public function import_single_event_by_id( $event_id ) {
+	public function import_single_event_by_id( $event_id, $retry_attempts = 2 ) {
 		// Initialize debug helper.
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $this->logger );
 
@@ -398,13 +399,39 @@ class EventsImporter {
 		$this->start_time = microtime( true );
 
 		try {
-			// Get the specific event from Humanitix API.
-			$debug_helper->log( 'API', "Calling get_event() for event_id: {$event_id}" );
+			// Validate event ID before making API call
+			if ( empty( $event_id ) ) {
+				throw new \Exception( 'Event ID cannot be empty. Please provide a valid event ID.' );
+			}
 
-			$event_data = $this->api->get_event( $event_id );
+			// Get the specific event from Humanitix API with retry logic.
+			$debug_helper->log( 'API', "Calling get_event() for event_id: {$event_id} with {$retry_attempts} retry attempts" );
+
+			$event_data = $this->api->get_event( $event_id, $retry_attempts );
 
 			if ( is_wp_error( $event_data ) ) {
-				throw new \Exception( 'Failed to fetch event from API: ' . $event_data->get_error_message() );
+				$error_code = $event_data->get_error_code();
+				$error_message = $event_data->get_error_message();
+
+				// Provide specific error messages based on error type
+				switch ( $error_code ) {
+					case 'event_not_found':
+						throw new \Exception( "Event not found: {$error_message}" );
+					case 'invalid_event_id':
+						throw new \Exception( "Invalid event ID: {$error_message}" );
+					case 'invalid_response':
+						throw new \Exception( "Invalid API response: {$error_message}" );
+					case 'invalid_event_data':
+						throw new \Exception( "Invalid event data structure: {$error_message}" );
+					case 'max_retries_exceeded':
+						throw new \Exception( "API request failed after multiple attempts. Please check your connection and try again." );
+					case 'server_error':
+						throw new \Exception( "Server error occurred. Please try again later." );
+					case 'client_error':
+						throw new \Exception( "API authentication or permission error. Please check your API key and organization ID." );
+					default:
+						throw new \Exception( "Failed to fetch event from API: {$error_message}" );
+				}
 			}
 
 			if ( empty( $event_data ) ) {
