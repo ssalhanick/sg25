@@ -578,26 +578,202 @@ class HumanitixAPI {
 	}
 
 	/**
-	 * Get a single event by ID.
+	 * Get a single event by ID with improved error handling and validation.
 	 *
 	 * @param string $event_id The event ID.
+	 * @param int    $retry_attempts Number of retry attempts (default: 2).
 	 * @return array|WP_Error Event data or error.
 	 */
-	public function get_event( $event_id ) {
-		$response = $this->make_request( 'GET', '/events/' . sanitize_text_field( $event_id ) );
+	public function get_event( $event_id, $retry_attempts = 2 ) {
+		// Initialize debug helper.
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
+		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
 
-		if ( is_wp_error( $response ) ) {
-			return $response;
+		// Validate event ID format
+		$event_id = sanitize_text_field( $event_id );
+		if ( empty( $event_id ) ) {
+			$debug_helper->log_critical_error( 'API', 'Empty event ID provided' );
+			return new \WP_Error( 'invalid_event_id', 'Event ID cannot be empty.' );
 		}
 
-		// Handle different response formats.
-		if ( isset( $response['data'] ) ) {
-			return $response['data'];
-		} elseif ( isset( $response['event'] ) ) {
-			return $response['event'];
+		// Check if event ID looks valid (basic format check)
+		if ( ! preg_match( '/^[a-zA-Z0-9_-]+$/', $event_id ) ) {
+			$debug_helper->log_critical_error( 'API', 'Invalid event ID format', array( 'event_id' => $event_id ) );
+			return new \WP_Error( 'invalid_event_id', 'Invalid event ID format. Event ID should contain only letters, numbers, hyphens, and underscores.' );
 		}
 
-		return $response;
+		$debug_helper->log( 'API', "Starting get_event with validated event_id: {$event_id}" );
+
+		// Try to get from cache first
+		$cache_key = 'humanitix_event_' . md5( $event_id );
+		$cached_event = wp_cache_get( $cache_key, 'humanitix_events' );
+		
+		if ( $cached_event !== false ) {
+			$debug_helper->log( 'API', "Event found in cache for event_id: {$event_id}" );
+			return $cached_event;
+		}
+
+		$attempt = 0;
+		$last_error = null;
+
+		while ( $attempt <= $retry_attempts ) {
+			$attempt++;
+			
+			$debug_helper->log( 'API', "Attempt {$attempt} to fetch event_id: {$event_id}" );
+
+			$response = $this->make_request( 'GET', '/events/' . $event_id );
+
+			if ( is_wp_error( $response ) ) {
+				$last_error = $response;
+				
+				// Check if it's a 404 (event not found)
+				if ( strpos( $response->get_error_message(), '404' ) !== false ) {
+					$debug_helper->log_critical_error( 'API', "Event not found: {$event_id}" );
+					return new \WP_Error( 'event_not_found', "Event with ID '{$event_id}' was not found. Please verify the event ID is correct." );
+				}
+
+				// Check if it's a network/timeout error
+				if ( strpos( $response->get_error_message(), 'timeout' ) !== false || 
+					 strpos( $response->get_error_message(), 'connection' ) !== false ) {
+					
+					if ( $attempt <= $retry_attempts ) {
+						$debug_helper->log( 'API', "Network error on attempt {$attempt}, retrying in 2 seconds..." );
+						sleep( 2 );
+						continue;
+					}
+				}
+
+				// For other errors, return immediately
+				$debug_helper->log_critical_error( 'API', "API request failed on attempt {$attempt}", array(
+					'event_id' => $event_id,
+					'error' => $response->get_error_message()
+				) );
+				return $response;
+			}
+
+			// Handle different response formats
+			$event_data = null;
+			if ( isset( $response['data'] ) ) {
+				$event_data = $response['data'];
+			} elseif ( isset( $response['event'] ) ) {
+				$event_data = $response['event'];
+			} elseif ( is_array( $response ) && ! empty( $response ) ) {
+				$event_data = $response;
+			}
+
+			if ( empty( $event_data ) ) {
+				$debug_helper->log_critical_error( 'API', "Empty or invalid response for event_id: {$event_id}", array(
+					'response_keys' => array_keys( $response ),
+					'response_type' => gettype( $response )
+				) );
+				return new \WP_Error( 'invalid_response', 'Invalid or empty response from API for event ID: ' . $event_id );
+			}
+
+			// Validate that we have the expected event data structure
+			if ( ! isset( $event_data['_id'] ) && ! isset( $event_data['id'] ) ) {
+				$debug_helper->log_critical_error( 'API', "Response missing event ID for event_id: {$event_id}", array(
+					'response_keys' => array_keys( $event_data )
+				) );
+				return new \WP_Error( 'invalid_event_data', 'Response does not contain valid event data structure.' );
+			}
+
+			// Cache the successful response for 5 minutes
+			wp_cache_set( $cache_key, $event_data, 'humanitix_events', 300 );
+
+			$debug_helper->log( 'API', "Successfully fetched event data for event_id: {$event_id}", array(
+				'event_name' => $event_data['name'] ?? $event_data['title'] ?? 'Unknown',
+				'event_id' => $event_data['_id'] ?? $event_data['id'] ?? 'unknown'
+			) );
+
+			return $event_data;
+		}
+
+		// If we get here, all retry attempts failed
+		$debug_helper->log_critical_error( 'API', "All retry attempts failed for event_id: {$event_id}", array(
+			'retry_attempts' => $retry_attempts,
+			'last_error' => $last_error ? $last_error->get_error_message() : 'Unknown error'
+		) );
+
+		return $last_error ?: new \WP_Error( 'max_retries_exceeded', 'Failed to fetch event after multiple attempts. Please try again later.' );
+	}
+
+	/**
+	 * Validate event ID format and provide helpful feedback.
+	 *
+	 * @param string $event_id The event ID to validate.
+	 * @return array Validation result with success status and message.
+	 */
+	public function validate_event_id( $event_id ) {
+		$event_id = trim( $event_id );
+		
+		if ( empty( $event_id ) ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID cannot be empty.',
+				'suggestion' => 'Please enter a valid Humanitix event ID.'
+			);
+		}
+
+		// Check for common mistakes
+		if ( strpos( $event_id, ' ' ) !== false ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID contains spaces.',
+				'suggestion' => 'Please remove any spaces from the event ID.'
+			);
+		}
+
+		if ( strpos( $event_id, 'https://' ) !== false || strpos( $event_id, 'http://' ) !== false ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID appears to be a URL.',
+				'suggestion' => 'Please enter only the event ID, not the full URL. The event ID is usually found in the URL after /events/.'
+			);
+		}
+
+		// Check if it looks like a valid Humanitix event ID format
+		if ( ! preg_match( '/^[a-zA-Z0-9_-]+$/', $event_id ) ) {
+			return array(
+				'success' => false,
+				'message' => 'Invalid event ID format.',
+				'suggestion' => 'Event ID should contain only letters, numbers, hyphens, and underscores. Please check the event ID from your Humanitix console.'
+			);
+		}
+
+		// Check length (Humanitix IDs are typically 24 characters)
+		if ( strlen( $event_id ) < 10 ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID seems too short.',
+				'suggestion' => 'Humanitix event IDs are typically longer. Please verify you have the correct event ID from your Humanitix console.'
+			);
+		}
+
+		return array(
+			'success' => true,
+			'message' => 'Event ID format looks valid.',
+			'suggestion' => 'You can proceed with the import.'
+		);
+	}
+
+	/**
+	 * Get helpful information about finding event IDs.
+	 *
+	 * @return array Information about finding event IDs.
+	 */
+	public function get_event_id_help() {
+		return array(
+			'title' => 'How to Find Your Event ID',
+			'steps' => array(
+				'1. Log into your Humanitix console at https://console.humanitix.com',
+				'2. Navigate to the event you want to import',
+				'3. Look at the URL in your browser - it will look like: https://console.humanitix.com/console/events/{event_id}/overview',
+				'4. Copy the {event_id} part (the string of letters and numbers)',
+				'5. Paste it into the Event ID field above'
+			),
+			'example' => 'Example: If your URL is https://console.humanitix.com/console/events/507f1f77bcf86cd799439011/overview, then your Event ID is: 507f1f77bcf86cd799439011',
+			'note' => 'Note: Event IDs are case-sensitive and should not include any extra characters or spaces.'
+		);
 	}
 
 	/**

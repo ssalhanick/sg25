@@ -16,6 +16,7 @@ use SG\HumanitixApiImporter\Security\RestApiSecurityHandler;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\AdminInterface;
 use SG\HumanitixApiImporter\Admin\SettingsManager;
+use SG\HumanitixApiImporter\Templates\TemplateManager;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -72,6 +73,13 @@ class Plugin {
 	 * @var Logger
 	 */
 	private $logger;
+
+	/**
+	 * The template manager instance.
+	 *
+	 * @var TemplateManager
+	 */
+	private $template_manager;
 
 	/**
 	 * Get the plugin instance.
@@ -172,6 +180,9 @@ class Plugin {
 		// Initialize security utilities.
 		$this->init_security_utilities();
 
+		// Initialize template module.
+		$this->init_template_module();
+
 		// Check database version and update if needed.
 		$this->check_database_version();
 
@@ -212,6 +223,23 @@ class Plugin {
 
 			// Update admin interface with importer.
 			$this->admin->set_importer( $this->importer );
+		}
+	}
+
+	/**
+	 * Initialize template module.
+	 *
+	 * Sets up the template manager for TEC template customizations.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function init_template_module() {
+		// Initialize template manager with logger.
+		$this->template_manager = new TemplateManager( $this->logger );
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] Template module initialized' );
 		}
 	}
 
@@ -786,5 +814,15 @@ class Plugin {
 		// if (version_compare($from_version, '1.1.0', '<')) {.
 		// Add new columns, etc.
 		// }.
+	}
+
+	/**
+	 * Get the template manager instance.
+	 *
+	 * @since 1.0.0
+	 * @return TemplateManager|null The template manager instance or null if not initialized.
+	 */
+	public function get_template_manager() {
+		return $this->template_manager;
 	}
 }
