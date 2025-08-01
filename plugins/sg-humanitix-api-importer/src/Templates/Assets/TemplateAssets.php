@@ -41,6 +41,13 @@ class TemplateAssets {
 	private $assets_enqueued = false;
 
 	/**
+	 * Whether TEC is active.
+	 *
+	 * @var bool
+	 */
+	private $tec_active = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * Initializes the template assets and sets up asset loading.
@@ -50,7 +57,23 @@ class TemplateAssets {
 	 */
 	public function __construct( Logger $logger ) {
 		$this->logger = $logger;
+		$this->check_tec_availability();
 		$this->init_assets();
+	}
+
+	/**
+	 * Check if TEC is available.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function check_tec_availability() {
+		// Check if TEC plugin is active.
+		$this->tec_active = class_exists( 'Tribe__Events__Main' );
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[sg-humanitix-api-importer] TemplateAssets: TEC active: ' . ( $this->tec_active ? 'true' : 'false' ) );
+		}
 	}
 
 	/**
@@ -60,6 +83,16 @@ class TemplateAssets {
 	 * @return void
 	 */
 	private function init_assets() {
+		// Only initialize if TEC is active.
+		if ( ! $this->tec_active ) {
+			$this->logger->log(
+				'info',
+				'Template assets not initialized - TEC not active',
+				array( 'module' => 'templates', 'component' => 'assets' )
+			);
+			return;
+		}
+
 		// Hook into WordPress asset loading.
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_template_assets' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
@@ -81,6 +114,11 @@ class TemplateAssets {
 	 * @return void
 	 */
 	public function enqueue_template_assets() {
+		// Only enqueue if TEC is active.
+		if ( ! $this->tec_active ) {
+			return;
+		}
+
 		// Only enqueue on TEC pages.
 		if ( ! $this->is_tec_page() ) {
 			return;
@@ -108,6 +146,11 @@ class TemplateAssets {
 	 * @return void
 	 */
 	public function enqueue_admin_assets() {
+		// Only enqueue if TEC is active.
+		if ( ! $this->tec_active ) {
+			return;
+		}
+
 		// Only enqueue on TEC admin pages.
 		if ( ! $this->is_tec_admin_page() ) {
 			return;
@@ -138,19 +181,19 @@ class TemplateAssets {
 			return false;
 		}
 
-		// Check various TEC page conditions.
+		// Check various TEC page conditions with function existence checks.
 		return (
-			tribe_is_event_query() ||
-			tribe_is_event() ||
-			tribe_is_event_category() ||
-			tribe_is_event_venue() ||
-			tribe_is_event_organizer() ||
-			tribe_is_month() ||
-			tribe_is_list_view() ||
-			tribe_is_day() ||
-			tribe_is_week() ||
-			tribe_is_map_view() ||
-			tribe_is_photo_view()
+			( function_exists( 'tribe_is_event_query' ) && tribe_is_event_query() ) ||
+			( function_exists( 'tribe_is_event' ) && tribe_is_event() ) ||
+			( function_exists( 'tribe_is_event_category' ) && tribe_is_event_category() ) ||
+			( function_exists( 'tribe_is_event_venue' ) && tribe_is_event_venue() ) ||
+			( function_exists( 'tribe_is_event_organizer' ) && tribe_is_event_organizer() ) ||
+			( function_exists( 'tribe_is_month' ) && tribe_is_month() ) ||
+			( function_exists( 'tribe_is_list_view' ) && tribe_is_list_view() ) ||
+			( function_exists( 'tribe_is_day' ) && tribe_is_day() ) ||
+			( function_exists( 'tribe_is_week' ) && tribe_is_week() ) ||
+			( function_exists( 'tribe_is_map_view' ) && tribe_is_map_view() ) ||
+			( function_exists( 'tribe_is_photo_view' ) && tribe_is_photo_view() )
 		);
 	}
 
@@ -373,5 +416,15 @@ class TemplateAssets {
 	 */
 	public function are_assets_enqueued() {
 		return $this->assets_enqueued;
+	}
+
+	/**
+	 * Check if TEC is active.
+	 *
+	 * @since 1.0.0
+	 * @return bool True if TEC is active, false otherwise.
+	 */
+	public function is_tec_active() {
+		return $this->tec_active;
 	}
 } 
