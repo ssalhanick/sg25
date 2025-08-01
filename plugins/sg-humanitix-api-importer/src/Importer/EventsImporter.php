@@ -113,6 +113,15 @@ class EventsImporter {
 
 		$debug_helper->log( 'Importer', "Starting import_events with page: {$page}" . ( $import_limit ? ", limit: {$import_limit}" : '' ) );
 
+		// Acquire import lock to prevent concurrent imports
+		if (!$this->acquire_import_lock()) {
+			throw new \Exception('Another import is currently running. Please wait for it to complete.');
+		}
+
+		// Perform pre-import cleanup and validation
+		$cleanup_stats = $this->pre_import_cleanup();
+		$debug_helper->log( 'Importer', 'Pre-import cleanup completed', array('cleanup_stats' => $cleanup_stats) );
+
 		// Start timing.
 		$this->start_time = microtime( true );
 
@@ -380,6 +389,9 @@ class EventsImporter {
 				'errors'   => array( $error_code ),
 			);
 		}
+		
+		// Always release the import lock
+		$this->release_import_lock();
 	}
 
 	/**
@@ -593,10 +605,11 @@ class EventsImporter {
 		$single_event['startDate'] = $date_data['startDate'] ?? $date_data['start'] ?? '';
 		$single_event['endDate']   = $date_data['endDate'] ?? $date_data['end'] ?? '';
 
-		// Add date-specific metadata
+		// Add date-specific metadata for duplicate detection
 		$single_event['_humanitix_date_id'] = $date_data['_id'] ?? "date_{$date_index}";
 		$single_event['_humanitix_date_index'] = $date_index;
 		$single_event['_humanitix_total_dates'] = count( $event_data['dates'] ?? array() );
+		$single_event['_humanitix_series_id'] = $event_data['_id'] ?? '';
 
 		// Remove the dates array to prevent infinite recursion
 		unset( $single_event['dates'] );
@@ -676,11 +689,11 @@ class EventsImporter {
 			// They only provide organiserId as a reference, not organizer details.
 			$organizer_id = null;
 
-			// Check if event already exists by Humanitix ID.
+			// Check if event already exists using enhanced duplicate detection
 			$humanitix_id = $event_data['_id'] ?? '';
 			$debug_helper->log( 'Importer', "Checking for existing event with humanitix_id: {$humanitix_id}" );
 
-			$existing_event = $this->find_existing_event( $humanitix_id );
+			$existing_event = $this->find_existing_event_enhanced( $event_data );
 
 			if ( $existing_event ) {
 				// Update existing event.
@@ -736,8 +749,27 @@ class EventsImporter {
 			$humanitix_id = $event_data['_id'] ?? '';
 			update_post_meta( $post_id, '_humanitix_event_id', $humanitix_id );
 
+			// Store event fingerprint for enhanced duplicate detection
+			$event_fingerprint = $this->generate_event_fingerprint( $event_data );
+			update_post_meta( $post_id, '_humanitix_event_fingerprint', $event_fingerprint );
+
+			// Store recurring event specific metadata
+			if ( isset( $event_data['_humanitix_date_id'] ) ) {
+				update_post_meta( $post_id, '_humanitix_date_id', $event_data['_humanitix_date_id'] );
+			}
+			if ( isset( $event_data['_humanitix_date_index'] ) ) {
+				update_post_meta( $post_id, '_humanitix_date_index', $event_data['_humanitix_date_index'] );
+			}
+			if ( isset( $event_data['_humanitix_series_id'] ) ) {
+				update_post_meta( $post_id, '_humanitix_series_id', $event_data['_humanitix_series_id'] );
+			}
+
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "Humanitix EventsImporter: Stored humanitix_id '{$humanitix_id}' for post_id {$post_id}" );
+				$debug_info = "Stored humanitix_id '{$humanitix_id}' and fingerprint '{$event_fingerprint}' for post_id {$post_id}";
+				if ( isset( $event_data['_humanitix_date_id'] ) ) {
+					$debug_info .= " (date_id: {$event_data['_humanitix_date_id']})";
+				}
+				error_log( "Humanitix EventsImporter: {$debug_info}" );
 			}
 
 			// Link venue to event if venue was created/found.
@@ -1966,5 +1998,435 @@ class EventsImporter {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Perform pre-import cleanup and validation.
+	 *
+	 * @since 1.0.0
+	 * @return array Cleanup results with statistics.
+	 */
+	private function pre_import_cleanup() {
+		global $wpdb;
+		
+		$cleanup_stats = array(
+			'orphaned_meta_removed' => 0,
+			'duplicate_meta_cleaned' => 0,
+			'corrupted_events_fixed' => 0,
+			'import_session_id' => uniqid('import_', true),
+		);
+
+		// Remove orphaned meta entries (events that don't exist)
+		$orphaned_meta = $wpdb->get_results(
+			"SELECT pm.meta_id, pm.post_id, pm.meta_value 
+			 FROM {$wpdb->postmeta} pm 
+			 LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+			 WHERE pm.meta_key = '_humanitix_event_id' 
+			 AND p.ID IS NULL"
+		);
+
+		foreach ($orphaned_meta as $meta) {
+			delete_metadata_by_mid('post', $meta->meta_id);
+			$cleanup_stats['orphaned_meta_removed']++;
+		}
+
+		// Find and clean duplicate meta entries
+		$duplicate_meta = $wpdb->get_results(
+			"SELECT meta_value, COUNT(*) as count 
+			 FROM {$wpdb->postmeta} 
+			 WHERE meta_key = '_humanitix_event_id' 
+			 GROUP BY meta_value 
+			 HAVING COUNT(*) > 1"
+		);
+
+		foreach ($duplicate_meta as $duplicate) {
+			// Keep the most recent event, delete others
+			$posts_with_meta = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT pm.post_id, p.post_date 
+					 FROM {$wpdb->postmeta} pm 
+					 JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+					 WHERE pm.meta_key = '_humanitix_event_id' 
+					 AND pm.meta_value = %s 
+					 ORDER BY p.post_date DESC",
+					$duplicate->meta_value
+				)
+			);
+
+			// Keep the first (most recent), delete the rest
+			for ($i = 1; $i < count($posts_with_meta); $i++) {
+				delete_post_meta($posts_with_meta[$i]->post_id, '_humanitix_event_id');
+				$cleanup_stats['duplicate_meta_cleaned']++;
+			}
+		}
+
+		// Validate data integrity of existing events
+		$corrupted_events = $wpdb->get_results(
+			"SELECT p.ID, p.post_title 
+			 FROM {$wpdb->posts} p 
+			 JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+			 WHERE p.post_type = 'tribe_events' 
+			 AND pm.meta_key = '_humanitix_event_id' 
+			 AND (p.post_title IS NULL OR p.post_title = '')"
+		);
+
+		foreach ($corrupted_events as $event) {
+			// Try to fix corrupted events or mark them for review
+			update_post_meta($event->ID, '_humanitix_requires_review', true);
+			$cleanup_stats['corrupted_events_fixed']++;
+		}
+
+		$this->logger->log(
+			'info',
+			'Pre-import cleanup completed',
+			array(
+				'module' => 'importer',
+				'cleanup_stats' => $cleanup_stats,
+			)
+		);
+
+		return $cleanup_stats;
+	}
+
+	/**
+	 * Generate event fingerprint for duplicate detection.
+	 *
+	 * @since 1.0.0
+	 * @param array $event_data Humanitix event data.
+	 * @return string Event fingerprint hash.
+	 */
+	private function generate_event_fingerprint($event_data) {
+		$fingerprint_data = array(
+			'title' => $event_data['name'] ?? $event_data['title'] ?? '',
+			'start_date' => $event_data['startDate'] ?? $event_data['start'] ?? '',
+			'end_date' => $event_data['endDate'] ?? $event_data['end'] ?? '',
+			'venue_name' => $event_data['venue']['venueName'] ?? $event_data['eventLocation']['venueName'] ?? '',
+			'venue_address' => $event_data['venue']['address'] ?? $event_data['eventLocation']['address'] ?? '',
+			'organizer' => $event_data['organizer']['name'] ?? $event_data['organiser']['name'] ?? '',
+			'event_type' => $event_data['type'] ?? $event_data['category'] ?? '',
+		);
+
+		// Add recurring event specific data for unique fingerprinting
+		if (isset($event_data['_humanitix_date_id'])) {
+			$fingerprint_data['date_id'] = $event_data['_humanitix_date_id'];
+		}
+		if (isset($event_data['_humanitix_date_index'])) {
+			$fingerprint_data['date_index'] = $event_data['_humanitix_date_index'];
+		}
+		if (isset($event_data['_humanitix_series_id'])) {
+			$fingerprint_data['series_id'] = $event_data['_humanitix_series_id'];
+		}
+
+		// Normalize data for consistent fingerprinting
+		$normalized_data = array();
+		foreach ($fingerprint_data as $key => $value) {
+			$normalized_data[$key] = strtolower(trim($value));
+		}
+
+		// Create fingerprint hash
+		$fingerprint_string = json_encode($normalized_data);
+		return md5($fingerprint_string);
+	}
+
+	/**
+	 * Find existing event using multiple detection strategies.
+	 *
+	 * @since 1.0.0
+	 * @param array $event_data Humanitix event data.
+	 * @return int|false Post ID if found, false otherwise.
+	 */
+	private function find_existing_event_enhanced($event_data) {
+		$humanitix_id = $event_data['_id'] ?? '';
+		$event_fingerprint = $this->generate_event_fingerprint($event_data);
+
+		if (defined('WP_DEBUG') && WP_DEBUG) {
+			error_log("Humanitix EventsImporter: Enhanced search for humanitix_id: {$humanitix_id}, fingerprint: {$event_fingerprint}");
+		}
+
+		// Special handling for recurring events
+		if (isset($event_data['_humanitix_date_id']) || isset($event_data['_humanitix_date_index'])) {
+			$existing_event = $this->find_existing_recurring_event($event_data);
+			if ($existing_event) {
+				return $existing_event;
+			}
+		}
+
+		// Strategy 1: Primary search by Humanitix ID
+		$existing_event = $this->find_existing_event($humanitix_id);
+		if ($existing_event) {
+			return $existing_event;
+		}
+
+		// Strategy 2: Search by event fingerprint
+		$existing_event = $this->find_existing_event_by_fingerprint($event_fingerprint);
+		if ($existing_event) {
+			return $existing_event;
+		}
+
+		// Strategy 3: Fuzzy matching for similar events
+		$existing_event = $this->find_existing_event_fuzzy($event_data);
+		if ($existing_event) {
+			return $existing_event;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Find existing recurring event by date-specific criteria.
+	 *
+	 * @since 1.0.0
+	 * @param array $event_data Humanitix event data.
+	 * @return int|false Post ID if found, false otherwise.
+	 */
+	private function find_existing_recurring_event($event_data) {
+		global $wpdb;
+		
+		$humanitix_id = $event_data['_id'] ?? '';
+		$date_id = $event_data['_humanitix_date_id'] ?? '';
+		$date_index = $event_data['_humanitix_date_index'] ?? '';
+		
+		if (empty($humanitix_id)) {
+			return false;
+		}
+		
+		// First, try to find by Humanitix ID + date ID combination
+		if (!empty($date_id)) {
+			$existing_event_id = $wpdb->get_var($wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta} 
+				 WHERE meta_key = '_humanitix_event_id' 
+				 AND meta_value = %s 
+				 AND post_id IN (
+					 SELECT post_id FROM {$wpdb->postmeta} 
+					 WHERE meta_key = '_humanitix_date_id' 
+					 AND meta_value = %s
+				 )
+				 AND post_id IN (
+					 SELECT ID FROM {$wpdb->posts} 
+					 WHERE post_type = 'tribe_events' 
+					 AND post_status != 'trash'
+				 )
+				 ORDER BY post_id DESC 
+				 LIMIT 1",
+				$humanitix_id,
+				$date_id
+			));
+			
+			if ($existing_event_id) {
+				if (defined('WP_DEBUG') && WP_DEBUG) {
+					error_log("Humanitix EventsImporter: Found existing recurring event by ID + date_id: {$existing_event_id}");
+				}
+				return (int) $existing_event_id;
+			}
+		}
+		
+		// If no date_id match, try by Humanitix ID + date index
+		if (!empty($date_index)) {
+			$existing_event_id = $wpdb->get_var($wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta} 
+				 WHERE meta_key = '_humanitix_event_id' 
+				 AND meta_value = %s 
+				 AND post_id IN (
+					 SELECT post_id FROM {$wpdb->postmeta} 
+					 WHERE meta_key = '_humanitix_date_index' 
+					 AND meta_value = %s
+				 )
+				 AND post_id IN (
+					 SELECT ID FROM {$wpdb->posts} 
+					 WHERE post_type = 'tribe_events' 
+					 AND post_status != 'trash'
+				 )
+				 ORDER BY post_id DESC 
+				 LIMIT 1",
+				$humanitix_id,
+				$date_index
+			));
+			
+			if ($existing_event_id) {
+				if (defined('WP_DEBUG') && WP_DEBUG) {
+					error_log("Humanitix EventsImporter: Found existing recurring event by ID + date_index: {$existing_event_id}");
+				}
+				return (int) $existing_event_id;
+			}
+		}
+		
+		// Finally, try by fingerprint (which now includes date information)
+		$event_fingerprint = $this->generate_event_fingerprint($event_data);
+		$existing_event_id = $this->find_existing_event_by_fingerprint($event_fingerprint);
+		
+		if ($existing_event_id) {
+			if (defined('WP_DEBUG') && WP_DEBUG) {
+				error_log("Humanitix EventsImporter: Found existing recurring event by fingerprint: {$existing_event_id}");
+			}
+		}
+		
+		return $existing_event_id;
+	}
+
+	/**
+	 * Find existing event by fingerprint.
+	 *
+	 * @since 1.0.0
+	 * @param string $fingerprint Event fingerprint hash.
+	 * @return int|false Post ID if found, false otherwise.
+	 */
+	private function find_existing_event_by_fingerprint($fingerprint) {
+		global $wpdb;
+
+		$existing_event_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta} 
+				 WHERE meta_key = '_humanitix_event_fingerprint' 
+				 AND meta_value = %s 
+				 AND post_id IN (
+					 SELECT ID FROM {$wpdb->posts} 
+					 WHERE post_type = 'tribe_events' 
+					 AND post_status != 'trash'
+				 )
+				 ORDER BY post_id DESC 
+				 LIMIT 1",
+				$fingerprint
+			)
+		);
+
+		if (defined('WP_DEBUG') && WP_DEBUG && $existing_event_id) {
+			error_log("Humanitix EventsImporter: Found existing event by fingerprint: {$existing_event_id}");
+		}
+
+		return $existing_event_id ? (int) $existing_event_id : false;
+	}
+
+	/**
+	 * Find existing event using fuzzy matching.
+	 *
+	 * @since 1.0.0
+	 * @param array $event_data Humanitix event data.
+	 * @return int|false Post ID if found, false otherwise.
+	 */
+	private function find_existing_event_fuzzy($event_data) {
+		$event_title = $event_data['name'] ?? $event_data['title'] ?? '';
+		$start_date = $event_data['startDate'] ?? $event_data['start'] ?? '';
+		$venue_name = $event_data['venue']['venueName'] ?? $event_data['eventLocation']['venueName'] ?? '';
+
+		if (empty($event_title) || empty($start_date)) {
+			return false;
+		}
+
+		// Search for events with similar title and date
+		$args = array(
+			'post_type' => 'tribe_events',
+			'post_status' => 'any',
+			'posts_per_page' => 5,
+			'meta_query' => array(
+				array(
+					'key' => '_EventStartDate',
+					'value' => date('Y-m-d', strtotime($start_date)),
+					'compare' => '=',
+				),
+			),
+			's' => $event_title, // Search in title
+		);
+
+		$query = new \WP_Query($args);
+		$candidates = $query->posts;
+
+		// Score each candidate based on similarity
+		$best_match = null;
+		$best_score = 0;
+
+		foreach ($candidates as $candidate) {
+			$score = 0;
+			
+			// Title similarity
+			$title_similarity = similar_text(
+				strtolower($event_title), 
+				strtolower($candidate->post_title), 
+				$percent
+			);
+			$score += $percent;
+
+			// Venue similarity (if available)
+			if (!empty($venue_name)) {
+				$candidate_venue = get_post_meta($candidate->ID, '_EventVenueID', true);
+				if ($candidate_venue) {
+					$venue_post = get_post($candidate_venue);
+					if ($venue_post) {
+						similar_text(
+							strtolower($venue_name), 
+							strtolower($venue_post->post_title), 
+							$venue_percent
+						);
+						$score += $venue_percent;
+					}
+				}
+			}
+
+			if ($score > $best_score && $score > 80) { // 80% similarity threshold
+				$best_score = $score;
+				$best_match = $candidate->ID;
+			}
+		}
+
+		if (defined('WP_DEBUG') && WP_DEBUG && $best_match) {
+			error_log("Humanitix EventsImporter: Found existing event by fuzzy matching: {$best_match} (score: {$best_score})");
+		}
+
+		return $best_match;
+	}
+
+	/**
+	 * Acquire import lock to prevent concurrent imports.
+	 *
+	 * @since 1.0.0
+	 * @param string $lock_name Lock identifier.
+	 * @param int $timeout Timeout in seconds.
+	 * @return bool True if lock acquired, false otherwise.
+	 */
+	private function acquire_import_lock($lock_name = 'humanitix_import', $timeout = 1800) {
+		$lock_key = "humanitix_import_lock_{$lock_name}";
+		$lock_value = uniqid('lock_', true);
+		
+		// Try to set the transient (lock)
+		$lock_acquired = set_transient($lock_key, $lock_value, $timeout);
+		
+		if ($lock_acquired) {
+			// Store the lock value for later verification
+			update_option("humanitix_import_lock_value_{$lock_name}", $lock_value);
+			
+			if (defined('WP_DEBUG') && WP_DEBUG) {
+				error_log("Humanitix EventsImporter: Import lock acquired: {$lock_name}");
+			}
+		} else {
+			if (defined('WP_DEBUG') && WP_DEBUG) {
+				error_log("Humanitix EventsImporter: Failed to acquire import lock: {$lock_name}");
+			}
+		}
+		
+		return $lock_acquired;
+	}
+
+	/**
+	 * Release import lock.
+	 *
+	 * @since 1.0.0
+	 * @param string $lock_name Lock identifier.
+	 * @return bool True if lock released, false otherwise.
+	 */
+	private function release_import_lock($lock_name = 'humanitix_import') {
+		$lock_key = "humanitix_import_lock_{$lock_name}";
+		$lock_value = get_option("humanitix_import_lock_value_{$lock_name}");
+		
+		// Verify we own the lock before releasing
+		if (get_transient($lock_key) === $lock_value) {
+			delete_transient($lock_key);
+			delete_option("humanitix_import_lock_value_{$lock_name}");
+			
+			if (defined('WP_DEBUG') && WP_DEBUG) {
+				error_log("Humanitix EventsImporter: Import lock released: {$lock_name}");
+			}
+			return true;
+		}
+		
+		return false;
 	}
 }
