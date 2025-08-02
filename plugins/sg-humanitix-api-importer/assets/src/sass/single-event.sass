@@ -31,12 +31,24 @@ body.tribe_events-template-default
                 .meta-content-inner
                     grid-area: content
                     padding: 2rem 1.5rem 2rem 2rem
-                    display: flex
-                    flex-flow: column nowrap
-                    justify-content: space-around
+                    display: grid
+                    grid-gap: 1rem
+                    grid-template-columns: 1fr
+                    grid-template-areas: "title" "action" "meta"
                     h1
                         font-size: 2.8rem
                         margin: 0
+                        grid-area: title
+                    .sg-humanitix-event-meta
+                        grid-area: meta
+                    .sg-humanitix-event-actions
+                        grid-area: action
+                        button.sg-humanitix-interest-btn
+                            background: #0E45DD
+                            a
+                                color: white
+                                text-decoration: none
+
                 .featured-image
                     grid-area: fimage
         .sg-humanitix-event-description
@@ -56,11 +68,26 @@ body.tribe_events-template-default
                     grid-template-areas: "fimage" "content"
                     height: 64rem
                     .meta-content-inner
-                        justify-content: flex-start
+                        grid-template-columns: 1fr 1fr 1fr
+                        grid-template-rows: auto 1fr
+                        grid-template-areas: "title title action" "meta meta meta"
                         > *
                             margin:
                                 top: 1.2rem
                                 bottom: 1.2rem
+                        .sg-humanitix-event-actions
+                            button.sg-humanitix-interest-btn
+                                a
+                                    width: 100%
+                            
+@media screen and (max-width: 760px)
+    body.tribe_events-template-default
+        #tribe-events-pg-template
+            .sg-humanitix-event-container
+                section.meta-content
+                    .meta-content-inner
+                        grid-template-columns: 1fr
+                        grid-template-areas: "title" "action" "meta"
 
 @media screen and (max-width: 560px)
     body.tribe_events-template-default

@@ -23,6 +23,9 @@ $attachment_id = get_post_thumbnail_id( get_the_ID() );
 $image_data = wp_get_attachment_image_src( $attachment_id, 'full' );
 $image_height = $image_data ? $image_data[2] : null;
 
+$event_id = get_the_ID();
+$humanitix_url = get_post_meta( $event_id, '_EventURL', true );
+
 get_header(); ?>
 
 <div id="tribe-events-pg-template" class="tribe-events-pg-template">
@@ -49,7 +52,18 @@ get_header(); ?>
                             ?>
                         </span>
                     </div>
-                    
+                    <!-- Price -->
+                    <div class="sg-humanitix-meta-item">
+                        <span class="sg-humanitix-meta-icon">💵</span>
+                        <?php
+                            $cost = tribe_get_formatted_cost( get_the_ID() );
+                            if ( $cost ) {?>
+                                <span class="sg-humanitix-meta-text">
+                                    <?php echo $cost; // This will include proper formatting and currency ?>
+                                </span>
+                        <?php }
+                        ?>
+                    </div>
                     <!-- Location -->
                     <div class="sg-humanitix-meta-item">
                         <span class="sg-humanitix-meta-icon">📍</span>
@@ -59,14 +73,22 @@ get_header(); ?>
                             } ?>
                         </span>
                     </div>
+                    
                 </div>
                 <!-- Action Buttons -->
-                <div class="sg-humanitix-event-actions">
-                    <button class="sg-humanitix-interest-btn">
-                        Buy Tickets
-                        <span class="sg-humanitix-btn-icon">🎫</span>
-                    </button>
-                </div>
+                <?php if ( function_exists( 'tribe_get_event_website_link' ) ) {
+                    $website_link = tribe_get_event_website_link( get_the_ID() );
+                    if ( $website_link ) { ?>
+                        <div class="sg-humanitix-event-actions">
+                            <button class="sg-humanitix-interest-btn">
+                                <a href="<?php echo esc_url($humanitix_url) ?>" target="_blank">
+                                Buy Tickets
+                                </a>
+                            </button>
+                        </div>
+                    <?php }
+                } ?>
+                
             </div>
             <div class="featured-image">
                 <?php the_post_thumbnail( 'full' ); ?>
