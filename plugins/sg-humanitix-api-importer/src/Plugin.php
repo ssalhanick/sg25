@@ -17,6 +17,9 @@ use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\AdminInterface;
 use SG\HumanitixApiImporter\Admin\SettingsManager;
 use SG\HumanitixApiImporter\Templates\TemplateManager;
+use SG\HumanitixApiImporter\Archive\ArchiveManager;
+use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
+use SG\HumanitixApiImporter\Admin\ArchiveAdminInterface;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -80,6 +83,27 @@ class Plugin {
 	 * @var TemplateManager
 	 */
 	private $template_manager;
+
+	/**
+	 * The archive manager instance.
+	 *
+	 * @var ArchiveManager
+	 */
+	private $archive_manager;
+
+	/**
+	 * The archive cron handler instance.
+	 *
+	 * @var ArchiveCronHandler
+	 */
+	private $archive_cron_handler;
+
+	/**
+	 * The archive admin interface instance.
+	 *
+	 * @var ArchiveAdminInterface
+	 */
+	private $archive_admin_interface;
 
 	/**
 	 * Get the plugin instance.
@@ -221,9 +245,18 @@ class Plugin {
 			// Initialize importer with logger.
 			$this->importer = new Importer\EventsImporter( $this->api, $this->logger );
 
-			// Update admin interface with importer.
-			$this->admin->set_importer( $this->importer );
+					// Update admin interface with importer.
+		$this->admin->set_importer( $this->importer );
 		}
+
+		// Initialize archive manager.
+		$this->archive_manager = new ArchiveManager();
+		
+		// Initialize archive cron handler.
+		$this->archive_cron_handler = new ArchiveCronHandler();
+		
+		// Initialize archive admin interface.
+		$this->archive_admin_interface = new ArchiveAdminInterface();
 	}
 
 	/**
@@ -824,5 +857,35 @@ class Plugin {
 	 */
 	public function get_template_manager() {
 		return $this->template_manager;
+	}
+
+	/**
+	 * Get the archive manager instance.
+	 *
+	 * @since 1.0.0
+	 * @return ArchiveManager|null The archive manager instance or null if not initialized.
+	 */
+	public function get_archive_manager() {
+		return $this->archive_manager;
+	}
+
+	/**
+	 * Get the archive cron handler instance.
+	 *
+	 * @since 1.0.0
+	 * @return ArchiveCronHandler|null The archive cron handler instance or null if not initialized.
+	 */
+	public function get_archive_cron_handler() {
+		return $this->archive_cron_handler;
+	}
+
+	/**
+	 * Get the archive admin interface instance.
+	 *
+	 * @since 1.0.0
+	 * @return ArchiveAdminInterface|null The archive admin interface instance or null if not initialized.
+	 */
+	public function get_archive_admin_interface() {
+		return $this->archive_admin_interface;
 	}
 }
