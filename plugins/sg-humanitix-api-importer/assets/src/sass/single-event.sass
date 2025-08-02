@@ -1,0 +1,72 @@
+body.tribe_events-template-default
+    #tribe-events-pg-template
+        max-width: 100vw
+        padding: unset
+        .sg-humanitix-event-container
+            min-height: 65vh
+            display: flex
+            flex-flow: row wrap
+            align-items: center
+            justify-content: center
+            .background-image
+                height: 65vh
+                width: 100vw
+                position: absolute  
+                background-repeat: no-repeat
+                background-position: center
+                background-size: cover
+                filter: blur(8px)
+                z-index: -1
+            section.meta-content
+                padding:
+                    top: 0
+                    bottom: 0
+                max-width: 80vw
+                background-color: #eee
+                margin: 0 auto
+                display: grid
+                grid-template-columns: 1fr 1fr
+                grid-template-areas: "content fimage"
+                grid-gap: 0px
+                .meta-content-inner
+                    grid-area: content
+                    padding: 2rem 1.5rem 2rem 2rem
+                    display: flex
+                    flex-flow: column nowrap
+                    justify-content: space-around
+                    h1
+                        font-size: 2.8rem
+                        margin: 0
+                .featured-image
+                    grid-area: fimage
+        .sg-humanitix-event-description
+            max-width: 80vw
+            margin: 0 auto
+            padding: 4rem 2rem 2rem 2rem
+
+    
+@media screen and (max-width: 1072px)
+    body.tribe_events-template-default
+        #tribe-events-pg-template
+            .sg-humanitix-event-container
+                position: relative
+                section.meta-content
+                    grid-template-columns: 1fr
+                    grid-template-rows: 1fr 1fr
+                    grid-template-areas: "fimage" "content"
+                    height: 64rem
+                    .meta-content-inner
+                        justify-content: flex-start
+                        > *
+                            margin:
+                                top: 1.2rem
+                                bottom: 1.2rem
+
+@media screen and (max-width: 560px)
+    body.tribe_events-template-default
+        #tribe-events-pg-template
+            .sg-humanitix-event-container
+                section.meta-content
+                    height: 47rem
+
+    
