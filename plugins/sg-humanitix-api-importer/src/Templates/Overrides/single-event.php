@@ -41,7 +41,7 @@ get_header(); ?>
                     
                     <!-- Date/Time -->
                     <div class="sg-humanitix-meta-item">
-                        <span class="sg-humanitix-meta-icon">📅</span>
+                        <span class="sg-humanitix-meta-icon"></span>
                         <span class="sg-humanitix-meta-text">
                             <?php 
                             if ( function_exists( 'tribe_events_event_schedule_details' ) ) {
@@ -54,7 +54,7 @@ get_header(); ?>
                     </div>
                     <!-- Price -->
                     <div class="sg-humanitix-meta-item">
-                        <span class="sg-humanitix-meta-icon">💵</span>
+                        <span class="sg-humanitix-meta-icon"></span>
                         <?php
                             $cost = tribe_get_formatted_cost( get_the_ID() );
                             if ( $cost ) {?>
@@ -66,7 +66,7 @@ get_header(); ?>
                     </div>
                     <!-- Location -->
                     <div class="sg-humanitix-meta-item">
-                        <span class="sg-humanitix-meta-icon">📍</span>
+                        <span class="sg-humanitix-meta-icon"></span>
                         <span class="sg-humanitix-meta-text">
                             <?php if ( function_exists( 'tribe_get_venue' ) && function_exists( 'tribe_get_venue_link' ) && tribe_get_venue_link() ) {
                                 echo tribe_get_venue_link();

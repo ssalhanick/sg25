@@ -15,22 +15,24 @@ body.tribe_events-template-default
                 background-repeat: no-repeat
                 background-position: center
                 background-size: cover
-                filter: blur(8px)
+                filter: blur(12px)
                 z-index: -1
             section.meta-content
+                filter: drop-shadow(1px 1px 3px black)
                 padding:
                     top: 0
                     bottom: 0
                 max-width: 80vw
-                background-color: #eee
+                background-color: white
                 margin: 0 auto
                 display: grid
                 grid-template-columns: 1fr 1fr
                 grid-template-areas: "content fimage"
                 grid-gap: 0px
                 .meta-content-inner
+                    background-color: white
                     grid-area: content
-                    padding: 2rem 1.5rem 2rem 2rem
+                    padding: 2rem 1.5rem 2rem 3rem
                     display: grid
                     grid-gap: 1rem
                     grid-template-columns: 1fr
@@ -45,6 +47,7 @@ body.tribe_events-template-default
                         grid-area: action
                         button.sg-humanitix-interest-btn
                             background: #0E45DD
+                            border-radius: 5px
                             a
                                 color: white
                                 text-decoration: none
@@ -95,5 +98,12 @@ body.tribe_events-template-default
             .sg-humanitix-event-container
                 section.meta-content
                     height: 47rem
-
+                    margin-bottom: 2rem
+                    .meta-content-inner
+                        padding-bottom: 2rem
+                        .sg-humanitix-event-actions
+                            button.sg-humanitix-interest-btn
+                                width: 100%
+            .sg-humanitix-event-description
+                margin-top: 2rem
     
