@@ -223,9 +223,9 @@ class TemplateAssets {
 	 * @return void
 	 */
 	private function enqueue_template_css() {
-		$css_file = 'templates.css';
-		$css_path = SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Templates/Assets/css/' . $css_file;
-		$css_url  = SG_HUMANITIX_API_IMPORTER_PLUGIN_URL . '/src/Templates/Assets/css/' . $css_file;
+		$css_file = 'tec_templates.css';
+		$css_path = SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/assets/build/css/' . $css_file;
+		$css_url  = SG_HUMANITIX_API_IMPORTER_PLUGIN_URL . '/assets/build/css/' . $css_file;
 
 		// Only enqueue if file exists.
 		if ( file_exists( $css_path ) ) {

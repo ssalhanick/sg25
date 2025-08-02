@@ -158,9 +158,12 @@ class TemplateManager {
 	 */
 	private function init_hooks() {
 		// Hook into TEC template system.
-		add_filter( 'tribe_events_template_paths', array( $this, 'add_template_paths' ) );
-		add_filter( 'tribe_events_template_part_path', array( $this, 'add_template_part_paths' ), 10, 3 );
-
+		add_filter( 'tribe_events_template_paths', array( $this, 'add_template_paths' ), 999 );
+		add_filter( 'tribe_events_template_part_path', array( $this, 'add_template_part_paths' ), 999, 3 );
+		
+		// WordPress template hierarchy override for single events.
+		add_filter( 'template_include', array( $this, 'override_single_event_template' ), 999 );
+		
 		// Hook into TEC content filters.
 		add_filter( 'tribe_events_single_event_title', array( $this, 'modify_event_title' ) );
 		add_filter( 'tribe_events_single_event_meta', array( $this, 'modify_event_meta' ) );
@@ -192,6 +195,7 @@ class TemplateManager {
 			array(
 				'module' => 'templates',
 				'path'   => $custom_path,
+				'paths'  => $paths,
 			)
 		);
 
@@ -225,6 +229,31 @@ class TemplateManager {
 		}
 
 		return $path;
+	}
+
+	/**
+	 * Override single event template.
+	 *
+	 * @since 1.0.0
+	 * @param string $template The original template path.
+	 * @return string The modified template path.
+	 */
+	public function override_single_event_template( $template ) {
+		if ( is_singular( 'tribe_events' ) ) {
+			$custom_template = SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Templates/Overrides/single-event.php';
+			if ( file_exists( $custom_template ) ) {
+				$this->logger->log(
+					'debug',
+					'Overriding single event template',
+					array(
+						'module' => 'templates',
+						'template' => $custom_template,
+					)
+				);
+				return $custom_template;
+			}
+		}
+		return $template;
 	}
 
 	/**
