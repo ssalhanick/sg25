@@ -157,6 +157,17 @@ class Logger {
 	public function get_logs( $level = '', $date = '', $limit = 100, $offset = 0 ) {
 		global $wpdb;
 
+		// Memory optimization: Check available memory
+		$memory_limit = ini_get( 'memory_limit' );
+		$memory_usage = memory_get_usage( true );
+		$memory_limit_bytes = $this->return_bytes( $memory_limit );
+		$available_memory = $memory_limit_bytes - $memory_usage;
+		
+		// If we have less than 10MB available, reduce the limit
+		if ( $available_memory < 10 * 1024 * 1024 ) {
+			$limit = min( $limit, 10 ); // Reduce to max 10 records
+		}
+
 		$where_conditions = array();
 		$where_values     = array();
 
@@ -189,6 +200,27 @@ class Logger {
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		return $wpdb->get_results( $wpdb->prepare( $sql, ...$prepare_values ) );
+	}
+
+	/**
+	 * Convert memory limit string to bytes
+	 *
+	 * @param string $val Memory limit string (e.g., '128M', '1G').
+	 * @return int Memory limit in bytes.
+	 */
+	private function return_bytes( $val ) {
+		$val = trim( $val );
+		$last = strtolower( $val[ strlen( $val ) - 1 ] );
+		$val = (int) $val;
+		switch ( $last ) {
+			case 'g':
+				$val *= 1024;
+			case 'm':
+				$val *= 1024;
+			case 'k':
+				$val *= 1024;
+		}
+		return $val;
 	}
 
 	/**

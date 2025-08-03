@@ -887,17 +887,79 @@ class AdminInterface {
 			</div>
 
 			<div class="card">
+				<h2>Memory Status</h2>
+				<?php
+				$memory_limit = ini_get( 'memory_limit' );
+				$memory_usage = memory_get_usage( true );
+				$memory_peak = memory_get_peak_usage( true );
+				$memory_limit_bytes = $this->return_bytes( $memory_limit );
+				$memory_usage_percent = round( ( $memory_usage / $memory_limit_bytes ) * 100, 2 );
+				
+				echo '<p><strong>Memory Limit:</strong> ' . esc_html( $memory_limit ) . '</p>';
+				echo '<p><strong>Current Usage:</strong> ' . esc_html( size_format( $memory_usage ) ) . ' (' . esc_html( $memory_usage_percent ) . '%)</p>';
+				echo '<p><strong>Peak Usage:</strong> ' . esc_html( size_format( $memory_peak ) ) . '</p>';
+				echo '<p><strong>Available:</strong> ' . esc_html( size_format( $memory_limit_bytes - $memory_usage ) ) . '</p>';
+				
+				if ( $memory_usage_percent > 80 ) {
+					echo '<p style="color: red;"><strong>⚠️ WARNING:</strong> High memory usage detected!</p>';
+				} elseif ( $memory_usage_percent > 60 ) {
+					echo '<p style="color: orange;"><strong>⚠️ WARNING:</strong> Moderate memory usage detected.</p>';
+				} else {
+					echo '<p style="color: green;"><strong>✅ OK:</strong> Memory usage is normal.</p>';
+				}
+				?>
+			</div>
+
+			<div class="card">
 				<h2>Debug Logs</h2>
 				<?php
 				$log_file = WP_CONTENT_DIR . '/debug.log';
 				if ( file_exists( $log_file ) ) {
-					$log_contents = file_get_contents( $log_file );
-					if ( ! empty( $log_contents ) ) {
-						echo '<p><strong>WordPress Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
-						echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( filesize( $log_file ) ) ) . '</p>';
-						echo '<p><strong>Last Modified:</strong> ' . esc_html( gmdate( 'Y-m-d H:i:s', filemtime( $log_file ) ) ) . '</p>';
+					$file_size = filesize( $log_file );
+					echo '<p><strong>WordPress Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
+					echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( $file_size ) ) . '</p>';
+					echo '<p><strong>Last Modified:</strong> ' . esc_html( gmdate( 'Y-m-d H:i:s', filemtime( $log_file ) ) ) . '</p>';
+					
+					// Memory-efficient way to get last 50 lines
+					if ( $file_size > 0 ) {
 						echo '<h3>Recent Log Entries (Last 50 lines):</h3>';
-						echo '<pre style="max-height: 400px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;">' . esc_html( implode( '', array_slice( explode( PHP_EOL, $log_contents ), -50 ) ) ) . '</pre>';
+						echo '<pre style="max-height: 400px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;">';
+						
+						// Use memory-efficient file reading
+						$lines = array();
+						$handle = fopen( $log_file, 'r' );
+						
+						if ( $handle ) {
+							// Read file backwards to get last 50 lines
+							$pos = -2; // Start from end
+							$line_count = 0;
+							$max_lines = 50;
+							
+							while ( $line_count < $max_lines && $pos > -$file_size ) {
+								fseek( $handle, $pos, SEEK_END );
+								$char = fgetc( $handle );
+								
+								if ( $char === "\n" ) {
+									$line = fgets( $handle );
+									if ( $line !== false ) {
+										array_unshift( $lines, $line );
+										$line_count++;
+									}
+								}
+								$pos--;
+							}
+							
+							fclose( $handle );
+							
+							// Display the lines
+							foreach ( $lines as $line ) {
+								echo esc_html( $line );
+							}
+						} else {
+							echo 'Error: Could not open debug log file for reading.';
+						}
+						
+						echo '</pre>';
 					} else {
 						echo '<p>Debug log file exists but is empty.</p>';
 					}
@@ -912,10 +974,19 @@ class AdminInterface {
 				<h2>Recent Logs</h2>
 				<?php
 				try {
+					// Memory optimization: Check available memory before loading logs
+					$memory_usage = memory_get_usage( true );
+					$memory_limit_bytes = $this->return_bytes( ini_get( 'memory_limit' ) );
+					$available_memory = $memory_limit_bytes - $memory_usage;
+					
+					// Reduce log limit if memory is low
+					$log_limit = ( $available_memory < 10 * 1024 * 1024 ) ? 5 : 10;
+					
 					$logger      = new \SG\HumanitixApiImporter\Admin\Logger();
-					$recent_logs = $logger->get_recent_logs( 10 );
+					$recent_logs = $logger->get_recent_logs( $log_limit );
 
 					if ( ! empty( $recent_logs ) ) {
+						echo '<p><em>Showing last ' . count( $recent_logs ) . ' logs (memory optimized)</em></p>';
 						echo '<table class="wp-list-table widefat fixed striped" style="width: 100%;">';
 						echo '<thead><tr><th style="width: 15%;">Time</th><th style="width: 10%;">Type</th><th style="width: 25%;">Message</th><th style="width: 50%;">Context</th></tr></thead>';
 						echo '<tbody>';
@@ -936,6 +1007,7 @@ class AdminInterface {
 					}
 				} catch ( Exception $e ) {
 					echo '<p><strong>Error loading logs:</strong> ' . esc_html( $e->getMessage() ) . '</p>';
+					echo '<p><em>This might be due to memory constraints on the server.</em></p>';
 				}
 				?>
 			</div>
@@ -954,6 +1026,27 @@ class AdminInterface {
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Convert memory limit string to bytes
+	 *
+	 * @param string $val Memory limit string (e.g., '128M', '1G').
+	 * @return int Memory limit in bytes.
+	 */
+	private function return_bytes( $val ) {
+		$val = trim( $val );
+		$last = strtolower( $val[ strlen( $val ) - 1 ] );
+		$val = (int) $val;
+		switch ( $last ) {
+			case 'g':
+				$val *= 1024;
+			case 'm':
+				$val *= 1024;
+			case 'k':
+				$val *= 1024;
+		}
+		return $val;
 	}
 
 	/**
