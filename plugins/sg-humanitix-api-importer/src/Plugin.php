@@ -20,6 +20,8 @@ use SG\HumanitixApiImporter\Templates\TemplateManager;
 use SG\HumanitixApiImporter\Archive\ArchiveManager;
 use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
 use SG\HumanitixApiImporter\Admin\ArchiveAdminInterface;
+use SG\HumanitixApiImporter\Admin\LogManager;
+use SG\HumanitixApiImporter\Admin\LogManagementInterface;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -104,6 +106,20 @@ class Plugin {
 	 * @var ArchiveAdminInterface
 	 */
 	private $archive_admin_interface;
+
+	/**
+	 * The log manager instance.
+	 *
+	 * @var LogManager
+	 */
+	private $log_manager;
+
+	/**
+	 * The log management interface instance.
+	 *
+	 * @var LogManagementInterface
+	 */
+	private $log_management_interface;
 
 	/**
 	 * Get the plugin instance.
@@ -257,6 +273,10 @@ class Plugin {
 		
 		// Initialize archive admin interface.
 		$this->archive_admin_interface = new ArchiveAdminInterface();
+
+		// Initialize log management components.
+		$this->log_manager = new LogManager();
+		$this->log_management_interface = new LogManagementInterface();
 	}
 
 	/**
@@ -887,5 +907,25 @@ class Plugin {
 	 */
 	public function get_archive_admin_interface() {
 		return $this->archive_admin_interface;
+	}
+
+	/**
+	 * Get the log manager instance.
+	 *
+	 * @since 1.0.0
+	 * @return LogManager|null The log manager instance or null if not initialized.
+	 */
+	public function get_log_manager() {
+		return $this->log_manager;
+	}
+
+	/**
+	 * Get the log management interface instance.
+	 *
+	 * @since 1.0.0
+	 * @return LogManagementInterface|null The log management interface instance or null if not initialized.
+	 */
+	public function get_log_management_interface() {
+		return $this->log_management_interface;
 	}
 }
