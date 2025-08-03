@@ -251,56 +251,65 @@ class ArchiveAdminInterface {
 		</style>
 
 		<script>
-		jQuery(document).ready(function($) {
-			$('#run-auto-archive').on('click', function() {
+		document.addEventListener('DOMContentLoaded', function() {
+			document.getElementById('run-auto-archive').addEventListener('click', function() {
 				runArchiveAction('humanitix_run_auto_archive', 'Running auto archive...');
 			});
 			
-			$('#run-monthly-archive').on('click', function() {
+			document.getElementById('run-monthly-archive').addEventListener('click', function() {
 				runArchiveAction('humanitix_run_monthly_archive', 'Running monthly archive...');
 			});
 			
-			$('#refresh-stats').on('click', function() {
+			document.getElementById('refresh-stats').addEventListener('click', function() {
 				refreshStats();
 			});
 			
 			function runArchiveAction(action, message) {
-				$('#archive-results').html('<div class="result-success">' + message + '</div>');
+				document.getElementById('archive-results').innerHTML = '<div class="result-success">' + message + '</div>';
 				
-				$.ajax({
-					url: ajaxurl,
-					type: 'POST',
-					data: {
+				fetch(ajaxurl, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+					},
+					body: new URLSearchParams({
 						action: action,
 						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
-					},
-					success: function(response) {
-						if (response.success) {
-							$('#archive-results').html('<div class="result-success">' + response.data.message + '</div>');
-							refreshStats();
-						} else {
-							$('#archive-results').html('<div class="result-error">' + response.data + '</div>');
-						}
-					},
-					error: function() {
-						$('#archive-results').html('<div class="result-error">Request failed</div>');
+					})
+				})
+				.then(response => response.json())
+				.then(response => {
+					if (response.success) {
+						document.getElementById('archive-results').innerHTML = '<div class="result-success">' + response.data.message + '</div>';
+						refreshStats();
+					} else {
+						document.getElementById('archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
 					}
+				})
+				.catch(error => {
+					document.getElementById('archive-results').innerHTML = '<div class="result-error">Request failed</div>';
 				});
 			}
 			
 			function refreshStats() {
-				$.ajax({
-					url: ajaxurl,
-					type: 'POST',
-					data: {
+				fetch(ajaxurl, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+					},
+					body: new URLSearchParams({
 						action: 'humanitix_get_archive_stats',
 						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
-					},
-					success: function(response) {
-						if (response.success) {
-							location.reload();
-						}
+					})
+				})
+				.then(response => response.json())
+				.then(response => {
+					if (response.success) {
+						location.reload();
 					}
+				})
+				.catch(error => {
+					console.error('Error refreshing stats:', error);
 				});
 			}
 		});

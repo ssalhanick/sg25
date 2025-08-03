@@ -808,7 +808,7 @@ class AdminInterface {
 				<table class="form-table">
 					<tr>
 						<th>API Key:</th>
-						<td><?php echo ! empty( $api_key ) ? esc_html( 'Set (' . substr( $api_key, 0, 8 ) . '...)' ) : esc_html( '<span style="color: red;">Not set</span>' ); ?></td>
+						<td><?php echo ! empty( $api_key ) ? esc_html( 'Set (' . substr( $api_key, 0, 8 ) . '...' . substr( $api_key, -4 ) . ')' ) : esc_html( '<span style="color: red;">Not set</span>' ); ?></td>
 					</tr>
 					<tr>
 						<th>API Endpoint:</th>

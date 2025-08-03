@@ -165,15 +165,26 @@ class LogManagementInterface {
 
 		<script>
 		function refreshLogStats() {
-			jQuery.post(ajaxurl, {
-				action: 'humanitix_log_stats',
-				nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
-			}, function(response) {
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams({
+					action: 'humanitix_log_stats',
+					nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
+				})
+			})
+			.then(response => response.json())
+			.then(response => {
 				if (response.success) {
 					displayLogStats(response.data);
 				} else {
-					jQuery('#log-stats-container').html('<p>Error loading statistics: ' + response.data + '</p>');
+					document.getElementById('log-stats-container').innerHTML = '<p>Error loading statistics: ' + response.data + '</p>';
 				}
+			})
+			.catch(error => {
+				document.getElementById('log-stats-container').innerHTML = '<p>Error loading statistics: ' + error.message + '</p>';
 			});
 		}
 
@@ -194,7 +205,7 @@ class LogManagementInterface {
 				html += '</ul>';
 			}
 			
-			jQuery('#log-stats-container').html(html);
+			document.getElementById('log-stats-container').innerHTML = html;
 		}
 
 		function formatBytes(bytes) {
@@ -205,20 +216,31 @@ class LogManagementInterface {
 		}
 
 		function runLogCleanup() {
-			const daysToKeep = jQuery('#days-to-keep').val();
-			const maxLogs = jQuery('#max-logs').val();
+			const daysToKeep = document.getElementById('days-to-keep').value;
+			const maxLogs = document.getElementById('max-logs').value;
 			
-			jQuery.post(ajaxurl, {
-				action: 'humanitix_log_cleanup',
-				days_to_keep: daysToKeep,
-				max_logs: maxLogs,
-				nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
-			}, function(response) {
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams({
+					action: 'humanitix_log_cleanup',
+					days_to_keep: daysToKeep,
+					max_logs: maxLogs,
+					nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
+				})
+			})
+			.then(response => response.json())
+			.then(response => {
 				if (response.success) {
 					displayCleanupResults(response.data);
 				} else {
-					jQuery('#cleanup-results').html('<p>Error: ' + response.data + '</p>');
+					document.getElementById('cleanup-results').innerHTML = '<p>Error: ' + response.data + '</p>';
 				}
+			})
+			.catch(error => {
+				document.getElementById('cleanup-results').innerHTML = '<p>Error: ' + error.message + '</p>';
 			});
 		}
 
@@ -238,23 +260,34 @@ class LogManagementInterface {
 				html += '</ul>';
 			}
 			
-			jQuery('#cleanup-results').html(html);
+			document.getElementById('cleanup-results').innerHTML = html;
 			refreshLogStats();
 		}
 
 		function runContextCompression() {
-			const minSize = jQuery('#min-compress-size').val();
+			const minSize = document.getElementById('min-compress-size').value;
 			
-			jQuery.post(ajaxurl, {
-				action: 'humanitix_log_compress',
-				min_size: minSize,
-				nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
-			}, function(response) {
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams({
+					action: 'humanitix_log_compress',
+					min_size: minSize,
+					nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
+				})
+			})
+			.then(response => response.json())
+			.then(response => {
 				if (response.success) {
 					displayCompressionResults(response.data);
 				} else {
-					jQuery('#compression-results').html('<p>Error: ' + response.data + '</p>');
+					document.getElementById('compression-results').innerHTML = '<p>Error: ' + response.data + '</p>';
 				}
+			})
+			.catch(error => {
+				document.getElementById('compression-results').innerHTML = '<p>Error: ' + error.message + '</p>';
 			});
 		}
 
@@ -273,25 +306,36 @@ class LogManagementInterface {
 				html += '</ul>';
 			}
 			
-			jQuery('#compression-results').html(html);
+			document.getElementById('compression-results').innerHTML = html;
 			refreshLogStats();
 		}
 
 		function exportLogs() {
-			const format = jQuery('#export-format').val();
-			const limit = jQuery('#export-limit').val();
+			const format = document.getElementById('export-format').value;
+			const limit = document.getElementById('export-limit').value;
 			
-			jQuery.post(ajaxurl, {
-				action: 'humanitix_log_export',
-				format: format,
-				limit: limit,
-				nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
-			}, function(response) {
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams({
+					action: 'humanitix_log_export',
+					format: format,
+					limit: limit,
+					nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
+				})
+			})
+			.then(response => response.json())
+			.then(response => {
 				if (response.success) {
 					displayExportResults(response.data);
 				} else {
-					jQuery('#export-results').html('<p>Error: ' + response.data + '</p>');
+					document.getElementById('export-results').innerHTML = '<p>Error: ' + response.data + '</p>';
 				}
+			})
+			.catch(error => {
+				document.getElementById('export-results').innerHTML = '<p>Error: ' + error.message + '</p>';
 			});
 		}
 
@@ -303,37 +347,59 @@ class LogManagementInterface {
 			html += '<li>File path: ' + results.file_path + '</li>';
 			html += '</ul>';
 			
-			jQuery('#export-results').html(html);
+			document.getElementById('export-results').innerHTML = html;
 		}
 
 		function scheduleCleanup() {
-			jQuery.post(ajaxurl, {
-				action: 'humanitix_schedule_cleanup',
-				nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
-			}, function(response) {
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams({
+					action: 'humanitix_schedule_cleanup',
+					nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
+				})
+			})
+			.then(response => response.json())
+			.then(response => {
 				if (response.success) {
-					jQuery('#schedule-results').html('<p>Weekly cleanup scheduled successfully!</p>');
+					document.getElementById('schedule-results').innerHTML = '<p>Weekly cleanup scheduled successfully!</p>';
 				} else {
-					jQuery('#schedule-results').html('<p>Error: ' + response.data + '</p>');
+					document.getElementById('schedule-results').innerHTML = '<p>Error: ' + response.data + '</p>';
 				}
+			})
+			.catch(error => {
+				document.getElementById('schedule-results').innerHTML = '<p>Error: ' + error.message + '</p>';
 			});
 		}
 
 		function clearCleanupSchedule() {
-			jQuery.post(ajaxurl, {
-				action: 'humanitix_clear_cleanup',
-				nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
-			}, function(response) {
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams({
+					action: 'humanitix_clear_cleanup',
+					nonce: '<?php echo wp_create_nonce( 'humanitix_log_management' ); ?>'
+				})
+			})
+			.then(response => response.json())
+			.then(response => {
 				if (response.success) {
-					jQuery('#schedule-results').html('<p>Cleanup schedule cleared successfully!</p>');
+					document.getElementById('schedule-results').innerHTML = '<p>Cleanup schedule cleared successfully!</p>';
 				} else {
-					jQuery('#schedule-results').html('<p>Error: ' + response.data + '</p>');
+					document.getElementById('schedule-results').innerHTML = '<p>Error: ' + response.data + '</p>';
 				}
+			})
+			.catch(error => {
+				document.getElementById('schedule-results').innerHTML = '<p>Error: ' + error.message + '</p>';
 			});
 		}
 
 		// Load stats on page load
-		jQuery(document).ready(function() {
+		document.addEventListener('DOMContentLoaded', function() {
 			refreshLogStats();
 		});
 		</script>

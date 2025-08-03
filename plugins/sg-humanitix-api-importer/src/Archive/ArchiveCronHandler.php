@@ -113,7 +113,8 @@ class ArchiveCronHandler {
 		
 		// Debug logging for settings
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[ArchiveCronHandler] Archive settings: ' . print_r( $settings, true ) );
+			$obfuscated_settings = $this->obfuscate_sensitive_data( $settings );
+			error_log( '[ArchiveCronHandler] Archive settings: ' . print_r( $obfuscated_settings, true ) );
 		}
 		
 		if ( ! $settings['archive_enabled'] ) {
@@ -365,7 +366,7 @@ class ArchiveCronHandler {
 	 */
 	private function get_archive_settings() {
 		$defaults = array(
-			'archive_enabled'        => false,
+			'archive_enabled'        => true,
 			'archive_age_threshold'  => 2, // years
 			'archive_frequency'      => 'monthly',
 			'archive_post_status'    => 'archived',
@@ -375,8 +376,37 @@ class ArchiveCronHandler {
 		);
 
 		$options = get_option( 'humanitix_importer_options', array() );
+		$settings = wp_parse_args( $options, $defaults );
 		
-		return wp_parse_args( $options, $defaults );
+		// Obfuscate sensitive data for logging
+		$obfuscated_settings = $this->obfuscate_sensitive_data( $settings );
+		
+		return $settings;
+	}
+
+	/**
+	 * Obfuscate sensitive data for logging.
+	 *
+	 * @since 1.0.0
+	 * @param mixed $data The data to obfuscate.
+	 * @return mixed The obfuscated data.
+	 */
+	private function obfuscate_sensitive_data( $data ) {
+		if ( is_array( $data ) ) {
+			$sensitive_keys = array( 'api_key', 'token', 'password', 'secret', 'key', 'auth' );
+			foreach ( $data as $key => $value ) {
+				if ( in_array( strtolower( $key ), $sensitive_keys, true ) ) {
+					if ( is_string( $value ) && strlen( $value ) > 8 ) {
+						$data[ $key ] = substr( $value, 0, 8 ) . '...' . substr( $value, -4 );
+					} else {
+						$data[ $key ] = '[REDACTED]';
+					}
+				} elseif ( is_array( $value ) ) {
+					$data[ $key ] = $this->obfuscate_sensitive_data( $value );
+				}
+			}
+		}
+		return $data;
 	}
 
 	/**
