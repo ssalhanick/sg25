@@ -72,12 +72,40 @@ class ArchiveManager {
 		$this->validator = new ArchiveValidator();
 		$this->settings = $this->get_archive_settings();
 		
-		// Register custom post status
-		add_action( 'init', array( $this, 'register_archive_post_status' ) );
+		// Register custom post status with higher priority to ensure it runs after TEC
+		add_action( 'init', array( $this, 'register_archive_post_status' ), 20 );
+		
+		// Add TEC-specific integration to ensure archived status is recognized
+		add_action( 'tribe_events_register_post_type', array( $this, 'register_archive_post_status' ) );
+		
+		// Force archived status to show in TEC admin interface
+		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
 		
 		// Add archive status to admin filters
 		add_action( 'admin_footer-post.php', array( $this, 'add_archive_status_to_dropdown' ) );
 		add_action( 'admin_footer-edit.php', array( $this, 'add_archive_status_to_dropdown' ) );
+		
+		// Add debug logging for post status registration
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			add_action( 'init', array( $this, 'debug_post_status_registration' ), 25 );
+		}
+		
+		// Add TEC-specific hooks for better integration
+		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
+		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'ensure_archived_in_tec_statuses' ) );
+		add_action( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
+		
+		// Ensure archived events are included in TEC event counts
+		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'include_archived_in_counts' ) );
+		
+		// Add admin notice for debugging (only in debug mode)
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			add_action( 'admin_notices', array( $this, 'debug_admin_notice' ) );
+		}
+		
+		// Add TEC-specific event counting integration
+		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'adjust_tec_event_counts' ) );
+		add_action( 'admin_footer-edit.php', array( $this, 'add_tec_count_adjustment' ) );
 	}
 
 	/**
@@ -125,6 +153,129 @@ class ArchiveManager {
 	}
 
 	/**
+	 * Add archived status to TEC admin list table statuses.
+	 *
+	 * @since 1.0.0
+	 * @param array $statuses Existing TEC statuses.
+	 * @return array Modified statuses including archived.
+	 */
+	public function add_archived_to_tec_statuses( $statuses ) {
+		$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		return $statuses;
+	}
+
+	/**
+	 * Debug post status registration for troubleshooting.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function debug_post_status_registration() {
+		global $post_type;
+		
+		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' ) {
+			$statuses = get_post_stati();
+			$tec_statuses = apply_filters( 'tribe_events_admin_list_table_statuses', array() );
+			
+			error_log( '[ArchiveManager] Available post statuses: ' . print_r( array_keys( $statuses ), true ) );
+			error_log( '[ArchiveManager] TEC admin statuses: ' . print_r( $tec_statuses, true ) );
+			error_log( '[ArchiveManager] Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) );
+		}
+	}
+
+	/**
+	 * Ensure archived status is included in TEC statuses.
+	 *
+	 * @since 1.0.0
+	 * @param array $statuses Existing TEC statuses.
+	 * @return array Modified statuses including archived.
+	 */
+	public function ensure_archived_in_tec_statuses( $statuses ) {
+		if ( ! isset( $statuses['archived'] ) ) {
+			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		}
+		return $statuses;
+	}
+
+	/**
+	 * Include archived events in TEC event counts.
+	 *
+	 * @since 1.0.0
+	 * @param array $statuses Existing TEC statuses.
+	 * @return array Modified statuses including archived.
+	 */
+	public function include_archived_in_counts( $statuses ) {
+		// Ensure archived is included in the status list for counting
+		if ( ! isset( $statuses['archived'] ) ) {
+			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		}
+		return $statuses;
+	}
+
+	/**
+	 * Debug admin notice for troubleshooting.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function debug_admin_notice() {
+		global $post_type;
+		
+		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' ) {
+			$statuses = get_post_stati();
+			$archived_count = $this->queries->get_archived_events_count();
+			
+			echo '<div class="notice notice-info">';
+			echo '<p><strong>ArchiveManager Debug:</strong></p>';
+			echo '<p>Available post statuses: ' . implode( ', ', array_keys( $statuses ) ) . '</p>';
+			echo '<p>Archived events count: ' . $archived_count . '</p>';
+			echo '<p>Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) . '</p>';
+			echo '</div>';
+		}
+	}
+
+	/**
+	 * Adjust TEC event counts to properly handle archived events.
+	 *
+	 * @since 1.0.0
+	 * @param array $statuses Existing TEC statuses.
+	 * @return array Modified statuses with proper counting.
+	 */
+	public function adjust_tec_event_counts( $statuses ) {
+		// Ensure archived events are counted separately from published
+		if ( ! isset( $statuses['archived'] ) ) {
+			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		}
+		return $statuses;
+	}
+
+	/**
+	 * Add JavaScript to adjust TEC event counts in the admin interface.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function add_tec_count_adjustment() {
+		global $post_type;
+		
+		if ( $post_type === 'tribe_events' ) {
+			$archived_count = $this->queries->get_archived_events_count();
+			?>
+			<script>
+			jQuery(document).ready(function($) {
+				// Add archived count to the status list if it doesn't exist
+				var $statusList = $('.subsubsub');
+				if ($statusList.length && !$statusList.find('a[href*="post_status=archived"]').length) {
+					var archivedLink = '<a href="<?php echo esc_url( add_query_arg( 'post_status', 'archived', admin_url( 'edit.php?post_type=tribe_events' ) ) ); ?>"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?> <span class="count">(<?php echo esc_html( $archived_count ); ?>)</span></a>';
+					$statusList.append(' | ' + archivedLink);
+				}
+			});
+			</script>
+			<?php
+		}
+	}
+
+	/**
 	 * Get archive settings.
 	 *
 	 * @since 1.0.0
@@ -132,7 +283,7 @@ class ArchiveManager {
 	 */
 	private function get_archive_settings() {
 		$defaults = array(
-			'archive_enabled'        => false,
+			'archive_enabled'        => true, // Changed to true for testing
 			'archive_age_threshold'  => 2, // years
 			'archive_frequency'      => 'monthly',
 			'archive_post_status'    => 'archived',
@@ -142,8 +293,14 @@ class ArchiveManager {
 		);
 
 		$options = get_option( 'humanitix_importer_options', array() );
+		$settings = wp_parse_args( $options, $defaults );
 		
-		return wp_parse_args( $options, $defaults );
+		// Debug logging for settings
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveManager] Archive settings: ' . print_r( $settings, true ) );
+		}
+		
+		return $settings;
 	}
 
 	/**

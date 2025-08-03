@@ -277,6 +277,9 @@ class Plugin {
 		// Initialize log management components.
 		$this->log_manager = new LogManager();
 		$this->log_management_interface = new LogManagementInterface();
+		
+		// Ensure TEC integration is properly set up
+		add_action( 'tribe_events_register_post_type', array( $this, 'ensure_tec_integration' ) );
 	}
 
 	/**
@@ -927,5 +930,30 @@ class Plugin {
 	 */
 	public function get_log_management_interface() {
 		return $this->log_management_interface;
+	}
+
+	/**
+	 * Ensure TEC integration is properly set up.
+	 *
+	 * This method hooks into the TEC post type registration to ensure our archive
+	 * manager and template manager are properly initialized and available.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function ensure_tec_integration() {
+		if ( ! function_exists( 'tribe_get_option' ) ) {
+			return;
+		}
+
+		// Ensure archive manager is initialized.
+		if ( ! isset( $this->archive_manager ) ) {
+			$this->archive_manager = new ArchiveManager();
+		}
+
+		// Ensure template manager is initialized.
+		if ( ! isset( $this->template_manager ) ) {
+			$this->template_manager = new TemplateManager( $this->logger );
+		}
 	}
 }
