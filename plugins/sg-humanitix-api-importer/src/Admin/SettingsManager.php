@@ -185,6 +185,14 @@ class SettingsManager {
 			'logging_settings'
 		);
 
+		add_settings_field(
+			'filter_log_noise',
+			'Filter Log Noise',
+			array( $this, 'render_filter_log_noise_field' ),
+			'humanitix-importer-settings',
+			'logging_settings'
+		);
+
 		add_settings_section(
 			'archive_settings',
 			'Archive Settings',
@@ -776,6 +784,27 @@ class SettingsManager {
 	}
 
 	/**
+	 * Render the filter log noise field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_filter_log_noise_field() {
+		$options = get_option( $this->options_name, array() );
+		$filter_noise = isset( $options['filter_log_noise'] ) ? $options['filter_log_noise'] : true;
+
+		?>
+		<input type="checkbox" 
+			   name="<?php echo esc_attr( $this->options_name ); ?>[filter_log_noise]" 
+			   value="1" 
+			   <?php checked( $filter_noise ); ?> />
+		<p class="description">
+			Filter out template assets, hooks initiations, and other noise from logs to reduce database size and improve performance.
+		</p>
+		<?php
+	}
+
+	/**
 	 * Render the log retention number field.
 	 *
 	 * Outputs a number input to set log retention period in days.
@@ -838,6 +867,10 @@ class SettingsManager {
 		$sanitized['delete_notifications']   = isset( $input['delete_notifications'] );
 		$sanitized['delete_dry_run']         = isset( $input['delete_dry_run'] );
 		$sanitized['delete_backup_enabled']  = isset( $input['delete_backup_enabled'] );
+
+		// Log settings
+		$sanitized['log_level'] = sanitize_text_field( $input['log_level'] ?? 'info' );
+		$sanitized['filter_log_noise'] = isset( $input['filter_log_noise'] );
 
 		return $sanitized;
 	}

@@ -232,13 +232,11 @@ class HumanitixAPI {
 				);
 			}
 
-			// Try different endpoints to test the connection.
-			$test_endpoints = array(
-				'/'       => 'Root endpoint',
-				'/health' => 'Health check',
-				'/ping'   => 'Ping endpoint',
-				'/events' => 'Events endpoint',
-			);
+					// Try different endpoints to test the connection.
+		$test_endpoints = array(
+			'/'       => 'Root endpoint',
+			'/events' => 'Events endpoint',
+		);
 
 			foreach ( $test_endpoints as $endpoint => $description ) {
 				$response = $this->make_request( 'GET', $endpoint, array(), true );
@@ -530,6 +528,7 @@ class HumanitixAPI {
 
 		$params = array(
 			'page' => max( 1, absint( $page ) ),
+			'limit' => 50, // Add limit parameter for better pagination
 		);
 
 		// Use the correct Humanitix API endpoint for events.
@@ -877,6 +876,14 @@ class HumanitixAPI {
 		}
 
 		if ( $status_code >= 400 ) {
+			// Parse error response for better debugging
+			$error_data = json_decode( $body, true );
+			$error_message = "Client error: HTTP {$status_code}";
+			
+			if ( $error_data && isset( $error_data['message'] ) ) {
+				$error_message .= " - " . $error_data['message'];
+			}
+			
 			$debug_helper->log_critical_error(
 				'API',
 				'Client error received',
@@ -885,9 +892,10 @@ class HumanitixAPI {
 					'url'         => $url,
 					'method'      => $method,
 					'body'        => $body,
+					'error_data'  => $error_data,
 				)
 			);
-			return new \WP_Error( 'client_error', "Client error: HTTP {$status_code}" );
+			return new \WP_Error( 'client_error', $error_message );
 		}
 
 		// For test requests, return the full response for debugging.
