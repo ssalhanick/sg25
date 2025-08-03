@@ -104,10 +104,23 @@ class ArchiveCronHandler {
 	public function run_auto_archive() {
 		$this->logger->log( 'info', 'Starting automated archive process' );
 		
+		// Debug logging
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveCronHandler] Starting automated archive process' );
+		}
+		
 		$settings = $this->get_archive_settings();
+		
+		// Debug logging for settings
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveCronHandler] Archive settings: ' . print_r( $settings, true ) );
+		}
 		
 		if ( ! $settings['archive_enabled'] ) {
 			$this->logger->log( 'info', 'Archive feature is disabled' );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveCronHandler] Archive feature is disabled' );
+			}
 			return array(
 				'success' => false,
 				'message' => 'Archive feature is disabled',
@@ -120,8 +133,19 @@ class ArchiveCronHandler {
 			$settings['archive_batch_size']
 		);
 
+		// Debug logging for events found
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveCronHandler] Events to archive: ' . count( $events_to_archive ) );
+			if ( ! empty( $events_to_archive ) ) {
+				error_log( '[ArchiveCronHandler] Event IDs: ' . print_r( $events_to_archive, true ) );
+			}
+		}
+
 		if ( empty( $events_to_archive ) ) {
 			$this->logger->log( 'info', 'No events to archive' );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveCronHandler] No events to archive' );
+			}
 			return array(
 				'success' => true,
 				'message' => 'No events to archive',
@@ -134,6 +158,11 @@ class ArchiveCronHandler {
 			$events_to_archive,
 			$settings['archive_dry_run']
 		);
+
+		// Debug logging for results
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveCronHandler] Archive batch results: ' . print_r( $results, true ) );
+		}
 
 		// Send notifications if enabled
 		if ( $settings['archive_notifications'] && $results['successful'] > 0 ) {
