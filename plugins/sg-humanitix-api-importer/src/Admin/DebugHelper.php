@@ -69,6 +69,9 @@ class DebugHelper {
 
 		$message = sprintf( '[%s] %s', strtoupper( $component ), $action );
 
+		// Sanitize sensitive data before logging
+		$context = $this->sanitize_sensitive_data( $context );
+
 		$this->logger->log( $level, $message, $context );
 	}
 
@@ -90,6 +93,9 @@ class DebugHelper {
 		// Include memory usage in detailed logs.
 		$context['memory_usage'] = $this->get_memory_usage_info();
 		$context['timestamp']    = microtime( true );
+
+		// Sanitize sensitive data before logging
+		$context = $this->sanitize_sensitive_data( $context );
 
 		$this->logger->log( $level, $message, $context );
 	}
@@ -182,6 +188,9 @@ class DebugHelper {
 			'response_code'   => $response_data['code'] ?? null,
 			'api_key_length'  => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
 		);
+
+		// Sanitize response data to remove any sensitive information
+		$context['response_data'] = $this->sanitize_sensitive_data( $response_data );
 
 		$this->log_detailed( 'API', 'API key validation: ' . ( $is_valid ? 'VALID' : 'INVALID' ), $context );
 	}

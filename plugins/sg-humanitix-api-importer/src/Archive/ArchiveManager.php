@@ -76,6 +76,11 @@ class ArchiveManager {
 	public function __construct() {
 		// Prevent multiple instances
 		if ( self::$instance !== null ) {
+			// Return the existing instance properties
+			$this->logger = self::$instance->logger;
+			$this->queries = self::$instance->queries;
+			$this->validator = self::$instance->validator;
+			$this->settings = self::$instance->settings;
 			return;
 		}
 		self::$instance = $this;
@@ -175,26 +180,38 @@ class ArchiveManager {
 	 * @return void
 	 */
 	public function add_archive_status_to_dropdown() {
-		global $post;
+		global $post_type;
 		
-		if ( $post && 'tribe_events' === $post->post_type ) {
+		if ( $post_type === 'tribe_events' ) {
 			?>
 			<script>
-			jQuery(document).ready(function($) {
+			document.addEventListener('DOMContentLoaded', function() {
 				// Add to main post status dropdown
-				if ($('#post_status').length) {
-					$('#post_status').append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				const postStatusSelect = document.getElementById('post_status');
+				if (postStatusSelect) {
+					const archivedOption = document.createElement('option');
+					archivedOption.value = 'archived';
+					archivedOption.textContent = '<?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?>';
+					postStatusSelect.appendChild(archivedOption);
 				}
 				
 				// Add to publish box dropdown
-				if ($('#publish').length) {
-					$('#publish').append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				const publishSelect = document.getElementById('publish');
+				if (publishSelect) {
+					const archivedOption = document.createElement('option');
+					archivedOption.value = 'archived';
+					archivedOption.textContent = '<?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?>';
+					publishSelect.appendChild(archivedOption);
 				}
 				
 				// Add to TEC-specific dropdowns
-				$('select[name="post_status"]').each(function() {
-					if (!$(this).find('option[value="archived"]').length) {
-						$(this).append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				const statusSelects = document.querySelectorAll('select[name="post_status"]');
+				statusSelects.forEach(function(select) {
+					if (!select.querySelector('option[value="archived"]')) {
+						const archivedOption = document.createElement('option');
+						archivedOption.value = 'archived';
+						archivedOption.textContent = '<?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?>';
+						select.appendChild(archivedOption);
 					}
 				});
 			});
@@ -237,21 +254,6 @@ class ArchiveManager {
 	}
 
 	/**
-	 * Adjust TEC event counts to properly handle archived events.
-	 *
-	 * @since 1.0.0
-	 * @param array $statuses Existing TEC statuses.
-	 * @return array Modified statuses with proper counting.
-	 */
-	public function adjust_tec_event_counts( $statuses ) {
-		// Ensure archived events are counted separately from published
-		if ( ! isset( $statuses['archived'] ) ) {
-			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
-		}
-		return $statuses;
-	}
-
-	/**
 	 * Debug admin notice for troubleshooting.
 	 *
 	 * @since 1.0.0
@@ -263,7 +265,16 @@ class ArchiveManager {
 		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' ) {
 			$statuses = get_post_stati();
 			$tec_statuses = apply_filters( 'tribe_events_admin_list_table_statuses', array() );
-			$archived_count = $this->queries->get_archived_events_count();
+			
+			// Safety check for queries
+			try {
+				if ( ! $this->queries ) {
+					$this->queries = new ArchiveQueries();
+				}
+				$archived_count = $this->queries->get_archived_events_count();
+			} catch ( \Exception $e ) {
+				$archived_count = 'Error: ' . $e->getMessage();
+			}
 			
 			echo '<div class="notice notice-info">';
 			echo '<p><strong>ArchiveManager Debug:</strong></p>';
@@ -336,6 +347,21 @@ class ArchiveManager {
 	}
 
 	/**
+	 * Adjust TEC event counts to properly handle archived events.
+	 *
+	 * @since 1.0.0
+	 * @param array $statuses Existing TEC statuses.
+	 * @return array Modified statuses with proper counting.
+	 */
+	public function adjust_tec_event_counts( $statuses ) {
+		// Ensure archived events are counted separately from published
+		if ( ! isset( $statuses['archived'] ) ) {
+			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		}
+		return $statuses;
+	}
+
+	/**
 	 * Add JavaScript to adjust TEC event counts in the admin interface.
 	 *
 	 * @since 1.0.0
@@ -345,20 +371,56 @@ class ArchiveManager {
 		global $post_type;
 		
 		if ( $post_type === 'tribe_events' ) {
-			$archived_count = $this->queries->get_archived_events_count();
+			// Safety check for queries
+			try {
+				if ( ! $this->queries ) {
+					$this->queries = new ArchiveQueries();
+				}
+				$archived_count = $this->queries->get_archived_events_count();
+			} catch ( \Exception $e ) {
+				$archived_count = 0;
+			}
 			?>
 			<script>
-			jQuery(document).ready(function($) {
+			document.addEventListener('DOMContentLoaded', function() {
 				// Add archived count to the status list if it doesn't exist
-				var $statusList = $('.subsubsub');
-				if ($statusList.length && !$statusList.find('a[href*="post_status=archived"]').length) {
-					var archivedLink = '<a href="<?php echo esc_url( add_query_arg( 'post_status', 'archived', admin_url( 'edit.php?post_type=tribe_events' ) ) ); ?>"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?> <span class="count">(<?php echo esc_html( $archived_count ); ?>)</span></a>';
-					$statusList.append(' | ' + archivedLink);
+				const statusList = document.querySelector('.subsubsub');
+				if (statusList && !statusList.querySelector('a[href*="post_status=archived"]')) {
+					const archivedLink = document.createElement('a');
+					archivedLink.href = '<?php echo esc_url( add_query_arg( 'post_status', 'archived', admin_url( 'edit.php?post_type=tribe_events' ) ) ); ?>';
+					archivedLink.innerHTML = '<?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?> <span class="count">(<?php echo esc_html( $archived_count ); ?>)</span>';
+					statusList.appendChild(document.createTextNode(' | '));
+					statusList.appendChild(archivedLink);
 				}
 			});
 			</script>
 			<?php
 		}
+	}
+
+	/**
+	 * Obfuscate sensitive data for logging.
+	 *
+	 * @since 1.0.0
+	 * @param mixed $data The data to obfuscate.
+	 * @return mixed The obfuscated data.
+	 */
+	private function obfuscate_sensitive_data( $data ) {
+		if ( is_array( $data ) ) {
+			$sensitive_keys = array( 'api_key', 'token', 'password', 'secret', 'key', 'auth' );
+			foreach ( $data as $key => $value ) {
+				if ( in_array( strtolower( $key ), $sensitive_keys, true ) ) {
+					if ( is_string( $value ) && strlen( $value ) > 8 ) {
+						$data[ $key ] = substr( $value, 0, 8 ) . '...' . substr( $value, -4 );
+					} else {
+						$data[ $key ] = '[REDACTED]';
+					}
+				} elseif ( is_array( $value ) ) {
+					$data[ $key ] = $this->obfuscate_sensitive_data( $value );
+				}
+			}
+		}
+		return $data;
 	}
 
 	/**
@@ -381,9 +443,10 @@ class ArchiveManager {
 		$options = get_option( 'humanitix_importer_options', array() );
 		$settings = wp_parse_args( $options, $defaults );
 		
-		// Debug logging for settings
+		// Debug logging for settings (obfuscated)
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[ArchiveManager] Archive settings: ' . print_r( $settings, true ) );
+			$obfuscated_settings = $this->obfuscate_sensitive_data( $settings );
+			error_log( '[ArchiveManager] Archive settings: ' . print_r( $obfuscated_settings, true ) );
 		}
 		
 		return $settings;
@@ -548,30 +611,41 @@ class ArchiveManager {
 	 * @return array Array of event IDs to archive.
 	 */
 	public function get_events_to_archive( $age_threshold = null, $limit = null ) {
-		if ( null === $age_threshold ) {
-			$age_threshold = $this->settings['archive_age_threshold'];
-		}
-
-		if ( null === $limit ) {
-			$limit = $this->settings['archive_batch_size'];
-		}
-
-		// Debug logging
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[ArchiveManager] Getting events to archive with threshold: ' . $age_threshold . ' years, limit: ' . $limit );
-		}
-
-		$events = $this->queries->get_events_older_than( $age_threshold, $limit );
-
-		// Debug logging
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[ArchiveManager] Found ' . count( $events ) . ' events to archive' );
-			if ( ! empty( $events ) ) {
-				error_log( '[ArchiveManager] Event IDs to archive: ' . print_r( $events, true ) );
+		try {
+			if ( ! $this->queries ) {
+				$this->queries = new ArchiveQueries();
 			}
-		}
+			
+			if ( null === $age_threshold ) {
+				$age_threshold = $this->settings['archive_age_threshold'];
+			}
 
-		return $events;
+			if ( null === $limit ) {
+				$limit = $this->settings['archive_batch_size'];
+			}
+
+			// Debug logging
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] Getting events to archive with threshold: ' . $age_threshold . ' years, limit: ' . $limit );
+			}
+
+			$events = $this->queries->get_events_older_than( $age_threshold, $limit );
+
+			// Debug logging
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] Found ' . count( $events ) . ' events to archive' );
+				if ( ! empty( $events ) ) {
+					error_log( '[ArchiveManager] Event IDs to archive: ' . print_r( $events, true ) );
+				}
+			}
+
+			return $events;
+		} catch ( \Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] Error getting events to archive: ' . $e->getMessage() );
+			}
+			return array();
+		}
 	}
 
 	/**
@@ -710,7 +784,23 @@ class ArchiveManager {
 	 * @return array Archive statistics.
 	 */
 	public function get_archive_statistics() {
-		return $this->queries->get_archive_statistics();
+		try {
+			if ( ! $this->queries ) {
+				$this->queries = new ArchiveQueries();
+			}
+			return $this->queries->get_archive_statistics();
+		} catch ( \Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] Error getting archive statistics: ' . $e->getMessage() );
+			}
+			// Return default statistics if there's an error
+			return array(
+				'total_archived' => 0,
+				'total_events'   => 0,
+				'archived_this_month' => 0,
+				'events_to_archive' => 0,
+			);
+		}
 	}
 
 	/**
@@ -1006,58 +1096,77 @@ class ArchiveManager {
 	}
 
 	/**
-	 * Add JavaScript to the admin head for quick edit.
+	 * Add comprehensive JavaScript for quick/bulk edit functionality.
 	 *
 	 * @since 1.0.0
 	 * @return void
 	 */
 	public function add_admin_head_script() {
-		?>
-		<script>
-		jQuery(document).ready(function($) {
-			// Function to add archived option to status dropdowns
-			function addArchivedToDropdown($select) {
-				if (!$select.find('option[value="archived"]').length) {
-					$select.append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+		global $post_type;
+		
+		if ( $post_type === 'tribe_events' ) {
+			?>
+			<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				// Function to add archived option to status dropdowns
+				function addArchivedToDropdown(select) {
+					if (!select.querySelector('option[value="archived"]')) {
+						const archivedOption = document.createElement('option');
+						archivedOption.value = 'archived';
+						archivedOption.textContent = '<?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?>';
+						select.appendChild(archivedOption);
+					}
 				}
-			}
 
-			// Add archived option to existing dropdowns
-			$('select[name="post_status"]').each(function() {
-				addArchivedToDropdown($(this));
-			});
+				// Add archived option to existing dropdowns
+				const statusSelects = document.querySelectorAll('select[name="post_status"]');
+				statusSelects.forEach(function(select) {
+					addArchivedToDropdown(select);
+				});
 
-			// Add archived option to quick edit dropdowns when they're created
-			$(document).on('click', '.editinline', function() {
-				setTimeout(function() {
-					$('.inline-edit-row select[name="post_status"]').each(function() {
-						addArchivedToDropdown($(this));
-					});
-				}, 100);
-			});
+				// Add archived option to quick edit dropdowns when they're created
+				document.addEventListener('click', function(event) {
+					if (event.target.classList.contains('editinline')) {
+						setTimeout(function() {
+							const quickEditSelects = document.querySelectorAll('.inline-edit-row select[name="post_status"]');
+							quickEditSelects.forEach(function(select) {
+								addArchivedToDropdown(select);
+							});
+						}, 100);
+					}
+				});
 
-			// Add archived option to bulk edit dropdowns
-			$(document).on('click', '.bulk-edit', function() {
-				setTimeout(function() {
-					$('.bulk-edit-row select[name="post_status"]').each(function() {
-						addArchivedToDropdown($(this));
-					});
-				}, 100);
-			});
+				// Add archived option to bulk edit dropdowns
+				document.addEventListener('click', function(event) {
+					if (event.target.classList.contains('bulk-edit')) {
+						setTimeout(function() {
+							const bulkEditSelects = document.querySelectorAll('.bulk-edit-row select[name="post_status"]');
+							bulkEditSelects.forEach(function(select) {
+								addArchivedToDropdown(select);
+							});
+						}, 100);
+					}
+				});
 
-			// Handle quick edit form submission
-			$(document).on('click', '.save', function() {
-				var $form = $(this).closest('form');
-				var $statusSelect = $form.find('select[name="post_status"]');
-				
-				if ($statusSelect.length && $statusSelect.val() === 'archived') {
-					// Ensure the archived status is properly set
-					$form.find('input[name="post_status"]').val('archived');
-				}
+				// Handle quick edit form submission
+				document.addEventListener('click', function(event) {
+					if (event.target.classList.contains('save')) {
+						const form = event.target.closest('form');
+						const statusSelect = form.querySelector('select[name="post_status"]');
+						
+						if (statusSelect && statusSelect.value === 'archived') {
+							// Ensure the archived status is properly set
+							const statusInput = form.querySelector('input[name="post_status"]');
+							if (statusInput) {
+								statusInput.value = 'archived';
+							}
+						}
+					}
+				});
 			});
-		});
-		</script>
-		<?php
+			</script>
+			<?php
+		}
 	}
 
 	/**
