@@ -60,6 +60,13 @@ class ArchiveManager {
 	private $settings;
 
 	/**
+	 * Static instance to prevent multiple instances.
+	 *
+	 * @var ArchiveManager
+	 */
+	private static $instance = null;
+
+	/**
 	 * Constructor.
 	 *
 	 * Initializes the archive manager and registers custom post status.
@@ -67,6 +74,12 @@ class ArchiveManager {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
+		// Prevent multiple instances
+		if ( self::$instance !== null ) {
+			return;
+		}
+		self::$instance = $this;
+		
 		$this->logger = new Logger();
 		$this->queries = new ArchiveQueries();
 		$this->validator = new ArchiveValidator();
@@ -78,34 +91,57 @@ class ArchiveManager {
 		// Add TEC-specific integration to ensure archived status is recognized
 		add_action( 'tribe_events_register_post_type', array( $this, 'register_archive_post_status' ) );
 		
-		// Force archived status to show in TEC admin interface
-		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
-		
 		// Add archive status to admin filters
 		add_action( 'admin_footer-post.php', array( $this, 'add_archive_status_to_dropdown' ) );
 		add_action( 'admin_footer-edit.php', array( $this, 'add_archive_status_to_dropdown' ) );
 		
-		// Add debug logging for post status registration
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			add_action( 'init', array( $this, 'debug_post_status_registration' ), 25 );
-		}
-		
-		// Add TEC-specific hooks for better integration
-		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
-		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'ensure_archived_in_tec_statuses' ) );
-		add_action( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
-		
-		// Ensure archived events are included in TEC event counts
-		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'include_archived_in_counts' ) );
-		
-		// Add admin notice for debugging (only in debug mode)
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			add_action( 'admin_notices', array( $this, 'debug_admin_notice' ) );
+		// Add TEC-specific hooks for better integration (consolidated to prevent duplicates)
+		if ( ! has_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) ) ) {
+			add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'add_archived_to_tec_statuses' ) );
 		}
 		
 		// Add TEC-specific event counting integration
-		add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'adjust_tec_event_counts' ) );
+		if ( ! has_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'adjust_tec_event_counts' ) ) ) {
+			add_filter( 'tribe_events_admin_list_table_statuses', array( $this, 'adjust_tec_event_counts' ) );
+		}
+		
 		add_action( 'admin_footer-edit.php', array( $this, 'add_tec_count_adjustment' ) );
+		
+		// Add debug logging for post status registration
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			add_action( 'init', array( $this, 'debug_post_status_registration' ), 25 );
+			add_action( 'admin_notices', array( $this, 'debug_admin_notice' ) );
+		}
+		
+		// Add debug admin interface for manual testing
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			add_action( 'admin_notices', array( $this, 'debug_manual_archive_interface' ) );
+		}
+		
+		// Add hooks to ensure archived status is available in dropdowns
+		add_filter( 'display_post_states', array( $this, 'add_archived_post_state' ), 10, 2 );
+		add_action( 'post_submitbox_misc_actions', array( $this, 'add_archived_to_submitbox' ) );
+		
+		// Add filter to ensure archived status is available in post status lists
+		add_filter( 'get_post_statuses', array( $this, 'add_archived_to_post_statuses' ) );
+		
+		// Add support for quick edit and bulk edit
+		add_action( 'quick_edit_custom_box', array( $this, 'add_archived_to_quick_edit' ), 10, 2 );
+		add_action( 'bulk_edit_custom_box', array( $this, 'add_archived_to_bulk_edit' ), 10, 2 );
+		
+		// Add JavaScript to populate quick edit dropdowns
+		add_action( 'admin_footer-edit.php', array( $this, 'add_quick_edit_script' ) );
+		
+		// Add support for quick edit form
+		add_action( 'quick_edit_custom_box', array( $this, 'add_archived_to_quick_edit_form' ), 10, 2 );
+		add_filter( 'quick_edit_dropdown_pages_args', array( $this, 'modify_quick_edit_args' ) );
+		
+		// Add filter to ensure archived status is available in quick edit
+		add_filter( 'wp_dropdown_pages', array( $this, 'add_archived_to_dropdown_pages' ), 10, 2 );
+		
+		// Add support for WordPress admin hooks
+		add_action( 'admin_head-edit.php', array( $this, 'add_admin_head_script' ) );
+		add_filter( 'wp_insert_post_data', array( $this, 'handle_quick_edit_archive' ), 10, 2 );
 	}
 
 	/**
@@ -145,7 +181,22 @@ class ArchiveManager {
 			?>
 			<script>
 			jQuery(document).ready(function($) {
-				$('#post_status').append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				// Add to main post status dropdown
+				if ($('#post_status').length) {
+					$('#post_status').append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				}
+				
+				// Add to publish box dropdown
+				if ($('#publish').length) {
+					$('#publish').append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				}
+				
+				// Add to TEC-specific dropdowns
+				$('select[name="post_status"]').each(function() {
+					if (!$(this).find('option[value="archived"]').length) {
+						$(this).append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+					}
+				});
 			});
 			</script>
 			<?php
@@ -160,7 +211,9 @@ class ArchiveManager {
 	 * @return array Modified statuses including archived.
 	 */
 	public function add_archived_to_tec_statuses( $statuses ) {
-		$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		if ( ! isset( $statuses['archived'] ) ) {
+			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		}
 		return $statuses;
 	}
 
@@ -184,28 +237,14 @@ class ArchiveManager {
 	}
 
 	/**
-	 * Ensure archived status is included in TEC statuses.
+	 * Adjust TEC event counts to properly handle archived events.
 	 *
 	 * @since 1.0.0
 	 * @param array $statuses Existing TEC statuses.
-	 * @return array Modified statuses including archived.
+	 * @return array Modified statuses with proper counting.
 	 */
-	public function ensure_archived_in_tec_statuses( $statuses ) {
-		if ( ! isset( $statuses['archived'] ) ) {
-			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
-		}
-		return $statuses;
-	}
-
-	/**
-	 * Include archived events in TEC event counts.
-	 *
-	 * @since 1.0.0
-	 * @param array $statuses Existing TEC statuses.
-	 * @return array Modified statuses including archived.
-	 */
-	public function include_archived_in_counts( $statuses ) {
-		// Ensure archived is included in the status list for counting
+	public function adjust_tec_event_counts( $statuses ) {
+		// Ensure archived events are counted separately from published
 		if ( ! isset( $statuses['archived'] ) ) {
 			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
 		}
@@ -223,6 +262,7 @@ class ArchiveManager {
 		
 		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' ) {
 			$statuses = get_post_stati();
+			$tec_statuses = apply_filters( 'tribe_events_admin_list_table_statuses', array() );
 			$archived_count = $this->queries->get_archived_events_count();
 			
 			echo '<div class="notice notice-info">';
@@ -230,23 +270,69 @@ class ArchiveManager {
 			echo '<p>Available post statuses: ' . implode( ', ', array_keys( $statuses ) ) . '</p>';
 			echo '<p>Archived events count: ' . $archived_count . '</p>';
 			echo '<p>Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) . '</p>';
+			echo '<p>TEC statuses: ' . implode( ', ', array_keys( $tec_statuses ) ) . '</p>';
+			
+			// Test if we can manually set a post to archived
+			if ( isset( $_GET['test_manual_archive'] ) && current_user_can( 'manage_options' ) ) {
+				$test_post_id = isset( $_GET['post_id'] ) ? intval( $_GET['post_id'] ) : 0;
+				if ( $test_post_id > 0 ) {
+					$result = wp_update_post( array(
+						'ID' => $test_post_id,
+						'post_status' => 'archived'
+					), true );
+					
+					if ( is_wp_error( $result ) ) {
+						echo '<p><strong>Manual Archive Test Failed:</strong> ' . $result->get_error_message() . '</p>';
+					} else {
+						echo '<p><strong>Manual Archive Test Success:</strong> Post ' . $test_post_id . ' set to archived</p>';
+					}
+				}
+			}
+			
 			echo '</div>';
 		}
 	}
 
 	/**
-	 * Adjust TEC event counts to properly handle archived events.
+	 * Debug manual archive interface for testing.
 	 *
 	 * @since 1.0.0
-	 * @param array $statuses Existing TEC statuses.
-	 * @return array Modified statuses with proper counting.
+	 * @return void
 	 */
-	public function adjust_tec_event_counts( $statuses ) {
-		// Ensure archived events are counted separately from published
-		if ( ! isset( $statuses['archived'] ) ) {
-			$statuses['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+	public function debug_manual_archive_interface() {
+		global $post_type;
+		
+		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' && current_user_can( 'manage_options' ) ) {
+			
+			// Handle manual archive trigger
+			if ( isset( $_GET['manual_archive'] ) && wp_verify_nonce( $_GET['_wpnonce'] ?? '', 'manual_archive' ) ) {
+				$age_threshold = isset( $_GET['age_threshold'] ) ? floatval( $_GET['age_threshold'] ) : null;
+				$limit = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : null;
+				
+				$result = $this->manual_trigger_archive( $age_threshold, $limit );
+				
+				echo '<div class="notice notice-' . ( $result['success'] ? 'success' : 'error' ) . '">';
+				echo '<p><strong>Manual Archive Result:</strong> ' . esc_html( $result['message'] ) . '</p>';
+				if ( isset( $result['results'] ) ) {
+					echo '<p>Total: ' . $result['results']['total'] . ', Successful: ' . $result['results']['successful'] . ', Failed: ' . $result['results']['failed'] . '</p>';
+				}
+				echo '</div>';
+			}
+			
+			// Show manual archive interface
+			$nonce = wp_create_nonce( 'manual_archive' );
+			echo '<div class="notice notice-info">';
+			echo '<p><strong>Manual Archive Testing:</strong></p>';
+			echo '<form method="get" style="margin: 10px 0;">';
+			echo '<input type="hidden" name="post_type" value="tribe_events">';
+			echo '<input type="hidden" name="_wpnonce" value="' . esc_attr( $nonce ) . '">';
+			echo '<input type="hidden" name="manual_archive" value="1">';
+			echo '<label>Age Threshold (years): <input type="number" name="age_threshold" value="0.1" step="0.1" min="0" style="width: 80px;"></label> ';
+			echo '<label>Limit: <input type="number" name="limit" value="5" min="1" max="50" style="width: 60px;"></label> ';
+			echo '<input type="submit" value="Test Manual Archive" class="button button-secondary">';
+			echo '</form>';
+			echo '</div>';
 		}
-		return $statuses;
 	}
 
 	/**
@@ -470,7 +556,22 @@ class ArchiveManager {
 			$limit = $this->settings['archive_batch_size'];
 		}
 
-		return $this->queries->get_events_older_than( $age_threshold, $limit );
+		// Debug logging
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveManager] Getting events to archive with threshold: ' . $age_threshold . ' years, limit: ' . $limit );
+		}
+
+		$events = $this->queries->get_events_older_than( $age_threshold, $limit );
+
+		// Debug logging
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveManager] Found ' . count( $events ) . ' events to archive' );
+			if ( ! empty( $events ) ) {
+				error_log( '[ArchiveManager] Event IDs to archive: ' . print_r( $events, true ) );
+			}
+		}
+
+		return $events;
 	}
 
 	/**
@@ -610,5 +711,367 @@ class ArchiveManager {
 	 */
 	public function get_archive_statistics() {
 		return $this->queries->get_archive_statistics();
+	}
+
+	/**
+	 * Manually trigger archive process for testing.
+	 *
+	 * @since 1.0.0
+	 * @param int $age_threshold Age threshold in years (optional).
+	 * @param int $limit Maximum number of events to process (optional).
+	 * @return array Archive results.
+	 */
+	public function manual_trigger_archive( $age_threshold = null, $limit = null ) {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveManager] Manual archive trigger called with threshold: ' . ( $age_threshold ?? 'default' ) . ', limit: ' . ( $limit ?? 'default' ) );
+		}
+
+		// Get events to archive
+		$events_to_archive = $this->get_events_to_archive( $age_threshold, $limit );
+
+		if ( empty( $events_to_archive ) ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] No events found for manual archive' );
+			}
+			return array(
+				'success' => false,
+				'message' => 'No events found to archive',
+				'events_found' => 0,
+			);
+		}
+
+		// Process archive batch
+		$results = $this->process_archive_batch( $events_to_archive, false );
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( '[ArchiveManager] Manual archive results: ' . print_r( $results, true ) );
+		}
+
+		return array(
+			'success' => true,
+			'message' => sprintf(
+				'Manual archive completed: %d successful, %d failed',
+				$results['successful'],
+				$results['failed']
+			),
+			'results' => $results,
+		);
+	}
+
+	/**
+	 * Add archived post state to the post submit box.
+	 *
+	 * @since 1.0.0
+	 * @param array $post_states Array of post states.
+	 * @param WP_Post $post The post object.
+	 * @return array Modified post states.
+	 */
+	public function add_archived_post_state( $post_states, $post ) {
+		if ( 'tribe_events' === $post->post_type && 'archived' === $post->post_status ) {
+			$post_states['archived'] = __( 'Archived', 'sg-humanitix-api-importer' );
+		}
+		return $post_states;
+	}
+
+	/**
+	 * Add archived status to the post submit box.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function add_archived_to_submitbox() {
+		global $post;
+
+		if ( $post && 'tribe_events' === $post->post_type ) {
+			$status = $post->post_status;
+			$archived_status = 'archived';
+
+			if ( $status === $archived_status ) {
+				echo '<div class="misc-pub-section">';
+				echo '<label for="post_status">' . __( 'Status', 'sg-humanitix-api-importer' ) . ':</label> ';
+				echo '<span id="post-status-display">';
+				echo esc_html( get_post_status_object( $status )->label );
+				echo '</span>';
+				echo '<script>jQuery(document).ready(function($) { $(\'#post-status-display\').text(\'' . esc_js( get_post_status_object( $status )->label ) . '\'); });</script>';
+				echo '<a href="' . esc_url( add_query_arg( array( 'post_status' => $archived_status, 'post' => $post->ID ), admin_url( 'edit.php?post_type=tribe_events' ) ) ) . '" class="edit-status hide-if-js">' . __( 'Edit', 'sg-humanitix-api-importer' ) . '</a>';
+				echo '<div class="hidden">';
+				wp_dropdown_pages( array(
+					'post_type' => 'tribe_events',
+					'selected'  => $post->ID,
+					'name'      => 'post_status',
+					'show_option_none' => '— ' . __( 'Select', 'sg-humanitix-api-importer' ) . ' —',
+					'sort_column' => 'menu_order, post_title',
+					'echo' => false,
+				) );
+				echo '</div>';
+				echo '</div>';
+			}
+		}
+	}
+
+	/**
+	 * Add archived status to the list of available post statuses.
+	 *
+	 * @since 1.0.0
+	 * @param array $statuses Array of available post statuses.
+	 * @return array Modified array of statuses.
+	 */
+	public function add_archived_to_post_statuses( $statuses ) {
+		$statuses['archived'] = array(
+			'label'                     => _x( 'Archived', 'post status', 'sg-humanitix-api-importer' ),
+			'public'                    => false,
+			'exclude_from_search'       => true,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop(
+				'Archived <span class="count">(%s)</span>',
+				'Archived <span class="count">(%s)</span>',
+				'sg-humanitix-api-importer'
+			),
+		);
+		return $statuses;
+	}
+
+	/**
+	 * Add archived status to quick edit custom box.
+	 *
+	 * @since 1.0.0
+	 * @param string $column_name The column name.
+	 * @param string $post_type The post type.
+	 * @return void
+	 */
+	public function add_archived_to_quick_edit( $column_name, $post_type ) {
+		if ( 'post_status' === $column_name && 'tribe_events' === $post_type ) {
+			$status = 'archived';
+			$current_status = get_post_status( get_the_ID() );
+
+			echo '<fieldset class="inline-edit-col-left">';
+			echo '<div class="inline-edit-col">';
+			echo '<label>';
+			echo '<span class="title">' . __( 'Status', 'sg-humanitix-api-importer' ) . '</span>';
+			echo '<span class="input-text-wrap">';
+			echo '<select name="post_status">';
+			echo '<option value="' . esc_attr( $current_status ) . '">' . esc_html( get_post_status_object( $current_status )->label ) . '</option>';
+			echo '<option value="archived" selected="selected">' . esc_html( get_post_status_object( $status )->label ) . '</option>';
+			echo '</select>';
+			echo '</span>';
+			echo '</label>';
+			echo '</div>';
+			echo '</fieldset>';
+		}
+	}
+
+	/**
+	 * Add archived status to bulk edit custom box.
+	 *
+	 * @since 1.0.0
+	 * @param string $column_name The column name.
+	 * @param string $post_type The post type.
+	 * @return void
+	 */
+	public function add_archived_to_bulk_edit( $column_name, $post_type ) {
+		if ( 'post_status' === $column_name && 'tribe_events' === $post_type ) {
+			$status = 'archived';
+			$current_status = get_post_status( get_the_ID() );
+
+			echo '<fieldset class="inline-edit-col-left">';
+			echo '<div class="inline-edit-col">';
+			echo '<label>';
+			echo '<span class="title">' . __( 'Status', 'sg-humanitix-api-importer' ) . '</span>';
+			echo '<span class="input-text-wrap">';
+			echo '<select name="post_status">';
+			echo '<option value="' . esc_attr( $current_status ) . '">' . esc_html( get_post_status_object( $current_status )->label ) . '</option>';
+			echo '<option value="archived" selected="selected">' . esc_html( get_post_status_object( $status )->label ) . '</option>';
+			echo '</select>';
+			echo '</span>';
+			echo '</label>';
+			echo '</div>';
+			echo '</fieldset>';
+		}
+	}
+
+	/**
+	 * Add JavaScript to populate quick edit dropdowns.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function add_quick_edit_script() {
+		global $post_type;
+
+		if ( 'tribe_events' === $post_type ) {
+			?>
+			<script>
+			jQuery(document).ready(function($) {
+				// Function to add archived option to status dropdowns
+				function addArchivedToDropdown($select) {
+					if (!$select.find('option[value="archived"]').length) {
+						$select.append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+					}
+				}
+
+				// Add archived option to existing dropdowns
+				$('select[name="post_status"]').each(function() {
+					addArchivedToDropdown($(this));
+				});
+
+				// Add archived option to quick edit dropdowns when they're created
+				$(document).on('click', '.editinline', function() {
+					setTimeout(function() {
+						$('.inline-edit-row select[name="post_status"]').each(function() {
+							addArchivedToDropdown($(this));
+						});
+					}, 100);
+				});
+
+				// Add archived option to bulk edit dropdowns
+				$(document).on('click', '.bulk-edit', function() {
+					setTimeout(function() {
+						$('.bulk-edit-row select[name="post_status"]').each(function() {
+							addArchivedToDropdown($(this));
+						});
+					}, 100);
+				});
+
+				// Handle quick edit form submission
+				$(document).on('click', '.save', function() {
+					var $form = $(this).closest('form');
+					var $statusSelect = $form.find('select[name="post_status"]');
+					
+					if ($statusSelect.length && $statusSelect.val() === 'archived') {
+						// Ensure the archived status is properly set
+						$form.find('input[name="post_status"]').val('archived');
+					}
+				});
+			});
+			</script>
+			<?php
+		}
+	}
+
+	/**
+	 * Add archived status to the quick edit form.
+	 *
+	 * @since 1.0.0
+	 * @param string $column_name The column name.
+	 * @param string $post_type The post type.
+	 * @return void
+	 */
+	public function add_archived_to_quick_edit_form( $column_name, $post_type ) {
+		if ( 'post_status' === $column_name && 'tribe_events' === $post_type ) {
+			$status = 'archived';
+			$current_status = get_post_status( get_the_ID() );
+
+			echo '<fieldset class="inline-edit-col-left">';
+			echo '<div class="inline-edit-col">';
+			echo '<label>';
+			echo '<span class="title">' . __( 'Status', 'sg-humanitix-api-importer' ) . '</span>';
+			echo '<span class="input-text-wrap">';
+			echo '<select name="post_status">';
+			echo '<option value="' . esc_attr( $current_status ) . '">' . esc_html( get_post_status_object( $current_status )->label ) . '</option>';
+			echo '<option value="archived" selected="selected">' . esc_html( get_post_status_object( $status )->label ) . '</option>';
+			echo '</select>';
+			echo '</span>';
+			echo '</label>';
+			echo '</div>';
+			echo '</fieldset>';
+		}
+	}
+
+	/**
+	 * Modify quick edit dropdown arguments.
+	 *
+	 * @since 1.0.0
+	 * @param array $args Quick edit dropdown arguments.
+	 * @return array Modified arguments.
+	 */
+	public function modify_quick_edit_args( $args ) {
+		$args['post_status'] = 'archived'; // Force the status to 'archived' in quick edit
+		return $args;
+	}
+
+	/**
+	 * Add archived status to the quick edit dropdown pages arguments.
+	 *
+	 * @since 1.0.0
+	 * @param array $args Quick edit dropdown arguments.
+	 * @param array $parsed_args Parsed arguments.
+	 * @return array Modified arguments.
+	 */
+	public function add_archived_to_dropdown_pages( $args, $parsed_args ) {
+		if ( isset( $parsed_args['post_type'] ) && 'tribe_events' === $parsed_args['post_type'] ) {
+			$args['post_status'] = 'archived'; // Force the status to 'archived' in quick edit
+		}
+		return $args;
+	}
+
+	/**
+	 * Add JavaScript to the admin head for quick edit.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function add_admin_head_script() {
+		?>
+		<script>
+		jQuery(document).ready(function($) {
+			// Function to add archived option to status dropdowns
+			function addArchivedToDropdown($select) {
+				if (!$select.find('option[value="archived"]').length) {
+					$select.append('<option value="archived"><?php esc_html_e( 'Archived', 'sg-humanitix-api-importer' ); ?></option>');
+				}
+			}
+
+			// Add archived option to existing dropdowns
+			$('select[name="post_status"]').each(function() {
+				addArchivedToDropdown($(this));
+			});
+
+			// Add archived option to quick edit dropdowns when they're created
+			$(document).on('click', '.editinline', function() {
+				setTimeout(function() {
+					$('.inline-edit-row select[name="post_status"]').each(function() {
+						addArchivedToDropdown($(this));
+					});
+				}, 100);
+			});
+
+			// Add archived option to bulk edit dropdowns
+			$(document).on('click', '.bulk-edit', function() {
+				setTimeout(function() {
+					$('.bulk-edit-row select[name="post_status"]').each(function() {
+						addArchivedToDropdown($(this));
+					});
+				}, 100);
+			});
+
+			// Handle quick edit form submission
+			$(document).on('click', '.save', function() {
+				var $form = $(this).closest('form');
+				var $statusSelect = $form.find('select[name="post_status"]');
+				
+				if ($statusSelect.length && $statusSelect.val() === 'archived') {
+					// Ensure the archived status is properly set
+					$form.find('input[name="post_status"]').val('archived');
+				}
+			});
+		});
+		</script>
+		<?php
+	}
+
+	/**
+	 * Handle quick edit archive status update.
+	 *
+	 * @since 1.0.0
+	 * @param array $data The post data.
+	 * @param array $postarr The post array.
+	 * @return array Modified post data.
+	 */
+	public function handle_quick_edit_archive( $data, $postarr ) {
+		if ( isset( $_POST['post_status'] ) && 'archived' === $_POST['post_status'] ) {
+			$data['post_status'] = 'archived';
+		}
+		return $data;
 	}
 } 
