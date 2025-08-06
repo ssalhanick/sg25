@@ -120,7 +120,7 @@ class ArchiveManager {
 		
 		// Add debug admin interface for manual testing
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			add_action( 'admin_notices', array( $this, 'debug_manual_archive_interface' ) );
+	
 		}
 		
 		// Add hooks to ensure archived status is available in dropdowns
@@ -283,68 +283,13 @@ class ArchiveManager {
 			echo '<p>Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) . '</p>';
 			echo '<p>TEC statuses: ' . implode( ', ', array_keys( $tec_statuses ) ) . '</p>';
 			
-			// Test if we can manually set a post to archived
-			if ( isset( $_GET['test_manual_archive'] ) && current_user_can( 'manage_options' ) ) {
-				$test_post_id = isset( $_GET['post_id'] ) ? intval( $_GET['post_id'] ) : 0;
-				if ( $test_post_id > 0 ) {
-					$result = wp_update_post( array(
-						'ID' => $test_post_id,
-						'post_status' => 'archived'
-					), true );
-					
-					if ( is_wp_error( $result ) ) {
-						echo '<p><strong>Manual Archive Test Failed:</strong> ' . $result->get_error_message() . '</p>';
-					} else {
-						echo '<p><strong>Manual Archive Test Success:</strong> Post ' . $test_post_id . ' set to archived</p>';
-					}
-				}
-			}
+			
 			
 			echo '</div>';
 		}
 	}
 
-	/**
-	 * Debug manual archive interface for testing.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function debug_manual_archive_interface() {
-		global $post_type;
-		
-		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' && current_user_can( 'manage_options' ) ) {
-			
-			// Handle manual archive trigger
-			if ( isset( $_GET['manual_archive'] ) && wp_verify_nonce( $_GET['_wpnonce'] ?? '', 'manual_archive' ) ) {
-				$age_threshold = isset( $_GET['age_threshold'] ) ? floatval( $_GET['age_threshold'] ) : null;
-				$limit = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : null;
-				
-				$result = $this->manual_trigger_archive( $age_threshold, $limit );
-				
-				echo '<div class="notice notice-' . ( $result['success'] ? 'success' : 'error' ) . '">';
-				echo '<p><strong>Manual Archive Result:</strong> ' . esc_html( $result['message'] ) . '</p>';
-				if ( isset( $result['results'] ) ) {
-					echo '<p>Total: ' . $result['results']['total'] . ', Successful: ' . $result['results']['successful'] . ', Failed: ' . $result['results']['failed'] . '</p>';
-				}
-				echo '</div>';
-			}
-			
-			// Show manual archive interface
-			$nonce = wp_create_nonce( 'manual_archive' );
-			echo '<div class="notice notice-info">';
-			echo '<p><strong>Manual Archive Testing:</strong></p>';
-			echo '<form method="get" style="margin: 10px 0;">';
-			echo '<input type="hidden" name="post_type" value="tribe_events">';
-			echo '<input type="hidden" name="_wpnonce" value="' . esc_attr( $nonce ) . '">';
-			echo '<input type="hidden" name="manual_archive" value="1">';
-			echo '<label>Age Threshold (years): <input type="number" name="age_threshold" value="0.1" step="0.1" min="0" style="width: 80px;"></label> ';
-			echo '<label>Limit: <input type="number" name="limit" value="5" min="1" max="50" style="width: 60px;"></label> ';
-			echo '<input type="submit" value="Test Manual Archive" class="button button-secondary">';
-			echo '</form>';
-			echo '</div>';
-		}
-	}
+
 
 	/**
 	 * Adjust TEC event counts to properly handle archived events.
@@ -1246,77 +1191,7 @@ class ArchiveManager {
 		return $this->get_events_to_archive( $age_threshold, $limit );
 	}
 
-	/**
-	 * Process delete batch for events.
-	 *
-	 * @since 1.0.0
-	 * @param array $events Array of event data.
-	 * @param bool $dry_run Whether this is a dry run.
-	 * @return array Results of the delete operation.
-	 */
-	public function process_delete_batch( $events, $dry_run = false ) {
-		$results = array(
-			'total'      => count( $events ),
-			'successful' => 0,
-			'failed'     => 0,
-			'errors'     => array(),
-		);
 
-		foreach ( $events as $event_data ) {
-			$event_id = is_array( $event_data ) ? $event_data['id'] : $event_data;
-			
-			if ( $dry_run ) {
-				$results['successful']++;
-				continue;
-			}
-
-			// Create backup before deleting
-			$backup_created = $this->create_event_backup( $event_id );
-			if ( ! $backup_created ) {
-				$results['failed']++;
-				$results['errors'][] = array(
-					'event_id' => $event_id,
-					'error'    => 'Failed to create backup',
-				);
-				continue;
-			}
-
-			// Delete the event
-			$delete_result = wp_delete_post( $event_id, true );
-			
-			if ( $delete_result ) {
-				$results['successful']++;
-				
-				$this->logger->log(
-					'info',
-					'Event deleted successfully',
-					array(
-						'event_id'    => $event_id,
-						'delete_date' => current_time( 'mysql' ),
-					)
-				);
-			} else {
-				$results['failed']++;
-				$results['errors'][] = array(
-					'event_id' => $event_id,
-					'error'    => 'Failed to delete event',
-				);
-			}
-		}
-
-		$this->logger->log(
-			'info',
-			'Delete batch processing completed',
-			array(
-				'total'      => $results['total'],
-				'successful' => $results['successful'],
-				'failed'     => $results['failed'],
-				'dry_run'    => $dry_run,
-			)
-		);
-
-		return $results;
-	}
 
 	/**
 	 * Restore events from backup.

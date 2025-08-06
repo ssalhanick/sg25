@@ -67,8 +67,7 @@ class ArchiveAdminInterface {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		
 		// Handle AJAX requests
-		add_action( 'wp_ajax_humanitix_manual_archive', array( $this, 'handle_manual_archive' ) );
-		add_action( 'wp_ajax_humanitix_manual_unarchive', array( $this, 'handle_manual_unarchive' ) );
+
 		add_action( 'wp_ajax_humanitix_run_auto_archive', array( $this, 'handle_run_auto_archive' ) );
 		add_action( 'wp_ajax_humanitix_run_monthly_archive', array( $this, 'handle_run_monthly_archive' ) );
 		add_action( 'wp_ajax_humanitix_get_archive_stats', array( $this, 'handle_get_archive_stats' ) );
@@ -140,18 +139,7 @@ class ArchiveAdminInterface {
 								<p class="description"><?php esc_html_e( 'Archive events older than this many years (e.g., 0.5 = 6 months, 1.0 = 1 year)', 'sg-humanitix-api-importer' ); ?></p>
 							</td>
 						</tr>
-						<tr>
-							<th scope="row">
-								<label for="action-type"><?php esc_html_e( 'Action Type', 'sg-humanitix-api-importer' ); ?></label>
-							</th>
-							<td>
-								<select id="action-type" name="action_type" class="regular-text">
-									<option value="archive"><?php esc_html_e( 'Archive Events', 'sg-humanitix-api-importer' ); ?></option>
-									<option value="delete"><?php esc_html_e( 'Delete Events', 'sg-humanitix-api-importer' ); ?></option>
-								</select>
-								<p class="description"><?php esc_html_e( 'Choose whether to archive or delete old events', 'sg-humanitix-api-importer' ); ?></p>
-							</td>
-						</tr>
+
 						<tr>
 							<th scope="row">
 								<label for="dry-run"><?php esc_html_e( 'Dry Run', 'sg-humanitix-api-importer' ); ?></label>
@@ -493,7 +481,6 @@ class ArchiveAdminInterface {
 			
 			function previewQuickArchive() {
 				const ageThreshold = document.getElementById('age-threshold').value;
-				const actionType = document.getElementById('action-type').value;
 				const batchSize = document.getElementById('batch-size').value;
 				
 				document.getElementById('quick-archive-results').innerHTML = '<div class="result-warning">Previewing changes...</div>';
@@ -506,7 +493,6 @@ class ArchiveAdminInterface {
 					body: new URLSearchParams({
 						action: 'humanitix_preview_quick_archive',
 						age_threshold: ageThreshold,
-						action_type: actionType,
 						batch_size: batchSize,
 						dry_run: '1',
 						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
@@ -541,7 +527,6 @@ class ArchiveAdminInterface {
 			
 			function executeQuickArchive() {
 				const ageThreshold = document.getElementById('age-threshold').value;
-				const actionType = document.getElementById('action-type').value;
 				const batchSize = document.getElementById('batch-size').value;
 				const dryRun = document.getElementById('dry-run').checked ? '1' : '0';
 				
@@ -559,7 +544,6 @@ class ArchiveAdminInterface {
 					body: new URLSearchParams({
 						action: 'humanitix_execute_quick_archive',
 						age_threshold: ageThreshold,
-						action_type: actionType,
 						batch_size: batchSize,
 						dry_run: dryRun,
 						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
@@ -646,61 +630,7 @@ class ArchiveAdminInterface {
 		<?php
 	}
 
-	/**
-	 * Handle manual archive AJAX request.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function handle_manual_archive() {
-		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
-		
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Unauthorized' );
-		}
 
-		$event_id = intval( $_POST['event_id'] ?? 0 );
-		
-		if ( ! $event_id ) {
-			wp_send_json_error( 'Invalid event ID' );
-		}
-
-		$result = $this->archive_manager->archive_event( $event_id );
-		
-		if ( $result['success'] ) {
-			wp_send_json_success( $result );
-		} else {
-			wp_send_json_error( $result['message'] );
-		}
-	}
-
-	/**
-	 * Handle manual unarchive AJAX request.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function handle_manual_unarchive() {
-		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
-		
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Unauthorized' );
-		}
-
-		$event_id = intval( $_POST['event_id'] ?? 0 );
-		
-		if ( ! $event_id ) {
-			wp_send_json_error( 'Invalid event ID' );
-		}
-
-		$result = $this->archive_manager->unarchive_event( $event_id );
-		
-		if ( $result['success'] ) {
-			wp_send_json_success( $result );
-		} else {
-			wp_send_json_error( $result['message'] );
-		}
-	}
 
 	/**
 	 * Handle run auto archive AJAX request.
@@ -767,15 +697,10 @@ class ArchiveAdminInterface {
 		}
 
 		$age_threshold = floatval( $_POST['age_threshold'] ?? 0.5 );
-		$action_type = sanitize_text_field( $_POST['action_type'] ?? 'archive' );
 		$batch_size = intval( $_POST['batch_size'] ?? 50 );
 
 		if ( $age_threshold < 0.1 || $age_threshold > 10 ) {
 			wp_send_json_error( 'Invalid age threshold. Must be between 0.1 and 10 years.' );
-		}
-
-		if ( ! in_array( $action_type, array( 'archive', 'delete' ), true ) ) {
-			wp_send_json_error( 'Invalid action type.' );
 		}
 
 		if ( $batch_size < 1 || $batch_size > 500 ) {
@@ -787,7 +712,6 @@ class ArchiveAdminInterface {
 		wp_send_json_success( array(
 			'total' => count( $events ),
 			'events' => array_slice( $events, 0, 10 ), // Show first 10 for preview
-			'action_type' => $action_type,
 			'age_threshold' => $age_threshold,
 		) );
 	}
@@ -806,16 +730,11 @@ class ArchiveAdminInterface {
 		}
 
 		$age_threshold = floatval( $_POST['age_threshold'] ?? 0.5 );
-		$action_type = sanitize_text_field( $_POST['action_type'] ?? 'archive' );
 		$batch_size = intval( $_POST['batch_size'] ?? 50 );
 		$dry_run = ( $_POST['dry_run'] ?? '0' ) === '1';
 
 		if ( $age_threshold < 0.1 || $age_threshold > 10 ) {
 			wp_send_json_error( 'Invalid age threshold. Must be between 0.1 and 10 years.' );
-		}
-
-		if ( ! in_array( $action_type, array( 'archive', 'delete' ), true ) ) {
-			wp_send_json_error( 'Invalid action type.' );
 		}
 
 		if ( $batch_size < 1 || $batch_size > 500 ) {
@@ -825,11 +744,7 @@ class ArchiveAdminInterface {
 		$events = $this->archive_manager->get_events_to_process( $age_threshold, $batch_size );
 		$event_ids = $this->archive_manager->get_event_ids_to_process( $age_threshold, $batch_size );
 		
-		if ( $action_type === 'archive' ) {
-			$results = $this->archive_manager->process_archive_batch( $event_ids, $dry_run );
-		} else {
-			$results = $this->archive_manager->process_delete_batch( $event_ids, $dry_run );
-		}
+		$results = $this->archive_manager->process_archive_batch( $event_ids, $dry_run );
 
 		wp_send_json_success( $results );
 	}

@@ -46,9 +46,7 @@ class TECIntegration {
 		// Add TEC admin page integration
 		add_action( 'admin_init', array( $this, 'init_tec_integration' ) );
 		
-		// Handle AJAX requests for quick archive
-		add_action( 'wp_ajax_humanitix_quick_archive_event', array( $this, 'handle_quick_archive_event' ) );
-		add_action( 'wp_ajax_humanitix_quick_unarchive_event', array( $this, 'handle_quick_unarchive_event' ) );
+
 		
 		// Add admin notices
 		add_action( 'admin_notices', array( $this, 'display_admin_notices' ) );
@@ -66,9 +64,7 @@ class TECIntegration {
 			return;
 		}
 
-		// Add quick archive buttons to the admin interface
-		add_action( 'admin_footer-edit.php', array( $this, 'add_quick_archive_buttons' ) );
-		add_action( 'admin_footer-post.php', array( $this, 'add_quick_archive_buttons' ) );
+
 		
 		// Add bulk actions
 		add_filter( 'bulk_actions-edit-tribe_events', array( $this, 'add_bulk_archive_actions' ) );
@@ -93,125 +89,7 @@ class TECIntegration {
 				 ( 'post.php' === $pagenow && isset( $_GET['post'] ) && 'tribe_events' === get_post_type( $_GET['post'] ) ) );
 	}
 
-	/**
-	 * Add quick archive buttons to TEC admin interface.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function add_quick_archive_buttons() {
-		global $post_type;
-		
-		if ( 'tribe_events' !== $post_type ) {
-			return;
-		}
-		
-		?>
-		<script>
-		document.addEventListener('DOMContentLoaded', function() {
-			// Add quick archive buttons to the admin interface
-			const addQuickArchiveButtons = function() {
-				// Add to row actions
-				const rows = document.querySelectorAll('.wp-list-table tr');
-				rows.forEach(function(row) {
-					const postId = row.getAttribute('data-post-id') || row.querySelector('.check-column input')?.value;
-					if (!postId) return;
-					
-					const rowActions = row.querySelector('.row-actions');
-					if (rowActions && !rowActions.querySelector('.quick-archive')) {
-						const archiveLink = document.createElement('span');
-						archiveLink.className = 'quick-archive';
-						archiveLink.innerHTML = ' | <a href="#" class="quick-archive-btn" data-post-id="' + postId + '">Quick Archive</a>';
-						rowActions.appendChild(archiveLink);
-					}
-				});
-				
-				// Add to publish box on single event page
-				const publishBox = document.querySelector('#submitdiv');
-				if (publishBox && !publishBox.querySelector('.quick-archive-publish')) {
-					const postId = document.querySelector('#post_ID')?.value;
-					if (postId) {
-						const archiveButton = document.createElement('div');
-						archiveButton.className = 'quick-archive-publish';
-						archiveButton.innerHTML = '<a href="#" class="button quick-archive-btn" data-post-id="' + postId + '">Quick Archive</a>';
-						publishBox.appendChild(archiveButton);
-					}
-				}
-			};
-			
-			// Add buttons on page load
-			addQuickArchiveButtons();
-			
-			// Add buttons after AJAX updates
-			document.addEventListener('click', function(event) {
-				if (event.target.classList.contains('quick-archive-btn')) {
-					event.preventDefault();
-					
-					const postId = event.target.getAttribute('data-post-id');
-					const isArchived = event.target.textContent.includes('Unarchive');
-					
-					if (confirm('Are you sure you want to ' + (isArchived ? 'unarchive' : 'archive') + ' this event?')) {
-						const action = isArchived ? 'humanitix_quick_unarchive_event' : 'humanitix_quick_archive_event';
-						
-						fetch(ajaxurl, {
-							method: 'POST',
-							headers: {
-								'Content-Type': 'application/x-www-form-urlencoded',
-							},
-							body: new URLSearchParams({
-								action: action,
-								post_id: postId,
-								nonce: '<?php echo wp_create_nonce( 'humanitix_quick_archive_nonce' ); ?>'
-							})
-						})
-						.then(response => response.json())
-						.then(response => {
-							if (response.success) {
-								// Show success message
-								const notice = document.createElement('div');
-								notice.className = 'notice notice-success is-dismissible';
-								notice.innerHTML = '<p>' + response.data.message + '</p>';
-								document.querySelector('#wpbody-content').insertBefore(notice, document.querySelector('#wpbody-content').firstChild);
-								
-								// Update button text
-								event.target.textContent = isArchived ? 'Quick Archive' : 'Quick Unarchive';
-								
-								// Reload page after a short delay to update status
-								setTimeout(function() {
-									location.reload();
-								}, 1000);
-							} else {
-								// Show error message
-								const notice = document.createElement('div');
-								notice.className = 'notice notice-error is-dismissible';
-								notice.innerHTML = '<p>Error: ' + response.data + '</p>';
-								document.querySelector('#wpbody-content').insertBefore(notice, document.querySelector('#wpbody-content').firstChild);
-							}
-						})
-						.catch(error => {
-							console.error('Quick archive error:', error);
-						});
-					}
-				}
-			});
-		});
-		</script>
-		
-		<style>
-		.quick-archive {
-			margin-left: 5px;
-		}
-		.quick-archive-publish {
-			margin-top: 10px;
-			padding-top: 10px;
-			border-top: 1px solid #ddd;
-		}
-		.quick-archive-btn {
-			text-decoration: none;
-		}
-		</style>
-		<?php
-	}
+
 
 	/**
 	 * Add bulk archive actions.
@@ -292,67 +170,7 @@ class TECIntegration {
 		}
 	}
 
-	/**
-	 * Handle quick archive event AJAX request.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function handle_quick_archive_event() {
-		check_ajax_referer( 'humanitix_quick_archive_nonce', 'nonce' );
-		
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Unauthorized' );
-		}
 
-		$post_id = intval( $_POST['post_id'] ?? 0 );
-		
-		if ( ! $post_id ) {
-			wp_send_json_error( 'Invalid post ID' );
-		}
-
-		$result = $this->archive_manager->archive_event( $post_id );
-		
-		if ( $result['success'] ) {
-			wp_send_json_success( array(
-				'message' => 'Event archived successfully',
-				'post_id' => $post_id,
-			) );
-		} else {
-			wp_send_json_error( $result['message'] );
-		}
-	}
-
-	/**
-	 * Handle quick unarchive event AJAX request.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function handle_quick_unarchive_event() {
-		check_ajax_referer( 'humanitix_quick_archive_nonce', 'nonce' );
-		
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Unauthorized' );
-		}
-
-		$post_id = intval( $_POST['post_id'] ?? 0 );
-		
-		if ( ! $post_id ) {
-			wp_send_json_error( 'Invalid post ID' );
-		}
-
-		$result = $this->archive_manager->unarchive_event( $post_id );
-		
-		if ( $result['success'] ) {
-			wp_send_json_success( array(
-				'message' => 'Event unarchived successfully',
-				'post_id' => $post_id,
-			) );
-		} else {
-			wp_send_json_error( $result['message'] );
-		}
-	}
 
 	/**
 	 * Display admin notices for archive operations.
