@@ -133,11 +133,11 @@ class ArchiveAdminInterface {
 					<table class="form-table">
 						<tr>
 							<th scope="row">
-								<label for="age-threshold"><?php esc_html_e( 'Age Threshold (days)', 'sg-humanitix-api-importer' ); ?></label>
+								<label for="age-threshold"><?php esc_html_e( 'Age Threshold (years)', 'sg-humanitix-api-importer' ); ?></label>
 							</th>
 							<td>
-								<input type="number" id="age-threshold" name="age_threshold" value="30" min="1" max="365" class="regular-text" />
-								<p class="description"><?php esc_html_e( 'Archive events older than this many days', 'sg-humanitix-api-importer' ); ?></p>
+								<input type="number" id="age-threshold" name="age_threshold" value="0.5" min="0.1" max="10" step="0.1" class="regular-text" />
+								<p class="description"><?php esc_html_e( 'Archive events older than this many years (e.g., 0.5 = 6 months, 1.0 = 1 year)', 'sg-humanitix-api-importer' ); ?></p>
 							</td>
 						</tr>
 						<tr>
@@ -225,6 +225,9 @@ class ArchiveAdminInterface {
 					<button type="button" class="button button-secondary" id="refresh-stats">
 						<?php esc_html_e( 'Refresh Statistics', 'sg-humanitix-api-importer' ); ?>
 					</button>
+					<button type="button" class="button button-secondary" id="clear-results" onclick="clearResults()">
+						<?php esc_html_e( 'Clear Results', 'sg-humanitix-api-importer' ); ?>
+					</button>
 				</div>
 				<div id="archive-results"></div>
 			</div>
@@ -304,8 +307,15 @@ class ArchiveAdminInterface {
 		}
 		#archive-results, #quick-archive-results {
 			margin-top: 15px;
-			padding: 10px;
+			padding: 15px;
 			border-radius: 4px;
+			border-left: 4px solid #0073aa;
+			animation: fadeIn 0.5s ease-in;
+		}
+		
+		@keyframes fadeIn {
+			from { opacity: 0; transform: translateY(-10px); }
+			to { opacity: 1; transform: translateY(0); }
 		}
 		.result-success {
 			background: #d4edda;
@@ -346,6 +356,9 @@ class ArchiveAdminInterface {
 
 		<script>
 		document.addEventListener('DOMContentLoaded', function() {
+			// Restore last result if available
+			restoreLastResult();
+			
 			// Existing functionality
 			document.getElementById('run-auto-archive').addEventListener('click', function() {
 				runArchiveAction('humanitix_run_auto_archive', 'Running auto archive...');
@@ -388,8 +401,15 @@ class ArchiveAdminInterface {
 				.then(response => response.json())
 				.then(response => {
 					if (response.success) {
-						document.getElementById('archive-results').innerHTML = '<div class="result-success">' + response.data.message + '</div>';
-						refreshStats();
+						let html = '<div class="result-success">' + response.data.message + '</div>';
+						// Add a "Results will be preserved" message
+						html += '<div class="result-warning" style="margin-top: 10px; font-size: 12px;">Results will be preserved. Stats will update automatically.</div>';
+						html += '<button type="button" class="button" onclick="clearArchiveResults()" style="margin-top: 10px;">Clear Results</button>';
+						document.getElementById('archive-results').innerHTML = html;
+						// Add a delay before refreshing stats so user can see the results
+						setTimeout(function() {
+							refreshStats();
+						}, 3000); // 3 second delay
 					} else {
 						document.getElementById('archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
 					}
@@ -397,6 +417,10 @@ class ArchiveAdminInterface {
 				.catch(error => {
 					document.getElementById('archive-results').innerHTML = '<div class="result-error">Request failed</div>';
 				});
+			}
+			
+			function clearArchiveResults() {
+				document.getElementById('archive-results').innerHTML = '';
 			}
 			
 			function refreshStats() {
@@ -413,12 +437,58 @@ class ArchiveAdminInterface {
 				.then(response => response.json())
 				.then(response => {
 					if (response.success) {
-						location.reload();
+						// Update stats without reloading
+						updateStatsDisplay(response.data);
 					}
 				})
 				.catch(error => {
 					console.error('Error refreshing stats:', error);
 				});
+			}
+			
+			function updateStatsDisplay(stats) {
+				// Update the statistics display without reloading
+				const statElements = document.querySelectorAll('.stat-number');
+				if (statElements.length >= 4 && stats) {
+					// Add a brief visual feedback
+					statElements.forEach(function(element) {
+						element.style.transition = 'color 0.3s ease';
+						element.style.color = '#0073aa';
+						setTimeout(function() {
+							element.style.color = '';
+						}, 300);
+					});
+					
+					statElements[0].textContent = stats.total_events || '0';
+					statElements[1].textContent = stats.total_archived || '0';
+					statElements[2].textContent = stats.events_to_archive || '0';
+					statElements[3].textContent = stats.archived_this_month || '0';
+				}
+			}
+			
+			function restoreLastResult() {
+				const lastResult = sessionStorage.getItem('lastArchiveResult');
+				const lastTime = sessionStorage.getItem('lastArchiveTime');
+				if (lastResult && lastTime) {
+					const resultsDiv = document.getElementById('archive-results');
+					if (resultsDiv) {
+						resultsDiv.innerHTML = lastResult + '<p><small>Last updated: ' + lastTime + '</small></p>';
+					}
+				}
+			}
+			
+			function clearResults() {
+				if (confirm('Are you sure you want to clear the archive results?')) {
+					document.getElementById('archive-results').innerHTML = '';
+					sessionStorage.removeItem('lastArchiveResult');
+					sessionStorage.removeItem('lastArchiveTime');
+				}
+			}
+			
+			function clearQuickArchiveResults() {
+				if (confirm('Are you sure you want to clear the quick archive results?')) {
+					document.getElementById('quick-archive-results').innerHTML = '';
+				}
 			}
 			
 			function previewQuickArchive() {
@@ -448,6 +518,7 @@ class ArchiveAdminInterface {
 						let html = '<div class="result-warning">Preview Results:</div>';
 						html += '<div class="preview-results">';
 						html += '<p><strong>Events that would be affected:</strong> ' + response.data.total + '</p>';
+						html += '<p><small>Age threshold: ' + response.data.age_threshold + ' years</small></p>';
 						if (response.data.events && response.data.events.length > 0) {
 							response.data.events.forEach(function(event) {
 								html += '<div class="preview-item">';
@@ -457,6 +528,7 @@ class ArchiveAdminInterface {
 							});
 						}
 						html += '</div>';
+						html += '<button type="button" class="button" onclick="clearQuickArchiveResults()" style="margin-top: 10px;">Clear Results</button>';
 						document.getElementById('quick-archive-results').innerHTML = html;
 					} else {
 						document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
@@ -495,6 +567,9 @@ class ArchiveAdminInterface {
 				})
 				.then(response => response.json())
 				.then(response => {
+					// Debug logging to understand the response structure
+					console.log('Quick archive response:', response);
+					
 					if (response.success) {
 						let html = '<div class="result-success">Operation completed successfully!</div>';
 						html += '<div class="preview-results">';
@@ -505,10 +580,22 @@ class ArchiveAdminInterface {
 						if (response.data.errors && response.data.errors.length > 0) {
 							html += '<p><strong>Errors:</strong></p>';
 							response.data.errors.forEach(function(error) {
-								html += '<div class="preview-item">Event ID ' + error.event_id + ': ' + error.error + '</div>';
+								// Handle different error object structures
+								let eventId = 'Unknown';
+								let errorMessage = 'Unknown error';
+								
+								if (typeof error === 'object' && error !== null) {
+									eventId = error.event_id || error.id || 'Unknown';
+									errorMessage = error.error || error.message || 'Unknown error';
+								} else if (typeof error === 'string') {
+									errorMessage = error;
+								}
+								
+								html += '<div class="preview-item">Event ID ' + eventId + ': ' + errorMessage + '</div>';
 							});
 						}
 						html += '</div>';
+						html += '<button type="button" class="button" onclick="clearQuickArchiveResults()" style="margin-top: 10px;">Clear Results</button>';
 						document.getElementById('quick-archive-results').innerHTML = html;
 						refreshStats();
 					} else {
@@ -549,6 +636,10 @@ class ArchiveAdminInterface {
 				.catch(error => {
 					document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">Restore request failed</div>';
 				});
+			}
+
+			function clearQuickArchiveResults() {
+				document.getElementById('quick-archive-results').innerHTML = '';
 			}
 		});
 		</script>
@@ -675,12 +766,12 @@ class ArchiveAdminInterface {
 			wp_die( 'Unauthorized' );
 		}
 
-		$age_threshold = intval( $_POST['age_threshold'] ?? 30 );
+		$age_threshold = floatval( $_POST['age_threshold'] ?? 0.5 );
 		$action_type = sanitize_text_field( $_POST['action_type'] ?? 'archive' );
 		$batch_size = intval( $_POST['batch_size'] ?? 50 );
 
-		if ( $age_threshold < 1 || $age_threshold > 365 ) {
-			wp_send_json_error( 'Invalid age threshold. Must be between 1 and 365 days.' );
+		if ( $age_threshold < 0.1 || $age_threshold > 10 ) {
+			wp_send_json_error( 'Invalid age threshold. Must be between 0.1 and 10 years.' );
 		}
 
 		if ( ! in_array( $action_type, array( 'archive', 'delete' ), true ) ) {
@@ -714,13 +805,13 @@ class ArchiveAdminInterface {
 			wp_die( 'Unauthorized' );
 		}
 
-		$age_threshold = intval( $_POST['age_threshold'] ?? 30 );
+		$age_threshold = floatval( $_POST['age_threshold'] ?? 0.5 );
 		$action_type = sanitize_text_field( $_POST['action_type'] ?? 'archive' );
 		$batch_size = intval( $_POST['batch_size'] ?? 50 );
 		$dry_run = ( $_POST['dry_run'] ?? '0' ) === '1';
 
-		if ( $age_threshold < 1 || $age_threshold > 365 ) {
-			wp_send_json_error( 'Invalid age threshold. Must be between 1 and 365 days.' );
+		if ( $age_threshold < 0.1 || $age_threshold > 10 ) {
+			wp_send_json_error( 'Invalid age threshold. Must be between 0.1 and 10 years.' );
 		}
 
 		if ( ! in_array( $action_type, array( 'archive', 'delete' ), true ) ) {
@@ -732,11 +823,12 @@ class ArchiveAdminInterface {
 		}
 
 		$events = $this->archive_manager->get_events_to_process( $age_threshold, $batch_size );
+		$event_ids = $this->archive_manager->get_event_ids_to_process( $age_threshold, $batch_size );
 		
 		if ( $action_type === 'archive' ) {
-			$results = $this->archive_manager->process_archive_batch( $events, $dry_run );
+			$results = $this->archive_manager->process_archive_batch( $event_ids, $dry_run );
 		} else {
-			$results = $this->archive_manager->process_delete_batch( $events, $dry_run );
+			$results = $this->archive_manager->process_delete_batch( $event_ids, $dry_run );
 		}
 
 		wp_send_json_success( $results );

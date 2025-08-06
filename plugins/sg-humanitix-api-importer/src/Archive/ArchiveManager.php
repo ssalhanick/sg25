@@ -460,7 +460,7 @@ class ArchiveManager {
 	 * @return array Archive result with success status and message.
 	 */
 	public function archive_event( $event_id ) {
-		$validation = $this->validator->validate_archive_operation( $event_id );
+		$validation = $this->validate_archive_operation( $event_id );
 		if ( ! $validation['success'] ) {
 			return array(
 				'success' => false,
@@ -708,26 +708,48 @@ class ArchiveManager {
 		// Check if event exists
 		$event = get_post( $event_id );
 		if ( ! $event ) {
-			return false;
+			return array(
+				'success' => false,
+				'message' => 'Event does not exist',
+			);
 		}
 
 		// Check if it's a TEC event
 		if ( 'tribe_events' !== $event->post_type ) {
-			return false;
+			return array(
+				'success' => false,
+				'message' => 'Not a TEC event',
+			);
 		}
 
 		// Check if already archived
 		if ( 'archived' === $event->post_status ) {
-			return false;
+			return array(
+				'success' => false,
+				'message' => 'Event is already archived',
+			);
 		}
 
-		// Check if event has start date
+		// Check if event has start date (try multiple possible meta keys)
 		$start_date = get_post_meta( $event_id, '_EventStartDate', true );
 		if ( empty( $start_date ) ) {
-			return false;
+			// Try alternative meta keys
+			$start_date = get_post_meta( $event_id, 'event_start_date', true );
+		}
+		if ( empty( $start_date ) ) {
+			$start_date = get_post_meta( $event_id, 'start_date', true );
+		}
+		if ( empty( $start_date ) ) {
+			// If no start date found, we'll still allow archiving but log it
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] Event ' . $event_id . ' has no start date, but allowing archive' );
+			}
 		}
 
-		return true;
+		return array(
+			'success' => true,
+			'message' => 'Event validation passed',
+		);
 	}
 
 	/**
@@ -1185,14 +1207,14 @@ class ArchiveManager {
 	}
 
 	/**
-	 * Get events to process based on age threshold.
+	 * Get events to process for quick archive operations.
 	 *
 	 * @since 1.0.0
-	 * @param int $age_threshold Age threshold in days.
+	 * @param float $age_threshold Age threshold in years (supports decimals like 0.5 for 6 months).
 	 * @param int $limit Maximum number of events to return.
 	 * @return array Array of event IDs to process.
 	 */
-	public function get_events_to_process( $age_threshold = 30, $limit = 50 ) {
+	public function get_events_to_process( $age_threshold = 0.5, $limit = 50 ) {
 		$events = $this->get_events_to_archive( $age_threshold, $limit );
 		
 		// Format events for the frontend
@@ -1210,6 +1232,18 @@ class ArchiveManager {
 		}
 		
 		return $formatted_events;
+	}
+	
+	/**
+	 * Get event IDs to process for quick archive operations.
+	 *
+	 * @since 1.0.0
+	 * @param float $age_threshold Age threshold in years (supports decimals like 0.5 for 6 months).
+	 * @param int $limit Maximum number of events to return.
+	 * @return array Array of event IDs to process.
+	 */
+	public function get_event_ids_to_process( $age_threshold = 0.5, $limit = 50 ) {
+		return $this->get_events_to_archive( $age_threshold, $limit );
 	}
 
 	/**
