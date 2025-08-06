@@ -185,9 +185,6 @@ class AdminInterface {
 		if ( empty( $api_key ) ) {
 			$missing_credentials[] = 'API key';
 		}
-		if ( empty( $org_id ) ) {
-			$missing_credentials[] = 'Organization ID';
-		}
 
 		$is_configured = empty( $missing_credentials );
 		$is_debug_mode = $this->is_debug_enabled();
@@ -1264,14 +1261,7 @@ class AdminInterface {
 			);
 		}
 
-		if ( empty( $org_id ) ) {
-			wp_send_json_error(
-				array(
-					'message' => 'Organization ID is required. Please enter your Humanitix organization ID in the settings.',
-					'debug'   => array( 'missing_org_id' => true ),
-				)
-			);
-		}
+
 
 		try {
 			// Create API instance and test connection.
@@ -2041,10 +2031,10 @@ class AdminInterface {
 		$org_id       = $options['org_id'] ?? '';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
-		if ( empty( $api_key ) || empty( $org_id ) ) {
+		if ( empty( $api_key ) ) {
 			wp_send_json_error( array( 
 				'message' => 'API configuration incomplete.',
-				'suggestion' => 'Please configure your API key and organization ID in the settings first.'
+				'suggestion' => 'Please configure your API key in the settings first.'
 			) );
 		}
 

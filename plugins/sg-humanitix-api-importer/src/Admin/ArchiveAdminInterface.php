@@ -15,6 +15,7 @@ use SG\HumanitixApiImporter\Archive\ArchiveManager;
 use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
 use SG\HumanitixApiImporter\Archive\ArchiveQueries;
 use SG\HumanitixApiImporter\Archive\ArchiveValidator;
+use SG\HumanitixApiImporter\Admin\Logger;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -71,6 +72,11 @@ class ArchiveAdminInterface {
 		add_action( 'wp_ajax_humanitix_run_auto_archive', array( $this, 'handle_run_auto_archive' ) );
 		add_action( 'wp_ajax_humanitix_run_monthly_archive', array( $this, 'handle_run_monthly_archive' ) );
 		add_action( 'wp_ajax_humanitix_get_archive_stats', array( $this, 'handle_get_archive_stats' ) );
+		
+		// New quick archive AJAX handlers
+		add_action( 'wp_ajax_humanitix_preview_quick_archive', array( $this, 'handle_preview_quick_archive' ) );
+		add_action( 'wp_ajax_humanitix_execute_quick_archive', array( $this, 'handle_execute_quick_archive' ) );
+		add_action( 'wp_ajax_humanitix_restore_from_backup', array( $this, 'handle_restore_from_backup' ) );
 	}
 
 	/**
@@ -117,6 +123,69 @@ class ArchiveAdminInterface {
 							</span>
 						</div>
 					<?php endforeach; ?>
+				</div>
+			</div>
+
+			<!-- Quick Archive Controls -->
+			<div class="card">
+				<h2><?php esc_html_e( 'Quick Archive Controls', 'sg-humanitix-api-importer' ); ?></h2>
+				<div class="quick-archive-form">
+					<table class="form-table">
+						<tr>
+							<th scope="row">
+								<label for="age-threshold"><?php esc_html_e( 'Age Threshold (days)', 'sg-humanitix-api-importer' ); ?></label>
+							</th>
+							<td>
+								<input type="number" id="age-threshold" name="age_threshold" value="30" min="1" max="365" class="regular-text" />
+								<p class="description"><?php esc_html_e( 'Archive events older than this many days', 'sg-humanitix-api-importer' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row">
+								<label for="action-type"><?php esc_html_e( 'Action Type', 'sg-humanitix-api-importer' ); ?></label>
+							</th>
+							<td>
+								<select id="action-type" name="action_type" class="regular-text">
+									<option value="archive"><?php esc_html_e( 'Archive Events', 'sg-humanitix-api-importer' ); ?></option>
+									<option value="delete"><?php esc_html_e( 'Delete Events', 'sg-humanitix-api-importer' ); ?></option>
+								</select>
+								<p class="description"><?php esc_html_e( 'Choose whether to archive or delete old events', 'sg-humanitix-api-importer' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row">
+								<label for="dry-run"><?php esc_html_e( 'Dry Run', 'sg-humanitix-api-importer' ); ?></label>
+							</th>
+							<td>
+								<input type="checkbox" id="dry-run" name="dry_run" value="1" />
+								<label for="dry-run"><?php esc_html_e( 'Preview changes without making them', 'sg-humanitix-api-importer' ); ?></label>
+								<p class="description"><?php esc_html_e( 'Check this to see what would be affected without making changes', 'sg-humanitix-api-importer' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row">
+								<label for="batch-size"><?php esc_html_e( 'Batch Size', 'sg-humanitix-api-importer' ); ?></label>
+							</th>
+							<td>
+								<input type="number" id="batch-size" name="batch_size" value="50" min="1" max="500" class="regular-text" />
+								<p class="description"><?php esc_html_e( 'Number of events to process per batch', 'sg-humanitix-api-importer' ); ?></p>
+							</td>
+						</tr>
+					</table>
+					
+					<div class="quick-archive-actions">
+						<button type="button" class="button button-primary" id="preview-quick-archive">
+							<?php esc_html_e( 'Preview Changes', 'sg-humanitix-api-importer' ); ?>
+						</button>
+						<button type="button" class="button button-secondary" id="execute-quick-archive">
+							<?php esc_html_e( 'Execute Archive', 'sg-humanitix-api-importer' ); ?>
+						</button>
+						<button type="button" class="button button-secondary" id="restore-from-backup">
+							<?php esc_html_e( 'Restore from Backup', 'sg-humanitix-api-importer' ); ?>
+						</button>
+					</div>
+					
+					<div id="quick-archive-results"></div>
 				</div>
 			</div>
 
@@ -212,10 +281,10 @@ class ArchiveAdminInterface {
 			margin-top: 5px;
 			color: #666;
 		}
-		.manual-controls {
+		.manual-controls, .quick-archive-actions {
 			margin: 15px 0;
 		}
-		.manual-controls .button {
+		.manual-controls .button, .quick-archive-actions .button {
 			margin-right: 10px;
 		}
 		.health-status {
@@ -233,7 +302,7 @@ class ArchiveAdminInterface {
 		.status-error {
 			color: #dc3232;
 		}
-		#archive-results {
+		#archive-results, #quick-archive-results {
 			margin-top: 15px;
 			padding: 10px;
 			border-radius: 4px;
@@ -248,10 +317,36 @@ class ArchiveAdminInterface {
 			border: 1px solid #f5c6cb;
 			color: #721c24;
 		}
+		.result-warning {
+			background: #fff3cd;
+			border: 1px solid #ffeaa7;
+			color: #856404;
+		}
+		.quick-archive-form {
+			margin-top: 15px;
+		}
+		.form-table th {
+			width: 200px;
+		}
+		.preview-results {
+			margin-top: 15px;
+			padding: 15px;
+			background: #f8f9fa;
+			border: 1px solid #dee2e6;
+			border-radius: 4px;
+		}
+		.preview-item {
+			margin-bottom: 8px;
+			padding: 8px;
+			background: #fff;
+			border-radius: 3px;
+			border-left: 3px solid #0073aa;
+		}
 		</style>
 
 		<script>
 		document.addEventListener('DOMContentLoaded', function() {
+			// Existing functionality
 			document.getElementById('run-auto-archive').addEventListener('click', function() {
 				runArchiveAction('humanitix_run_auto_archive', 'Running auto archive...');
 			});
@@ -262,6 +357,19 @@ class ArchiveAdminInterface {
 			
 			document.getElementById('refresh-stats').addEventListener('click', function() {
 				refreshStats();
+			});
+			
+			// New quick archive functionality
+			document.getElementById('preview-quick-archive').addEventListener('click', function() {
+				previewQuickArchive();
+			});
+			
+			document.getElementById('execute-quick-archive').addEventListener('click', function() {
+				executeQuickArchive();
+			});
+			
+			document.getElementById('restore-from-backup').addEventListener('click', function() {
+				restoreFromBackup();
 			});
 			
 			function runArchiveAction(action, message) {
@@ -310,6 +418,136 @@ class ArchiveAdminInterface {
 				})
 				.catch(error => {
 					console.error('Error refreshing stats:', error);
+				});
+			}
+			
+			function previewQuickArchive() {
+				const ageThreshold = document.getElementById('age-threshold').value;
+				const actionType = document.getElementById('action-type').value;
+				const batchSize = document.getElementById('batch-size').value;
+				
+				document.getElementById('quick-archive-results').innerHTML = '<div class="result-warning">Previewing changes...</div>';
+				
+				fetch(ajaxurl, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+					},
+					body: new URLSearchParams({
+						action: 'humanitix_preview_quick_archive',
+						age_threshold: ageThreshold,
+						action_type: actionType,
+						batch_size: batchSize,
+						dry_run: '1',
+						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
+					})
+				})
+				.then(response => response.json())
+				.then(response => {
+					if (response.success) {
+						let html = '<div class="result-warning">Preview Results:</div>';
+						html += '<div class="preview-results">';
+						html += '<p><strong>Events that would be affected:</strong> ' + response.data.total + '</p>';
+						if (response.data.events && response.data.events.length > 0) {
+							response.data.events.forEach(function(event) {
+								html += '<div class="preview-item">';
+								html += '<strong>' + event.title + '</strong> (ID: ' + event.id + ')';
+								html += '<br><small>Start Date: ' + event.start_date + '</small>';
+								html += '</div>';
+							});
+						}
+						html += '</div>';
+						document.getElementById('quick-archive-results').innerHTML = html;
+					} else {
+						document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
+					}
+				})
+				.catch(error => {
+					document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">Preview request failed</div>';
+				});
+			}
+			
+			function executeQuickArchive() {
+				const ageThreshold = document.getElementById('age-threshold').value;
+				const actionType = document.getElementById('action-type').value;
+				const batchSize = document.getElementById('batch-size').value;
+				const dryRun = document.getElementById('dry-run').checked ? '1' : '0';
+				
+				if (!confirm('Are you sure you want to ' + (dryRun === '1' ? 'preview' : 'execute') + ' this archive operation?')) {
+					return;
+				}
+				
+				document.getElementById('quick-archive-results').innerHTML = '<div class="result-warning">Processing...</div>';
+				
+				fetch(ajaxurl, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+					},
+					body: new URLSearchParams({
+						action: 'humanitix_execute_quick_archive',
+						age_threshold: ageThreshold,
+						action_type: actionType,
+						batch_size: batchSize,
+						dry_run: dryRun,
+						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
+					})
+				})
+				.then(response => response.json())
+				.then(response => {
+					if (response.success) {
+						let html = '<div class="result-success">Operation completed successfully!</div>';
+						html += '<div class="preview-results">';
+						html += '<p><strong>Results:</strong></p>';
+						html += '<p>Total processed: ' + response.data.total + '</p>';
+						html += '<p>Successful: ' + response.data.successful + '</p>';
+						html += '<p>Failed: ' + response.data.failed + '</p>';
+						if (response.data.errors && response.data.errors.length > 0) {
+							html += '<p><strong>Errors:</strong></p>';
+							response.data.errors.forEach(function(error) {
+								html += '<div class="preview-item">Event ID ' + error.event_id + ': ' + error.error + '</div>';
+							});
+						}
+						html += '</div>';
+						document.getElementById('quick-archive-results').innerHTML = html;
+						refreshStats();
+					} else {
+						document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
+					}
+				})
+				.catch(error => {
+					document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">Execution request failed</div>';
+				});
+			}
+			
+			function restoreFromBackup() {
+				if (!confirm('Are you sure you want to restore events from backup? This will overwrite current events.')) {
+					return;
+				}
+				
+				document.getElementById('quick-archive-results').innerHTML = '<div class="result-warning">Restoring from backup...</div>';
+				
+				fetch(ajaxurl, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+					},
+					body: new URLSearchParams({
+						action: 'humanitix_restore_from_backup',
+						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
+					})
+				})
+				.then(response => response.json())
+				.then(response => {
+					if (response.success) {
+						document.getElementById('quick-archive-results').innerHTML = '<div class="result-success">' + response.data.message + '</div>';
+						refreshStats();
+					} else {
+						document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
+					}
+				})
+				.catch(error => {
+					document.getElementById('quick-archive-results').innerHTML = '<div class="result-error">Restore request failed</div>';
 				});
 			}
 		});
@@ -422,5 +660,107 @@ class ArchiveAdminInterface {
 
 		$stats = $this->archive_manager->get_archive_statistics();
 		wp_send_json_success( $stats );
+	}
+
+	/**
+	 * Handle preview quick archive AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_preview_quick_archive() {
+		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
+		
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$age_threshold = intval( $_POST['age_threshold'] ?? 30 );
+		$action_type = sanitize_text_field( $_POST['action_type'] ?? 'archive' );
+		$batch_size = intval( $_POST['batch_size'] ?? 50 );
+
+		if ( $age_threshold < 1 || $age_threshold > 365 ) {
+			wp_send_json_error( 'Invalid age threshold. Must be between 1 and 365 days.' );
+		}
+
+		if ( ! in_array( $action_type, array( 'archive', 'delete' ), true ) ) {
+			wp_send_json_error( 'Invalid action type.' );
+		}
+
+		if ( $batch_size < 1 || $batch_size > 500 ) {
+			wp_send_json_error( 'Invalid batch size. Must be between 1 and 500.' );
+		}
+
+		$events = $this->archive_manager->get_events_to_process( $age_threshold, $batch_size );
+		
+		wp_send_json_success( array(
+			'total' => count( $events ),
+			'events' => array_slice( $events, 0, 10 ), // Show first 10 for preview
+			'action_type' => $action_type,
+			'age_threshold' => $age_threshold,
+		) );
+	}
+
+	/**
+	 * Handle execute quick archive AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_execute_quick_archive() {
+		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
+		
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$age_threshold = intval( $_POST['age_threshold'] ?? 30 );
+		$action_type = sanitize_text_field( $_POST['action_type'] ?? 'archive' );
+		$batch_size = intval( $_POST['batch_size'] ?? 50 );
+		$dry_run = ( $_POST['dry_run'] ?? '0' ) === '1';
+
+		if ( $age_threshold < 1 || $age_threshold > 365 ) {
+			wp_send_json_error( 'Invalid age threshold. Must be between 1 and 365 days.' );
+		}
+
+		if ( ! in_array( $action_type, array( 'archive', 'delete' ), true ) ) {
+			wp_send_json_error( 'Invalid action type.' );
+		}
+
+		if ( $batch_size < 1 || $batch_size > 500 ) {
+			wp_send_json_error( 'Invalid batch size. Must be between 1 and 500.' );
+		}
+
+		$events = $this->archive_manager->get_events_to_process( $age_threshold, $batch_size );
+		
+		if ( $action_type === 'archive' ) {
+			$results = $this->archive_manager->process_archive_batch( $events, $dry_run );
+		} else {
+			$results = $this->archive_manager->process_delete_batch( $events, $dry_run );
+		}
+
+		wp_send_json_success( $results );
+	}
+
+	/**
+	 * Handle restore from backup AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_restore_from_backup() {
+		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
+		
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$result = $this->archive_manager->restore_from_backup();
+		
+		if ( $result['success'] ) {
+			wp_send_json_success( $result );
+		} else {
+			wp_send_json_error( $result['message'] );
+		}
 	}
 } 

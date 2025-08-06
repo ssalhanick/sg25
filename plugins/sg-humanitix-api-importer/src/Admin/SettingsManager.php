@@ -444,7 +444,8 @@ class SettingsManager {
 				class="regular-text" 
 				placeholder="e.g., org_1234567890abcdef" />
 		<p class="description">
-			Enter your Humanitix organization ID. This is required to scope API requests to your organization.<br>
+			Enter your Humanitix organization ID (optional). This can be used to scope API requests to your organization.<br>
+			<strong>Note:</strong> The Humanitix API only requires the x-api-key header. Organization ID is optional and may not be supported by all API endpoints.<br>
 			<strong>How to find it:</strong> Log into your Humanitix account and check your organization settings or API documentation.
 		</p>
 		<?php

@@ -1183,4 +1183,231 @@ class ArchiveManager {
 		}
 		return $data;
 	}
+
+	/**
+	 * Get events to process based on age threshold.
+	 *
+	 * @since 1.0.0
+	 * @param int $age_threshold Age threshold in days.
+	 * @param int $limit Maximum number of events to return.
+	 * @return array Array of event IDs to process.
+	 */
+	public function get_events_to_process( $age_threshold = 30, $limit = 50 ) {
+		$events = $this->get_events_to_archive( $age_threshold, $limit );
+		
+		// Format events for the frontend
+		$formatted_events = array();
+		foreach ( $events as $event_id ) {
+			$event = get_post( $event_id );
+			if ( $event ) {
+				$start_date = get_post_meta( $event_id, '_EventStartDate', true );
+				$formatted_events[] = array(
+					'id' => $event_id,
+					'title' => $event->post_title,
+					'start_date' => $start_date ? date( 'Y-m-d', strtotime( $start_date ) ) : 'Unknown',
+				);
+			}
+		}
+		
+		return $formatted_events;
+	}
+
+	/**
+	 * Process delete batch for events.
+	 *
+	 * @since 1.0.0
+	 * @param array $events Array of event data.
+	 * @param bool $dry_run Whether this is a dry run.
+	 * @return array Results of the delete operation.
+	 */
+	public function process_delete_batch( $events, $dry_run = false ) {
+		$results = array(
+			'total'      => count( $events ),
+			'successful' => 0,
+			'failed'     => 0,
+			'errors'     => array(),
+		);
+
+		foreach ( $events as $event_data ) {
+			$event_id = is_array( $event_data ) ? $event_data['id'] : $event_data;
+			
+			if ( $dry_run ) {
+				$results['successful']++;
+				continue;
+			}
+
+			// Create backup before deleting
+			$backup_created = $this->create_event_backup( $event_id );
+			if ( ! $backup_created ) {
+				$results['failed']++;
+				$results['errors'][] = array(
+					'event_id' => $event_id,
+					'error'    => 'Failed to create backup',
+				);
+				continue;
+			}
+
+			// Delete the event
+			$delete_result = wp_delete_post( $event_id, true );
+			
+			if ( $delete_result ) {
+				$results['successful']++;
+				
+				$this->logger->log(
+					'info',
+					'Event deleted successfully',
+					array(
+						'event_id'    => $event_id,
+						'delete_date' => current_time( 'mysql' ),
+					)
+				);
+			} else {
+				$results['failed']++;
+				$results['errors'][] = array(
+					'event_id' => $event_id,
+					'error'    => 'Failed to delete event',
+				);
+			}
+		}
+
+		$this->logger->log(
+			'info',
+			'Delete batch processing completed',
+			array(
+				'total'      => $results['total'],
+				'successful' => $results['successful'],
+				'failed'     => $results['failed'],
+				'dry_run'    => $dry_run,
+			)
+		);
+
+		return $results;
+	}
+
+	/**
+	 * Restore events from backup.
+	 *
+	 * @since 1.0.0
+	 * @return array Results of the restore operation.
+	 */
+	public function restore_from_backup() {
+		global $wpdb;
+		
+		$backup_table = $wpdb->prefix . 'humanitix_event_backups';
+		
+		// Check if backup table exists
+		$table_exists = $wpdb->get_var( $wpdb->prepare( 
+			"SHOW TABLES LIKE %s", 
+			$backup_table 
+		) );
+		
+		if ( ! $table_exists ) {
+			return array(
+				'success' => false,
+				'message' => 'No backup table found',
+			);
+		}
+
+		// Get all backup records
+		$backups = $wpdb->get_results( "SELECT * FROM {$backup_table}" );
+		
+		if ( empty( $backups ) ) {
+			return array(
+				'success' => false,
+				'message' => 'No backup records found',
+			);
+		}
+
+		$results = array(
+			'total'      => count( $backups ),
+			'successful' => 0,
+			'failed'     => 0,
+			'errors'     => array(),
+		);
+
+		foreach ( $backups as $backup ) {
+			$backup_data = json_decode( $backup->event_data, true );
+			
+			if ( ! $backup_data ) {
+				$results['failed']++;
+				$results['errors'][] = array(
+					'event_id' => $backup->event_id,
+					'error'    => 'Invalid backup data',
+				);
+				continue;
+			}
+
+			// Check if event already exists
+			$existing_event = get_post( $backup->event_id );
+			if ( $existing_event ) {
+				// Update existing event
+				$update_result = wp_update_post( array(
+					'ID'           => $backup->event_id,
+					'post_title'   => $backup_data['post_title'],
+					'post_content' => $backup_data['post_content'],
+					'post_status'  => 'publish',
+				), true );
+			} else {
+				// Create new event
+				$update_result = wp_insert_post( array(
+					'ID'           => $backup->event_id,
+					'post_title'   => $backup_data['post_title'],
+					'post_content' => $backup_data['post_content'],
+					'post_status'  => 'publish',
+					'post_type'    => 'tribe_events',
+				), true );
+			}
+
+			if ( is_wp_error( $update_result ) ) {
+				$results['failed']++;
+				$results['errors'][] = array(
+					'event_id' => $backup->event_id,
+					'error'    => $update_result->get_error_message(),
+				);
+			} else {
+				// Restore post meta
+				if ( isset( $backup_data['post_meta'] ) ) {
+					foreach ( $backup_data['post_meta'] as $meta_key => $meta_value ) {
+						update_post_meta( $backup->event_id, $meta_key, $meta_value );
+					}
+				}
+				
+				$results['successful']++;
+				
+				$this->logger->log(
+					'info',
+					'Event restored from backup',
+					array(
+						'event_id'     => $backup->event_id,
+						'restore_date' => current_time( 'mysql' ),
+					)
+				);
+			}
+		}
+
+		// Clear backup table after successful restore
+		if ( $results['successful'] > 0 ) {
+			$wpdb->query( "TRUNCATE TABLE {$backup_table}" );
+		}
+
+		$this->logger->log(
+			'info',
+			'Restore from backup completed',
+			array(
+				'total'      => $results['total'],
+				'successful' => $results['successful'],
+				'failed'     => $results['failed'],
+			)
+		);
+
+		return array(
+			'success' => true,
+			'message' => sprintf( 
+				'Restored %d events successfully. %d failed.', 
+				$results['successful'], 
+				$results['failed'] 
+			),
+			'results' => $results,
+		);
+	}
 } 
