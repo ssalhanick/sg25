@@ -256,7 +256,7 @@ class Plugin {
 		// Get API settings from options.
 		$options      = get_option( 'humanitix_importer_options', array() );
 		$api_key      = $options['api_key'] ?? '';
-		$org_id       = $options['org_id'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
 		// Initialize admin interface with settings.

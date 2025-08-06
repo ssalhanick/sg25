@@ -179,7 +179,7 @@ class AdminInterface {
 		// Check if API credentials are configured.
 		$options = get_option( 'humanitix_importer_options', array() );
 		$api_key = $options['api_key'] ?? '';
-		$org_id  = $options['org_id'] ?? '';
+		$org_id  = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 
 		$missing_credentials = array();
 		if ( empty( $api_key ) ) {
@@ -713,7 +713,7 @@ class AdminInterface {
 				$options      = get_option( 'humanitix_importer_options', array() );
 				$api_key      = $options['api_key'] ?? '';
 				$api_endpoint = $options['api_endpoint'] ?? '';
-				$org_id       = $options['org_id'] ?? '';
+				$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 				?>
 				<table class="form-table">
 					<tr>
@@ -1155,7 +1155,7 @@ class AdminInterface {
 		// Get API settings.
 		$options      = get_option( 'humanitix_importer_options', array() );
 		$api_key      = $options['api_key'] ?? '';
-		$org_id       = $options['org_id'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
 		if ( empty( $api_key ) ) {
@@ -1846,7 +1846,7 @@ class AdminInterface {
 		// Get API settings for validation
 		$options      = get_option( 'humanitix_importer_options', array() );
 		$api_key      = $options['api_key'] ?? '';
-		$org_id       = $options['org_id'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
 		if ( empty( $api_key ) ) {

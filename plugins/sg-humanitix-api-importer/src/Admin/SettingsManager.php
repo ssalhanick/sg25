@@ -374,13 +374,13 @@ class SettingsManager {
 	 */
 	public function render_org_id_field() {
 		$options = get_option( $this->options_name, array() );
-		$org_id  = $options['org_id'] ?? '';
+		$org_id  = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		?>
 		<input type="text" 
 				name="<?php echo esc_attr( $this->options_name ); ?>[org_id]" 
 				value="<?php echo esc_attr( $org_id ); ?>" 
 				class="regular-text" 
-				placeholder="e.g., org_1234567890abcdef" />
+				placeholder="e.g., 5ac597aed8fe7c0c0f212e27" />
 		<p class="description">
 			Enter your Humanitix organization ID (optional). This can be used to scope API requests to your organization.<br>
 			<strong>Note:</strong> The Humanitix API only requires the x-api-key header. Organization ID is optional and may not be supported by all API endpoints.<br>
