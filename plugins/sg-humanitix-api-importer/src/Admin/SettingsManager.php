@@ -201,14 +201,6 @@ class SettingsManager {
 		);
 
 		add_settings_field(
-			'archive_enabled',
-			'Enable Event Archiving',
-			array( $this, 'render_archive_enabled_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
 			'archive_age_threshold',
 			'Archive Age Threshold (years)',
 			array( $this, 'render_archive_age_field' ),
@@ -217,41 +209,9 @@ class SettingsManager {
 		);
 
 		add_settings_field(
-			'archive_frequency',
-			'Archive Frequency',
-			array( $this, 'render_archive_frequency_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
 			'archive_post_status',
 			'Archive Post Status',
 			array( $this, 'render_archive_status_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_batch_size',
-			'Archive Batch Size',
-			array( $this, 'render_archive_batch_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_notifications',
-			'Archive Notifications',
-			array( $this, 'render_archive_notifications_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_dry_run',
-			'Dry Run Mode',
-			array( $this, 'render_archive_dry_run_field' ),
 			'humanitix-importer-settings',
 			'archive_settings'
 		);
@@ -829,29 +789,10 @@ class SettingsManager {
 	 * @return void
 	 */
 	public function render_archive_section() {
-		echo '<p>Configure automatic event archiving to manage old events. Events older than the specified age threshold will be automatically archived.</p>';
+		echo '<p>Configure archive settings for the Quick Archive Controls. These settings determine how events are archived when using the manual archive interface.</p>';
 	}
 
-	/**
-	 * Render the archive enabled checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_enabled_field() {
-		$options = get_option( $this->options_name, array() );
-		$enabled = isset( $options['archive_enabled'] ) ? $options['archive_enabled'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[archive_enabled]" 
-					value="1" 
-					<?php checked( $enabled, true ); ?> />
-			Enable automatic event archiving
-		</label>
-		<p class="description">When enabled, events older than the age threshold will be automatically archived.</p>
-		<?php
-	}
+
 
 	/**
 	 * Render the archive age threshold number field.
@@ -873,24 +814,7 @@ class SettingsManager {
 		<?php
 	}
 
-	/**
-	 * Render the archive frequency select field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_frequency_field() {
-		$options = get_option( $this->options_name, array() );
-		$frequency = $options['archive_frequency'] ?? 'monthly';
-		?>
-		<select name="<?php echo esc_attr( $this->options_name ); ?>[archive_frequency]">
-			<option value="monthly" <?php selected( $frequency, 'monthly' ); ?>>Monthly</option>
-			<option value="quarterly" <?php selected( $frequency, 'quarterly' ); ?>>Quarterly</option>
-			<option value="yearly" <?php selected( $frequency, 'yearly' ); ?>>Yearly</option>
-		</select>
-		<p class="description">How often to run the archive process.</p>
-		<?php
-	}
+
 
 	/**
 	 * Render the archive post status select field.
@@ -911,66 +835,7 @@ class SettingsManager {
 		<?php
 	}
 
-	/**
-	 * Render the archive batch size number field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_batch_field() {
-		$options = get_option( $this->options_name, array() );
-		$batch_size = $options['archive_batch_size'] ?? 50;
-		?>
-		<input type="number" 
-				name="<?php echo esc_attr( $this->options_name ); ?>[archive_batch_size]" 
-				value="<?php echo esc_attr( $batch_size ); ?>" 
-				min="10" 
-				max="200" />
-		<p class="description">Number of events to process in each archive batch.</p>
-		<?php
-	}
 
-	/**
-	 * Render the archive notifications checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_notifications_field() {
-		$options = get_option( $this->options_name, array() );
-		$notifications = isset( $options['archive_notifications'] ) ? $options['archive_notifications'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[archive_notifications]" 
-					value="1" 
-					<?php checked( $notifications, true ); ?> />
-			Send archive notifications
-		</label>
-		<p class="description">Receive notifications when archive operations complete.</p>
-		<?php
-	}
-
-	/**
-	 * Render the archive dry run checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_dry_run_field() {
-		$options = get_option( $this->options_name, array() );
-		$dry_run = isset( $options['archive_dry_run'] ) ? $options['archive_dry_run'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[archive_dry_run]" 
-					value="1" 
-					<?php checked( $dry_run, true ); ?> />
-			Enable dry run mode
-		</label>
-		<p class="description">When enabled, archive operations will be simulated without actually archiving events.</p>
-		<?php
-	}
 
 
 }

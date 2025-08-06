@@ -12,7 +12,6 @@
 namespace SG\HumanitixApiImporter\Admin;
 
 use SG\HumanitixApiImporter\Archive\ArchiveManager;
-use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
 use SG\HumanitixApiImporter\Archive\ArchiveQueries;
 use SG\HumanitixApiImporter\Archive\ArchiveValidator;
 use SG\HumanitixApiImporter\Admin\Logger;
@@ -46,12 +45,7 @@ class ArchiveAdminInterface {
 	 */
 	private $archive_manager;
 
-	/**
-	 * The cron handler instance.
-	 *
-	 * @var ArchiveCronHandler
-	 */
-	private $cron_handler;
+
 
 	/**
 	 * Constructor.
@@ -61,15 +55,11 @@ class ArchiveAdminInterface {
 	public function __construct() {
 		$this->logger = new Logger();
 		$this->archive_manager = new ArchiveManager();
-		$this->cron_handler = new ArchiveCronHandler();
 		
 		// Add admin menu
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		
 		// Handle AJAX requests
-
-		add_action( 'wp_ajax_humanitix_run_auto_archive', array( $this, 'handle_run_auto_archive' ) );
-		add_action( 'wp_ajax_humanitix_run_monthly_archive', array( $this, 'handle_run_monthly_archive' ) );
 		add_action( 'wp_ajax_humanitix_get_archive_stats', array( $this, 'handle_get_archive_stats' ) );
 		
 		// New quick archive AJAX handlers
@@ -103,7 +93,6 @@ class ArchiveAdminInterface {
 	 */
 	public function render_admin_page() {
 		$stats = $this->archive_manager->get_archive_statistics();
-		$next_runs = $this->cron_handler->get_next_run_times();
 		$validator = new ArchiveValidator();
 		$health = $validator->check_system_health();
 		
@@ -198,43 +187,21 @@ class ArchiveAdminInterface {
 						<span class="stat-label"><?php esc_html_e( 'Archived This Month', 'sg-humanitix-api-importer' ); ?></span>
 					</div>
 				</div>
-			</div>
-
-			<!-- Manual Archive Controls -->
-			<div class="card">
-				<h2><?php esc_html_e( 'Manual Archive Controls', 'sg-humanitix-api-importer' ); ?></h2>
-				<div class="manual-controls">
-					<button type="button" class="button button-primary" id="run-auto-archive">
-						<?php esc_html_e( 'Run Auto Archive', 'sg-humanitix-api-importer' ); ?>
-					</button>
-					<button type="button" class="button button-secondary" id="run-monthly-archive">
-						<?php esc_html_e( 'Run Monthly Archive', 'sg-humanitix-api-importer' ); ?>
-					</button>
+				<div style="margin-top: 15px;">
 					<button type="button" class="button button-secondary" id="refresh-stats">
 						<?php esc_html_e( 'Refresh Statistics', 'sg-humanitix-api-importer' ); ?>
 					</button>
-					<button type="button" class="button button-secondary" id="clear-results" onclick="clearResults()">
-						<?php esc_html_e( 'Clear Results', 'sg-humanitix-api-importer' ); ?>
-					</button>
 				</div>
-				<div id="archive-results"></div>
 			</div>
 
-			<!-- Scheduled Tasks -->
-			<div class="card">
-				<h2><?php esc_html_e( 'Scheduled Tasks', 'sg-humanitix-api-importer' ); ?></h2>
-				<div class="scheduled-tasks">
-					<p><strong><?php esc_html_e( 'Auto Archive:', 'sg-humanitix-api-importer' ); ?></strong> 
-						<?php echo esc_html( $next_runs['auto_archive'] ); ?></p>
-					<p><strong><?php esc_html_e( 'Monthly Archive:', 'sg-humanitix-api-importer' ); ?></strong> 
-						<?php echo esc_html( $next_runs['monthly_archive'] ); ?></p>
-				</div>
-			</div>
+
+
+
 
 			<!-- Archive Settings -->
 			<div class="card">
-				<h2><?php esc_html_e( 'Archive Settings', 'sg-humanitix-api-importer' ); ?></h2>
-				<p><?php esc_html_e( 'Configure archive settings in the main plugin settings page.', 'sg-humanitix-api-importer' ); ?></p>
+				<h2><?php esc_html_e( 'Archive Configuration', 'sg-humanitix-api-importer' ); ?></h2>
+				<p><?php esc_html_e( 'Configure archive age threshold and post status in the main plugin settings page.', 'sg-humanitix-api-importer' ); ?></p>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=humanitix-importer' ) ); ?>" class="button">
 					<?php esc_html_e( 'Go to Settings', 'sg-humanitix-api-importer' ); ?>
 				</a>
@@ -293,7 +260,7 @@ class ArchiveAdminInterface {
 		.status-error {
 			color: #dc3232;
 		}
-		#archive-results, #quick-archive-results {
+		#quick-archive-results {
 			margin-top: 15px;
 			padding: 15px;
 			border-radius: 4px;
@@ -347,15 +314,7 @@ class ArchiveAdminInterface {
 			// Restore last result if available
 			restoreLastResult();
 			
-			// Existing functionality
-			document.getElementById('run-auto-archive').addEventListener('click', function() {
-				runArchiveAction('humanitix_run_auto_archive', 'Running auto archive...');
-			});
-			
-			document.getElementById('run-monthly-archive').addEventListener('click', function() {
-				runArchiveAction('humanitix_run_monthly_archive', 'Running monthly archive...');
-			});
-			
+			// Refresh stats functionality
 			document.getElementById('refresh-stats').addEventListener('click', function() {
 				refreshStats();
 			});
@@ -373,43 +332,7 @@ class ArchiveAdminInterface {
 				restoreFromBackup();
 			});
 			
-			function runArchiveAction(action, message) {
-				document.getElementById('archive-results').innerHTML = '<div class="result-success">' + message + '</div>';
-				
-				fetch(ajaxurl, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/x-www-form-urlencoded',
-					},
-					body: new URLSearchParams({
-						action: action,
-						nonce: '<?php echo wp_create_nonce( 'humanitix_archive_nonce' ); ?>'
-					})
-				})
-				.then(response => response.json())
-				.then(response => {
-					if (response.success) {
-						let html = '<div class="result-success">' + response.data.message + '</div>';
-						// Add a "Results will be preserved" message
-						html += '<div class="result-warning" style="margin-top: 10px; font-size: 12px;">Results will be preserved. Stats will update automatically.</div>';
-						html += '<button type="button" class="button" onclick="clearArchiveResults()" style="margin-top: 10px;">Clear Results</button>';
-						document.getElementById('archive-results').innerHTML = html;
-						// Add a delay before refreshing stats so user can see the results
-						setTimeout(function() {
-							refreshStats();
-						}, 3000); // 3 second delay
-					} else {
-						document.getElementById('archive-results').innerHTML = '<div class="result-error">' + response.data + '</div>';
-					}
-				})
-				.catch(error => {
-					document.getElementById('archive-results').innerHTML = '<div class="result-error">Request failed</div>';
-				});
-			}
-			
-			function clearArchiveResults() {
-				document.getElementById('archive-results').innerHTML = '';
-			}
+
 			
 			function refreshStats() {
 				fetch(ajaxurl, {
@@ -455,22 +378,11 @@ class ArchiveAdminInterface {
 			}
 			
 			function restoreLastResult() {
-				const lastResult = sessionStorage.getItem('lastArchiveResult');
-				const lastTime = sessionStorage.getItem('lastArchiveTime');
-				if (lastResult && lastTime) {
-					const resultsDiv = document.getElementById('archive-results');
-					if (resultsDiv) {
-						resultsDiv.innerHTML = lastResult + '<p><small>Last updated: ' + lastTime + '</small></p>';
-					}
-				}
+				// No longer needed since we removed manual archive controls
 			}
 			
 			function clearResults() {
-				if (confirm('Are you sure you want to clear the archive results?')) {
-					document.getElementById('archive-results').innerHTML = '';
-					sessionStorage.removeItem('lastArchiveResult');
-					sessionStorage.removeItem('lastArchiveTime');
-				}
+				// No longer needed since we removed manual archive controls
 			}
 			
 			function clearQuickArchiveResults() {
@@ -632,39 +544,7 @@ class ArchiveAdminInterface {
 
 
 
-	/**
-	 * Handle run auto archive AJAX request.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function handle_run_auto_archive() {
-		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
-		
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Unauthorized' );
-		}
 
-		$result = $this->cron_handler->run_auto_archive();
-		wp_send_json_success( $result );
-	}
-
-	/**
-	 * Handle run monthly archive AJAX request.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function handle_run_monthly_archive() {
-		check_ajax_referer( 'humanitix_archive_nonce', 'nonce' );
-		
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Unauthorized' );
-		}
-
-		$result = $this->cron_handler->run_monthly_archive();
-		wp_send_json_success( $result );
-	}
 
 	/**
 	 * Handle get archive stats AJAX request.
