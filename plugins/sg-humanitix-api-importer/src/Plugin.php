@@ -20,6 +20,7 @@ use SG\HumanitixApiImporter\Templates\TemplateManager;
 use SG\HumanitixApiImporter\Archive\ArchiveManager;
 use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
 use SG\HumanitixApiImporter\Admin\ArchiveAdminInterface;
+use SG\HumanitixApiImporter\Admin\TECIntegration;
 use SG\HumanitixApiImporter\Admin\LogManager;
 use SG\HumanitixApiImporter\Admin\LogManagementInterface;
 
@@ -120,6 +121,13 @@ class Plugin {
 	 * @var LogManagementInterface
 	 */
 	private $log_management_interface;
+
+	/**
+	 * The TEC integration instance.
+	 *
+	 * @var TECIntegration
+	 */
+	private $tec_integration;
 
 	/**
 	 * Get the plugin instance.
@@ -248,13 +256,13 @@ class Plugin {
 		// Get API settings from options.
 		$options      = get_option( 'humanitix_importer_options', array() );
 		$api_key      = $options['api_key'] ?? '';
-		$org_id       = $options['org_id'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
 		// Initialize admin interface with settings.
 		$this->admin = new AdminInterface( null, $this->settings );
 
-		if ( ! empty( $api_key ) && ! empty( $org_id ) ) {
+		if ( ! empty( $api_key ) ) {
 			// Initialize API client with organization ID.
 			$this->api = new HumanitixAPI( $api_key, $api_endpoint, $org_id );
 
@@ -277,6 +285,9 @@ class Plugin {
 		// Initialize log management components.
 		$this->log_manager = new LogManager();
 		$this->log_management_interface = new LogManagementInterface();
+		
+		// Initialize TEC integration.
+		$this->tec_integration = new TECIntegration();
 		
 		// Ensure TEC integration is properly set up
 		add_action( 'tribe_events_register_post_type', array( $this, 'ensure_tec_integration' ) );
@@ -926,10 +937,20 @@ class Plugin {
 	 * Get the log management interface instance.
 	 *
 	 * @since 1.0.0
-	 * @return LogManagementInterface|null The log management interface instance or null if not initialized.
+	 * @return LogManagementInterface The log management interface instance.
 	 */
 	public function get_log_management_interface() {
 		return $this->log_management_interface;
+	}
+
+	/**
+	 * Get the TEC integration instance.
+	 *
+	 * @since 1.0.0
+	 * @return TECIntegration The TEC integration instance.
+	 */
+	public function get_tec_integration() {
+		return $this->tec_integration;
 	}
 
 	/**

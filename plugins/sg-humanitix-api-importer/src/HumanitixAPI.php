@@ -222,20 +222,13 @@ class HumanitixAPI {
 				);
 			}
 
-			if ( empty( $this->org_id ) ) {
-				$error_message = 'Organization ID is required for connection test.';
-				$logger->log( 'error', $error_message, array( 'test_type' => 'connection_test' ) );
-				return array(
-					'success' => false,
-					'message' => $error_message,
-					'debug'   => array( 'missing_org_id' => true ),
-				);
-			}
-
-					// Try different endpoints to test the connection.
+			// Try different endpoints to test the connection.
 		$test_endpoints = array(
 			'/'       => 'Root endpoint',
 			'/events' => 'Events endpoint',
+			'/v1/events' => 'V1 Events endpoint',
+			'/api/v1/events' => 'API V1 Events endpoint',
+			'/v2/events' => 'V2 Events endpoint',
 		);
 
 			foreach ( $test_endpoints as $endpoint => $description ) {
@@ -528,7 +521,6 @@ class HumanitixAPI {
 
 		$params = array(
 			'page' => max( 1, absint( $page ) ),
-			'limit' => 50, // Add limit parameter for better pagination
 		);
 
 		// Use the correct Humanitix API endpoint for events.

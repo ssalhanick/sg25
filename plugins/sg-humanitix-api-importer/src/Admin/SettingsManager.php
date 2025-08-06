@@ -201,25 +201,9 @@ class SettingsManager {
 		);
 
 		add_settings_field(
-			'archive_enabled',
-			'Enable Event Archiving',
-			array( $this, 'render_archive_enabled_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
 			'archive_age_threshold',
 			'Archive Age Threshold (years)',
 			array( $this, 'render_archive_age_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_frequency',
-			'Archive Frequency',
-			array( $this, 'render_archive_frequency_field' ),
 			'humanitix-importer-settings',
 			'archive_settings'
 		);
@@ -232,93 +216,7 @@ class SettingsManager {
 			'archive_settings'
 		);
 
-		add_settings_field(
-			'archive_batch_size',
-			'Archive Batch Size',
-			array( $this, 'render_archive_batch_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
 
-		add_settings_field(
-			'archive_notifications',
-			'Archive Notifications',
-			array( $this, 'render_archive_notifications_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_dry_run',
-			'Dry Run Mode',
-			array( $this, 'render_archive_dry_run_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		// Delete Settings Section
-		add_settings_section(
-			'delete_settings',
-			'Delete Settings',
-			array( $this, 'render_delete_section' ),
-			'humanitix-importer-settings'
-		);
-
-		add_settings_field(
-			'delete_enabled',
-			'Enable Event Deletion',
-			array( $this, 'render_delete_enabled_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
-
-		add_settings_field(
-			'delete_age_threshold',
-			'Delete Age Threshold (years)',
-			array( $this, 'render_delete_age_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
-
-		add_settings_field(
-			'delete_recovery_period',
-			'Recovery Period (days)',
-			array( $this, 'render_delete_recovery_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
-
-		add_settings_field(
-			'delete_batch_size',
-			'Delete Batch Size',
-			array( $this, 'render_delete_batch_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
-
-		add_settings_field(
-			'delete_notifications',
-			'Delete Notifications',
-			array( $this, 'render_delete_notifications_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
-
-		add_settings_field(
-			'delete_dry_run',
-			'Delete Dry Run Mode',
-			array( $this, 'render_delete_dry_run_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
-
-		add_settings_field(
-			'delete_backup_enabled',
-			'Enable Backup Before Deletion',
-			array( $this, 'render_delete_backup_field' ),
-			'humanitix-importer-settings',
-			'delete_settings'
-		);
 	}
 
 	/**
@@ -436,15 +334,16 @@ class SettingsManager {
 	 */
 	public function render_org_id_field() {
 		$options = get_option( $this->options_name, array() );
-		$org_id  = $options['org_id'] ?? '';
+		$org_id  = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		?>
 		<input type="text" 
 				name="<?php echo esc_attr( $this->options_name ); ?>[org_id]" 
 				value="<?php echo esc_attr( $org_id ); ?>" 
 				class="regular-text" 
-				placeholder="e.g., org_1234567890abcdef" />
+				placeholder="e.g., 5ac597aed8fe7c0c0f212e27" />
 		<p class="description">
-			Enter your Humanitix organization ID. This is required to scope API requests to your organization.<br>
+			Enter your Humanitix organization ID (optional). This can be used to scope API requests to your organization.<br>
+			<strong>Note:</strong> The Humanitix API only requires the x-api-key header. Organization ID is optional and may not be supported by all API endpoints.<br>
 			<strong>How to find it:</strong> Log into your Humanitix account and check your organization settings or API documentation.
 		</p>
 		<?php
@@ -859,14 +758,7 @@ class SettingsManager {
 		$sanitized['archive_notifications']  = isset( $input['archive_notifications'] );
 		$sanitized['archive_dry_run']        = isset( $input['archive_dry_run'] );
 
-		// Delete settings
-		$sanitized['delete_enabled']         = isset( $input['delete_enabled'] );
-		$sanitized['delete_age_threshold']   = floatval( $input['delete_age_threshold'] ?? 5.0 );
-		$sanitized['delete_recovery_period'] = absint( $input['delete_recovery_period'] ?? 30 );
-		$sanitized['delete_batch_size']      = absint( $input['delete_batch_size'] ?? 25 );
-		$sanitized['delete_notifications']   = isset( $input['delete_notifications'] );
-		$sanitized['delete_dry_run']         = isset( $input['delete_dry_run'] );
-		$sanitized['delete_backup_enabled']  = isset( $input['delete_backup_enabled'] );
+
 
 		// Log settings
 		$sanitized['log_level'] = sanitize_text_field( $input['log_level'] ?? 'info' );
@@ -897,29 +789,10 @@ class SettingsManager {
 	 * @return void
 	 */
 	public function render_archive_section() {
-		echo '<p>Configure automatic event archiving to manage old events. Events older than the specified age threshold will be automatically archived.</p>';
+		echo '<p>Configure archive settings for the Quick Archive Controls. These settings determine how events are archived when using the manual archive interface.</p>';
 	}
 
-	/**
-	 * Render the archive enabled checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_enabled_field() {
-		$options = get_option( $this->options_name, array() );
-		$enabled = isset( $options['archive_enabled'] ) ? $options['archive_enabled'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[archive_enabled]" 
-					value="1" 
-					<?php checked( $enabled, true ); ?> />
-			Enable automatic event archiving
-		</label>
-		<p class="description">When enabled, events older than the age threshold will be automatically archived.</p>
-		<?php
-	}
+
 
 	/**
 	 * Render the archive age threshold number field.
@@ -941,24 +814,7 @@ class SettingsManager {
 		<?php
 	}
 
-	/**
-	 * Render the archive frequency select field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_frequency_field() {
-		$options = get_option( $this->options_name, array() );
-		$frequency = $options['archive_frequency'] ?? 'monthly';
-		?>
-		<select name="<?php echo esc_attr( $this->options_name ); ?>[archive_frequency]">
-			<option value="monthly" <?php selected( $frequency, 'monthly' ); ?>>Monthly</option>
-			<option value="quarterly" <?php selected( $frequency, 'quarterly' ); ?>>Quarterly</option>
-			<option value="yearly" <?php selected( $frequency, 'yearly' ); ?>>Yearly</option>
-		</select>
-		<p class="description">How often to run the archive process.</p>
-		<?php
-	}
+
 
 	/**
 	 * Render the archive post status select field.
@@ -979,217 +835,7 @@ class SettingsManager {
 		<?php
 	}
 
-	/**
-	 * Render the archive batch size number field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_batch_field() {
-		$options = get_option( $this->options_name, array() );
-		$batch_size = $options['archive_batch_size'] ?? 50;
-		?>
-		<input type="number" 
-				name="<?php echo esc_attr( $this->options_name ); ?>[archive_batch_size]" 
-				value="<?php echo esc_attr( $batch_size ); ?>" 
-				min="10" 
-				max="200" />
-		<p class="description">Number of events to process in each archive batch.</p>
-		<?php
-	}
 
-	/**
-	 * Render the archive notifications checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_notifications_field() {
-		$options = get_option( $this->options_name, array() );
-		$notifications = isset( $options['archive_notifications'] ) ? $options['archive_notifications'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[archive_notifications]" 
-					value="1" 
-					<?php checked( $notifications, true ); ?> />
-			Send archive notifications
-		</label>
-		<p class="description">Receive notifications when archive operations complete.</p>
-		<?php
-	}
 
-	/**
-	 * Render the archive dry run checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_archive_dry_run_field() {
-		$options = get_option( $this->options_name, array() );
-		$dry_run = isset( $options['archive_dry_run'] ) ? $options['archive_dry_run'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[archive_dry_run]" 
-					value="1" 
-					<?php checked( $dry_run, true ); ?> />
-			Enable dry run mode
-		</label>
-		<p class="description">When enabled, archive operations will be simulated without actually archiving events.</p>
-		<?php
-	}
 
-	/**
-	 * Render the delete settings section description.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_section() {
-		echo '<p><strong>⚠️ WARNING:</strong> Event deletion is permanent and cannot be undone. Use with extreme caution. It is recommended to enable backup creation and dry run mode initially.</p>';
-		echo '<p>Configure automatic event deletion to permanently remove old archived events. Events older than the specified age threshold will be permanently deleted.</p>';
-	}
-
-	/**
-	 * Render the delete enabled checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_enabled_field() {
-		$options = get_option( $this->options_name, array() );
-		$enabled = isset( $options['delete_enabled'] ) ? $options['delete_enabled'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[delete_enabled]" 
-					value="1" 
-					<?php checked( $enabled, true ); ?> />
-			Enable automatic event deletion
-		</label>
-		<p class="description">⚠️ <strong>DANGEROUS:</strong> When enabled, archived events older than the deletion threshold will be permanently deleted.</p>
-		<?php
-	}
-
-	/**
-	 * Render the delete age threshold number field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_age_field() {
-		$options = get_option( $this->options_name, array() );
-		$age_threshold = $options['delete_age_threshold'] ?? 5.0;
-		?>
-		<input type="number" 
-				name="<?php echo esc_attr( $this->options_name ); ?>[delete_age_threshold]" 
-				value="<?php echo esc_attr( $age_threshold ); ?>" 
-				min="1.0" 
-				max="20.0" 
-				step="0.1" />
-		<p class="description">⚠️ <strong>PERMANENT:</strong> Archived events older than this number of years will be permanently deleted. Use decimal values like 5.5 for 5.5 years.</p>
-		<?php
-	}
-
-	/**
-	 * Render the delete recovery period number field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_recovery_field() {
-		$options = get_option( $this->options_name, array() );
-		$recovery_period = $options['delete_recovery_period'] ?? 30;
-		?>
-		<input type="number" 
-				name="<?php echo esc_attr( $this->options_name ); ?>[delete_recovery_period]" 
-				value="<?php echo esc_attr( $recovery_period ); ?>" 
-				min="1" 
-				max="365" />
-		<p class="description">Number of days to keep backups before automatic cleanup. Longer periods use more storage.</p>
-		<?php
-	}
-
-	/**
-	 * Render the delete batch size number field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_batch_field() {
-		$options = get_option( $this->options_name, array() );
-		$batch_size = $options['delete_batch_size'] ?? 25;
-		?>
-		<input type="number" 
-				name="<?php echo esc_attr( $this->options_name ); ?>[delete_batch_size]" 
-				value="<?php echo esc_attr( $batch_size ); ?>" 
-				min="5" 
-				max="100" />
-		<p class="description">Number of events to process in each deletion batch. Lower values are safer for large databases.</p>
-		<?php
-	}
-
-	/**
-	 * Render the delete notifications checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_notifications_field() {
-		$options = get_option( $this->options_name, array() );
-		$notifications = isset( $options['delete_notifications'] ) ? $options['delete_notifications'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[delete_notifications]" 
-					value="1" 
-					<?php checked( $notifications, true ); ?> />
-			Send deletion notifications
-		</label>
-		<p class="description">Receive notifications when deletion operations complete.</p>
-		<?php
-	}
-
-	/**
-	 * Render the delete dry run checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_dry_run_field() {
-		$options = get_option( $this->options_name, array() );
-		$dry_run = isset( $options['delete_dry_run'] ) ? $options['delete_dry_run'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[delete_dry_run]" 
-					value="1" 
-					<?php checked( $dry_run, true ); ?> />
-			Enable dry run mode
-		</label>
-		<p class="description">⚠️ <strong>RECOMMENDED:</strong> When enabled, deletion operations will be simulated without actually deleting events.</p>
-		<?php
-	}
-
-	/**
-	 * Render the delete backup checkbox field.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function render_delete_backup_field() {
-		$options = get_option( $this->options_name, array() );
-		$backup_enabled = isset( $options['delete_backup_enabled'] ) ? $options['delete_backup_enabled'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-					name="<?php echo esc_attr( $this->options_name ); ?>[delete_backup_enabled]" 
-					value="1" 
-					<?php checked( $backup_enabled, true ); ?> />
-			Create backup before deletion
-		</label>
-		<p class="description">⚠️ <strong>HIGHLY RECOMMENDED:</strong> Creates a backup of each event before permanent deletion for potential recovery.</p>
-		<?php
-	}
 }

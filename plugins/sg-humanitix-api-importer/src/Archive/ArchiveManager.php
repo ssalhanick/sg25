@@ -120,7 +120,7 @@ class ArchiveManager {
 		
 		// Add debug admin interface for manual testing
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			add_action( 'admin_notices', array( $this, 'debug_manual_archive_interface' ) );
+	
 		}
 		
 		// Add hooks to ensure archived status is available in dropdowns
@@ -283,68 +283,13 @@ class ArchiveManager {
 			echo '<p>Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) . '</p>';
 			echo '<p>TEC statuses: ' . implode( ', ', array_keys( $tec_statuses ) ) . '</p>';
 			
-			// Test if we can manually set a post to archived
-			if ( isset( $_GET['test_manual_archive'] ) && current_user_can( 'manage_options' ) ) {
-				$test_post_id = isset( $_GET['post_id'] ) ? intval( $_GET['post_id'] ) : 0;
-				if ( $test_post_id > 0 ) {
-					$result = wp_update_post( array(
-						'ID' => $test_post_id,
-						'post_status' => 'archived'
-					), true );
-					
-					if ( is_wp_error( $result ) ) {
-						echo '<p><strong>Manual Archive Test Failed:</strong> ' . $result->get_error_message() . '</p>';
-					} else {
-						echo '<p><strong>Manual Archive Test Success:</strong> Post ' . $test_post_id . ' set to archived</p>';
-					}
-				}
-			}
+			
 			
 			echo '</div>';
 		}
 	}
 
-	/**
-	 * Debug manual archive interface for testing.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function debug_manual_archive_interface() {
-		global $post_type;
-		
-		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' && current_user_can( 'manage_options' ) ) {
-			
-			// Handle manual archive trigger
-			if ( isset( $_GET['manual_archive'] ) && wp_verify_nonce( $_GET['_wpnonce'] ?? '', 'manual_archive' ) ) {
-				$age_threshold = isset( $_GET['age_threshold'] ) ? floatval( $_GET['age_threshold'] ) : null;
-				$limit = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : null;
-				
-				$result = $this->manual_trigger_archive( $age_threshold, $limit );
-				
-				echo '<div class="notice notice-' . ( $result['success'] ? 'success' : 'error' ) . '">';
-				echo '<p><strong>Manual Archive Result:</strong> ' . esc_html( $result['message'] ) . '</p>';
-				if ( isset( $result['results'] ) ) {
-					echo '<p>Total: ' . $result['results']['total'] . ', Successful: ' . $result['results']['successful'] . ', Failed: ' . $result['results']['failed'] . '</p>';
-				}
-				echo '</div>';
-			}
-			
-			// Show manual archive interface
-			$nonce = wp_create_nonce( 'manual_archive' );
-			echo '<div class="notice notice-info">';
-			echo '<p><strong>Manual Archive Testing:</strong></p>';
-			echo '<form method="get" style="margin: 10px 0;">';
-			echo '<input type="hidden" name="post_type" value="tribe_events">';
-			echo '<input type="hidden" name="_wpnonce" value="' . esc_attr( $nonce ) . '">';
-			echo '<input type="hidden" name="manual_archive" value="1">';
-			echo '<label>Age Threshold (years): <input type="number" name="age_threshold" value="0.1" step="0.1" min="0" style="width: 80px;"></label> ';
-			echo '<label>Limit: <input type="number" name="limit" value="5" min="1" max="50" style="width: 60px;"></label> ';
-			echo '<input type="submit" value="Test Manual Archive" class="button button-secondary">';
-			echo '</form>';
-			echo '</div>';
-		}
-	}
+
 
 	/**
 	 * Adjust TEC event counts to properly handle archived events.
@@ -460,7 +405,7 @@ class ArchiveManager {
 	 * @return array Archive result with success status and message.
 	 */
 	public function archive_event( $event_id ) {
-		$validation = $this->validator->validate_archive_operation( $event_id );
+		$validation = $this->validate_archive_operation( $event_id );
 		if ( ! $validation['success'] ) {
 			return array(
 				'success' => false,
@@ -708,26 +653,48 @@ class ArchiveManager {
 		// Check if event exists
 		$event = get_post( $event_id );
 		if ( ! $event ) {
-			return false;
+			return array(
+				'success' => false,
+				'message' => 'Event does not exist',
+			);
 		}
 
 		// Check if it's a TEC event
 		if ( 'tribe_events' !== $event->post_type ) {
-			return false;
+			return array(
+				'success' => false,
+				'message' => 'Not a TEC event',
+			);
 		}
 
 		// Check if already archived
 		if ( 'archived' === $event->post_status ) {
-			return false;
+			return array(
+				'success' => false,
+				'message' => 'Event is already archived',
+			);
 		}
 
-		// Check if event has start date
+		// Check if event has start date (try multiple possible meta keys)
 		$start_date = get_post_meta( $event_id, '_EventStartDate', true );
 		if ( empty( $start_date ) ) {
-			return false;
+			// Try alternative meta keys
+			$start_date = get_post_meta( $event_id, 'event_start_date', true );
+		}
+		if ( empty( $start_date ) ) {
+			$start_date = get_post_meta( $event_id, 'start_date', true );
+		}
+		if ( empty( $start_date ) ) {
+			// If no start date found, we'll still allow archiving but log it
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[ArchiveManager] Event ' . $event_id . ' has no start date, but allowing archive' );
+			}
 		}
 
-		return true;
+		return array(
+			'success' => true,
+			'message' => 'Event validation passed',
+		);
 	}
 
 	/**
@@ -1182,5 +1149,174 @@ class ArchiveManager {
 			$data['post_status'] = 'archived';
 		}
 		return $data;
+	}
+
+	/**
+	 * Get events to process for quick archive operations.
+	 *
+	 * @since 1.0.0
+	 * @param float $age_threshold Age threshold in years (supports decimals like 0.5 for 6 months).
+	 * @param int $limit Maximum number of events to return.
+	 * @return array Array of event IDs to process.
+	 */
+	public function get_events_to_process( $age_threshold = 0.5, $limit = 50 ) {
+		$events = $this->get_events_to_archive( $age_threshold, $limit );
+		
+		// Format events for the frontend
+		$formatted_events = array();
+		foreach ( $events as $event_id ) {
+			$event = get_post( $event_id );
+			if ( $event ) {
+				$start_date = get_post_meta( $event_id, '_EventStartDate', true );
+				$formatted_events[] = array(
+					'id' => $event_id,
+					'title' => $event->post_title,
+					'start_date' => $start_date ? date( 'Y-m-d', strtotime( $start_date ) ) : 'Unknown',
+				);
+			}
+		}
+		
+		return $formatted_events;
+	}
+	
+	/**
+	 * Get event IDs to process for quick archive operations.
+	 *
+	 * @since 1.0.0
+	 * @param float $age_threshold Age threshold in years (supports decimals like 0.5 for 6 months).
+	 * @param int $limit Maximum number of events to return.
+	 * @return array Array of event IDs to process.
+	 */
+	public function get_event_ids_to_process( $age_threshold = 0.5, $limit = 50 ) {
+		return $this->get_events_to_archive( $age_threshold, $limit );
+	}
+
+
+
+	/**
+	 * Restore events from backup.
+	 *
+	 * @since 1.0.0
+	 * @return array Results of the restore operation.
+	 */
+	public function restore_from_backup() {
+		global $wpdb;
+		
+		$backup_table = $wpdb->prefix . 'humanitix_event_backups';
+		
+		// Check if backup table exists
+		$table_exists = $wpdb->get_var( $wpdb->prepare( 
+			"SHOW TABLES LIKE %s", 
+			$backup_table 
+		) );
+		
+		if ( ! $table_exists ) {
+			return array(
+				'success' => false,
+				'message' => 'No backup table found',
+			);
+		}
+
+		// Get all backup records
+		$backups = $wpdb->get_results( "SELECT * FROM {$backup_table}" );
+		
+		if ( empty( $backups ) ) {
+			return array(
+				'success' => false,
+				'message' => 'No backup records found',
+			);
+		}
+
+		$results = array(
+			'total'      => count( $backups ),
+			'successful' => 0,
+			'failed'     => 0,
+			'errors'     => array(),
+		);
+
+		foreach ( $backups as $backup ) {
+			$backup_data = json_decode( $backup->event_data, true );
+			
+			if ( ! $backup_data ) {
+				$results['failed']++;
+				$results['errors'][] = array(
+					'event_id' => $backup->event_id,
+					'error'    => 'Invalid backup data',
+				);
+				continue;
+			}
+
+			// Check if event already exists
+			$existing_event = get_post( $backup->event_id );
+			if ( $existing_event ) {
+				// Update existing event
+				$update_result = wp_update_post( array(
+					'ID'           => $backup->event_id,
+					'post_title'   => $backup_data['post_title'],
+					'post_content' => $backup_data['post_content'],
+					'post_status'  => 'publish',
+				), true );
+			} else {
+				// Create new event
+				$update_result = wp_insert_post( array(
+					'ID'           => $backup->event_id,
+					'post_title'   => $backup_data['post_title'],
+					'post_content' => $backup_data['post_content'],
+					'post_status'  => 'publish',
+					'post_type'    => 'tribe_events',
+				), true );
+			}
+
+			if ( is_wp_error( $update_result ) ) {
+				$results['failed']++;
+				$results['errors'][] = array(
+					'event_id' => $backup->event_id,
+					'error'    => $update_result->get_error_message(),
+				);
+			} else {
+				// Restore post meta
+				if ( isset( $backup_data['post_meta'] ) ) {
+					foreach ( $backup_data['post_meta'] as $meta_key => $meta_value ) {
+						update_post_meta( $backup->event_id, $meta_key, $meta_value );
+					}
+				}
+				
+				$results['successful']++;
+				
+				$this->logger->log(
+					'info',
+					'Event restored from backup',
+					array(
+						'event_id'     => $backup->event_id,
+						'restore_date' => current_time( 'mysql' ),
+					)
+				);
+			}
+		}
+
+		// Clear backup table after successful restore
+		if ( $results['successful'] > 0 ) {
+			$wpdb->query( "TRUNCATE TABLE {$backup_table}" );
+		}
+
+		$this->logger->log(
+			'info',
+			'Restore from backup completed',
+			array(
+				'total'      => $results['total'],
+				'successful' => $results['successful'],
+				'failed'     => $results['failed'],
+			)
+		);
+
+		return array(
+			'success' => true,
+			'message' => sprintf( 
+				'Restored %d events successfully. %d failed.', 
+				$results['successful'], 
+				$results['failed'] 
+			),
+			'results' => $results,
+		);
 	}
 } 
