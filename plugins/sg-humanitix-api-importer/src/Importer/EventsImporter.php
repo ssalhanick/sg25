@@ -179,7 +179,7 @@ class EventsImporter {
 
 			while ( $retry_count < $max_retries && is_null( $events ) ) {
 				try {
-					$events = $this->api->get_events( $page, $date_range );
+					$events = $this->api->get_events( $page );
 
 					// If we get a WP_Error, throw an exception.
 					if ( is_wp_error( $events ) ) {
