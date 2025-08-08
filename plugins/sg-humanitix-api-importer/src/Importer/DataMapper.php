@@ -489,12 +489,21 @@ class DataMapper {
 		$mapped_event['meta_input']['_EventCapacity']              = $total_capacity;
 		$mapped_event['meta_input']['humanitix_available_tickets'] = $available_tickets;
 
-		// Set pricing information.
+		// Set pricing information, preferring General Admission price.
 		if ( null !== $min_price && ! isset( $mapped_event['meta_input']['_EventCost'] ) ) {
-			$mapped_event['meta_input']['_EventCost'] = $min_price;
-			if ( $max_price !== $min_price ) {
-				$mapped_event['meta_input']['_EventCost'] .= ' - ' . $max_price;
+			$general_admission_price = null;
+			foreach ( $essential_ticket_data as $ticket ) {
+				$name_normalized = strtolower( trim( $ticket['name'] ) );
+				if ( $name_normalized === 'general admission' ||
+					 $name_normalized === 'ga' ||
+					 ( strpos( $name_normalized, 'general' ) !== false && strpos( $name_normalized, 'admission' ) !== false ) ) {
+					$general_admission_price = $ticket['price'];
+					break;
+				}
 			}
+
+			// Use General Admission price if available, otherwise use the minimum active ticket price
+			$mapped_event['meta_input']['_EventCost'] = $general_admission_price !== null ? $general_admission_price : $min_price;
 		}
 
 		return $mapped_event;
@@ -508,7 +517,7 @@ class DataMapper {
 	 * @param array $optimization_settings Optimization settings.
 	 * @return array Updated mapped event data.
 	 */
-	private function process_pricing_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
+    private function process_pricing_optimized( $humanitix_event, $mapped_event, $optimization_settings ) {
 		if ( ! isset( $humanitix_event['pricing'] ) || ! is_array( $humanitix_event['pricing'] ) ) {
 			return $mapped_event;
 		}
@@ -516,10 +525,11 @@ class DataMapper {
 		// Store only essential pricing data.
 		$essential_pricing_data = array();
 
-		if ( isset( $humanitix_event['pricing']['maximumPrice'] ) ) {
-			$essential_pricing_data['maximumPrice']   = floatval( $humanitix_event['pricing']['maximumPrice'] );
-			$mapped_event['meta_input']['_EventCost'] = $essential_pricing_data['maximumPrice'];
-		}
+        if ( isset( $humanitix_event['pricing']['maximumPrice'] ) ) {
+            $essential_pricing_data['maximumPrice'] = floatval( $humanitix_event['pricing']['maximumPrice'] );
+            // Store for reference but never use to set TEC cost
+            $mapped_event['meta_input']['humanitix_maximum_price'] = $essential_pricing_data['maximumPrice'];
+        }
 
 		if ( ! empty( $essential_pricing_data ) ) {
 			$mapped_event['meta_input']['humanitix_pricing'] = wp_json_encode( $essential_pricing_data );

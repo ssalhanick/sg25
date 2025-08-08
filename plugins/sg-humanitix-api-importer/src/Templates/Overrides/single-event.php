@@ -56,11 +56,37 @@ get_header(); ?>
                     <div class="sg-humanitix-meta-item">
                         <span class="sg-humanitix-meta-icon"></span>
                         <?php
+
+                        function get_general_admission_price( $event_id = null ) {
+                            if ( ! $event_id ) {
+                                $event_id = get_the_ID();
+                            }
+                            
+                            $ticket_types_json = get_post_meta( $event_id, 'humanitix_ticket_types', true );
+                            $ticket_types = json_decode( $ticket_types_json, true );
+                            if ( $ticket_types && is_array( $ticket_types ) ) {
+                                foreach ( $ticket_types as $ticket ) {
+                                    if ( $ticket['name'] === 'General Admission' ) {
+                                        return $ticket['price'];
+                                    }
+                                }
+                            }
+                            
+                            return null;
+                        }
+
+                        // Usage
+                        $price = get_general_admission_price();
+                        if ( $price !== null ) {
+                            $cost = $price;
+                        } else {
                             $cost = tribe_get_formatted_cost( get_the_ID() );
-                            if ( $cost ) {?>
-                                <span class="sg-humanitix-meta-text">
-                                    <?php echo $cost; // This will include proper formatting and currency ?>
-                                </span>
+                        }
+                            
+                        if ( $cost ) {?>
+                            <span class="sg-humanitix-meta-text">
+                                <?php echo $cost . ' and up'; // This will include proper formatting and currency ?>
+                            </span>
                         <?php }
                         ?>
                     </div>
