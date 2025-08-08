@@ -518,6 +518,34 @@ class TemplateHooks {
 	}
 
 	/**
+	 * Display ticket types for an event.
+	 *
+	 * @param int $event_id The event ID.
+	 * @return void
+	 */
+	public function display_ticket_types( $event_id = null ) {
+		if ( ! $event_id ) {
+			$event_id = get_the_ID();
+		}
+		
+		$ticket_types_json = get_post_meta( $event_id, 'humanitix_ticket_types', true );
+		$ticket_types = json_decode( $ticket_types_json, true );
+		
+		if ( $ticket_types && is_array( $ticket_types ) ) {
+			echo '<div class="humanitix-ticket-types">';
+			foreach ( $ticket_types as $ticket ) {
+				?>
+				<div class="ticket-type">
+					<span class="ticket-name"><?php echo esc_html( $ticket['name'] ); ?></span>
+					<span class="ticket-price">$<?php echo esc_html( $ticket['price'] ); ?></span>
+				</div>
+				<?php
+			}
+			echo '</div>';
+		}
+	}
+
+	/**
 	 * Modify event date.
 	 *
 	 * @since 1.0.0

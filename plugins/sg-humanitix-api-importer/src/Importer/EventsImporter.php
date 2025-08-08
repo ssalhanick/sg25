@@ -114,41 +114,41 @@ class EventsImporter {
 		$debug_helper->log( 'Importer', "Starting import_events with page: {$page}" . ( $import_limit ? ", limit: {$import_limit}" : '' ) );
 
 		// Acquire import lock to prevent concurrent imports
-		if (!$this->acquire_import_lock()) {
-			throw new \Exception('Another import is currently running. Please wait for it to complete.');
+		if ( ! $this->acquire_import_lock() ) {
+			throw new \Exception( 'Another import is currently running. Please wait for it to complete.' );
 		}
 
-		// Perform pre-import cleanup and validation
-		$cleanup_stats = $this->pre_import_cleanup();
-		$debug_helper->log( 'Importer', 'Pre-import cleanup completed', array('cleanup_stats' => $cleanup_stats) );
-
-		// Start timing.
-		$this->start_time = microtime( true );
-
-		// Log import start with detailed metrics when HUMANITIX_DEBUG is enabled.
-		if ( $debug_helper->is_humanitix_debug_enabled() ) {
-			$debug_helper->log_detailed(
-				'Import',
-				'Starting import process',
-				array(
-					'page'         => $page,
-					'import_limit' => $import_limit,
-					'memory_usage' => $debug_helper->get_memory_usage_info(),
-				)
-			);
-		}
-
-		// Debug: Check what Humanitix IDs are already stored.
 		try {
-			$this->debug_check_stored_humanitix_ids();
-		} catch ( Exception $e ) {
-			// Log the error but don't stop the import process.
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Humanitix EventsImporter: Debug check failed: ' . $e->getMessage() );
+			// Perform pre-import cleanup and validation
+			$cleanup_stats = $this->pre_import_cleanup();
+			$debug_helper->log( 'Importer', 'Pre-import cleanup completed', array( 'cleanup_stats' => $cleanup_stats ) );
+
+			// Start timing.
+			$this->start_time = microtime( true );
+
+			// Log import start with detailed metrics when HUMANITIX_DEBUG is enabled.
+			if ( $debug_helper->is_humanitix_debug_enabled() ) {
+				$debug_helper->log_detailed(
+					'Import',
+					'Starting import process',
+					array(
+						'page'         => $page,
+						'import_limit' => $import_limit,
+						'memory_usage' => $debug_helper->get_memory_usage_info(),
+					)
+				);
 			}
-		}
 
-		try {
+			// Debug: Check what Humanitix IDs are already stored.
+			try {
+				$this->debug_check_stored_humanitix_ids();
+			} catch ( Exception $e ) {
+				// Log the error but don't stop the import process.
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( 'Humanitix EventsImporter: Debug check failed: ' . $e->getMessage() );
+				}
+			}
+
 			// Get events from Humanitix API.
 			$debug_helper->log( 'API', 'Calling get_events()' );
 
@@ -388,10 +388,10 @@ class EventsImporter {
 				'existing' => 0,
 				'errors'   => array( $error_code ),
 			);
+		} finally {
+			// Always release the import lock
+			$this->release_import_lock();
 		}
-		
-		// Always release the import lock
-		$this->release_import_lock();
 	}
 
 	/**
@@ -1047,7 +1047,7 @@ class EventsImporter {
 		$is_series   = $this->is_series_event( $humanitix_event );
 		$series_info = $is_series ? $this->extract_series_info( $humanitix_event ) : null;
 
-		$tec_event_data = array(
+            $tec_event_data = array(
 			'post_title'          => $humanitix_event['title'] ?? '',
 			'post_content'        => $humanitix_event['description'] ?? '',
 			'post_excerpt'        => $humanitix_event['short_description'] ?? '',
@@ -1060,7 +1060,7 @@ class EventsImporter {
 			'EventShowMapLink'    => true,
 			'EventShowMap'        => true,
 			'EventURL'            => $humanitix_event['url'] ?? '',
-			'EventCost'           => $this->format_cost( $humanitix_event['pricing'] ?? array() ),
+                // Do not set EventCost here; DataMapper determines GA price and sets _EventCost in meta_input
 			'EventCurrencySymbol' => '$',
 			'post_status'         => 'publish',
 		);
