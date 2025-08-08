@@ -15,14 +15,14 @@
 			background-repeat: no-repeat;
 		}
 	}
-	.sg-humanitix-event-description {
-		.sg-humanitix-event-body {
-			.tribe-events-schedule tribe-clearfix,
-			.tribe-events-event-image,
-			.tribe-block tribe-block__events-link,
-			.tribe-events-event-meta {
-				display: none;
-			}
+}
+.sg-humanitix-event-description {
+	.sg-humanitix-event-body {
+		.tribe-events-schedule,
+		.tribe-events-event-image,
+		.tribe-block tribe-block__events-link,
+		.tribe-events-event-meta {
+			display: none;
 		}
 	}
 }
