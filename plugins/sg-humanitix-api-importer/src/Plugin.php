@@ -13,6 +13,7 @@ namespace SG\HumanitixApiImporter;
 
 use SG\HumanitixApiImporter\Security\AjaxSecurityHandler;
 use SG\HumanitixApiImporter\Security\RestApiSecurityHandler;
+use SG\HumanitixApiImporter\Security\ContentGoneHandler;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\AdminInterface;
 use SG\HumanitixApiImporter\Admin\SettingsManager;
@@ -354,6 +355,9 @@ class Plugin {
 				'max_requests_per_minute' => 100,
 			)
 		);
+
+		// Initialize 410 content handler.
+		new ContentGoneHandler();
 	}
 
 	/**

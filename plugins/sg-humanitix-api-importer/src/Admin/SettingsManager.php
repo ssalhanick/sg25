@@ -201,6 +201,22 @@ class SettingsManager {
 		);
 
 		add_settings_field(
+			'deleted_410_enable',
+			'410 for Deleted Content',
+			array( $this, 'render_410_enable_field' ),
+			'humanitix-importer-settings',
+			'archive_settings'
+		);
+
+		add_settings_field(
+			'deleted_410_ttl_days',
+			'410 Retention (days)',
+			array( $this, 'render_410_ttl_field' ),
+			'humanitix-importer-settings',
+			'archive_settings'
+		);
+
+		add_settings_field(
 			'archive_age_threshold',
 			'Archive Age Threshold (years)',
 			array( $this, 'render_archive_age_field' ),
@@ -758,6 +774,10 @@ class SettingsManager {
 		$sanitized['archive_notifications']  = isset( $input['archive_notifications'] );
 		$sanitized['archive_dry_run']        = isset( $input['archive_dry_run'] );
 
+		// 410 settings for deleted events
+		$sanitized['deleted_410_enable']   = isset( $input['deleted_410_enable'] );
+		$sanitized['deleted_410_ttl_days'] = max( 0, absint( $input['deleted_410_ttl_days'] ?? 365 ) );
+
 
 
 		// Log settings
@@ -789,7 +809,7 @@ class SettingsManager {
 	 * @return void
 	 */
 	public function render_archive_section() {
-		echo '<p>Configure archive settings for the Quick Archive Controls. These settings determine how events are archived when using the manual archive interface.</p>';
+		echo '<p>Configure archive settings for the Quick Archive Controls. These settings determine how events are archived when using the manual archive interface. You can also enable automatic 410 (Gone) responses for deleted events.</p>';
 	}
 
 
@@ -811,6 +831,38 @@ class SettingsManager {
 				max="10" 
 				step="0.1" />
 		<p class="description">Events older than this number of years will be archived. Use decimal values like 0.5 for 6 months, 0.25 for 3 months, etc.</p>
+		<?php
+	}
+
+	/**
+	 * Render the enable 410 checkbox field.
+	 */
+	public function render_410_enable_field() {
+		$options = get_option( $this->options_name, array() );
+		$enabled = isset( $options['deleted_410_enable'] ) ? (bool) $options['deleted_410_enable'] : true;
+		?>
+		<label>
+			<input type="checkbox"
+				   name="<?php echo esc_attr( $this->options_name ); ?>[deleted_410_enable]"
+				   value="1" <?php checked( $enabled, true ); ?> />
+			Enable 410 (Gone) for deleted events
+		</label>
+		<p class="description">When enabled, requests to previously deleted event URLs will return HTTP 410 Gone instead of 404 Not Found.</p>
+		<?php
+	}
+
+	/**
+	 * Render the 410 TTL days field.
+	 */
+	public function render_410_ttl_field() {
+		$options  = get_option( $this->options_name, array() );
+		$ttl_days = isset( $options['deleted_410_ttl_days'] ) ? absint( $options['deleted_410_ttl_days'] ) : 365;
+		?>
+		<input type="number"
+			   name="<?php echo esc_attr( $this->options_name ); ?>[deleted_410_ttl_days]"
+			   value="<?php echo esc_attr( $ttl_days ); ?>"
+			   min="0" max="1095" />
+		<p class="description">Number of days to keep returning 410 for deleted event URLs. Set to 0 to never expire.</p>
 		<?php
 	}
 
