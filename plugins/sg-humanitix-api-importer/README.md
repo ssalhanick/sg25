@@ -9,6 +9,7 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 - Comprehensive logging and debugging
 - Admin interface for configuration
 - Support for recurring imports
+- Optional HTTP 410 (Gone) for deleted events with configurable retention (TTL)
 
 ## Installation
 
@@ -25,6 +26,15 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 3. Enter your Organization ID
 4. Optionally set a custom API endpoint
 5. Test your connection using the "Test API Connection" button
+
+### Deleted Content (410) Settings
+
+1. Go to **WordPress Admin** → **Humanitix** → **Settings** → Archive Settings
+2. Enable **410 for Deleted Content** (on by default)
+3. Set **410 Retention (days)**. Default: `365` (set `0` to never expire)
+4. Save changes
+
+What this does: when an event is trashed or deleted, its URL is recorded. Future requests to that exact URL return HTTP 410 Gone instead of 404 Not Found, until the retention period expires or the event is restored.
 
 ### Debug Mode
 
@@ -69,6 +79,15 @@ When debug mode is enabled, you'll see a **Debug** menu item that provides:
 1. Enable automatic imports in the settings
 2. Set your preferred import frequency
 3. The plugin will automatically import events according to your schedule
+
+### Verifying 410 for a deleted event
+
+- Browser: Open DevTools → Network → request → confirm Status `410`
+- PowerShell (Windows):
+  - `curl -I "https://your-site.test/events/old-event-slug/"`
+  - or `iwr -Method Head "https://your-site.test/events/old-event-slug/" -UseBasicParsing | Select-Object StatusCode,StatusDescription,Headers`
+
+If the slug was reused by a new post, it will no longer be a 404 and won’t return 410.
 
 ## Troubleshooting
 
@@ -124,7 +143,8 @@ sg-humanitix-api-importer/
 │   ├── Security/
 │   │   ├── AjaxSecurityHandler.php
 │   │   ├── RestApiSecurityHandler.php
-│   │   └── SecurityValidator.php
+│   │   ├── SecurityValidator.php
+│   │   └── ContentGoneHandler.php
 │   ├── Assets.php
 │   ├── HumanitixAPI.php
 │   └── Plugin.php
@@ -350,3 +370,14 @@ For support and bug reports, please use the plugin's debug features to gather de
 ## License
 
 This plugin is licensed under the GPL v2 or later. 
+
+---
+
+## Developer Notes
+
+- The 410 feature stores tombstones in the non-autoloaded option `sg_hai_410_tombstones` and only checks them on 404 requests.
+- Filters:
+  - `sg_hai_410_post_types` (array): post types to track for 410s. Default: `['tribe_events']`.
+- Settings (stored under `humanitix_importer_options`):
+  - `deleted_410_enable` (bool, default true)
+  - `deleted_410_ttl_days` (int days, default 365; `0` means never expire)
