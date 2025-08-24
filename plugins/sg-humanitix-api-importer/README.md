@@ -17,6 +17,181 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 2. Activate the plugin through the 'Plugins' screen in WordPress
 3. Configure your API settings in the admin panel
 
+## Getting Back Up to Speed
+
+If you haven't worked on this project in a few weeks, here's a quick refresher:
+
+### Quick Start Checklist
+
+1. **Check Current Status**
+   - Go to **WordPress Admin** → **Humanitix** → **Settings**
+   - Verify API key and Organization ID are still valid
+   - Check if automatic imports are running
+
+2. **Test the System**
+   - Use **"Test API Connection"** button in settings
+   - Run a manual import: **Humanitix** → **Start Import**
+   - Check recent logs for any errors
+
+3. **Development Setup**
+   - Ensure `WP_DEBUG` is enabled in `wp-config.php` for debug mode
+   - Check that The Events Calendar plugin is active
+   - Verify your local WordPress environment is running
+
+### Key Commands to Remember
+
+```bash
+# Check plugin status
+git status
+git log --oneline -10
+
+# Pull latest changes
+git pull origin main
+
+# Switch to development branch
+git checkout -b feature/your-feature-name
+
+# Test the plugin
+# Navigate to WordPress admin → Humanitix → Debug
+```
+
+### Common Development Tasks
+
+- **Adding new API fields**: Edit `src/Importer/DataMapper.php`
+- **Customizing templates**: Work in `src/Templates/` directory
+- **Adding hooks**: Modify `src/Templates/Hooks/TemplateHooks.php`
+- **Testing changes**: Use the built-in test framework in `tests/` directory
+
+### Debug Mode Quick Access
+
+1. Enable debug mode (see Debug Mode section below)
+2. Go to **WordPress Admin** → **Humanitix** → **Debug**
+3. Check logs, API status, and plugin configuration
+
+### Recent Changes to Remember
+
+- Template module is now fully integrated
+- 410 (Gone) handling for deleted events
+- Comprehensive testing framework available
+- Asset management system for custom CSS/JS
+
+### Technical Development Workflow
+
+Here's how the development, staging, and production pipeline works:
+
+#### 1. **Local Development Setup**
+```bash
+# Clone and setup
+git clone <your-repo>
+cd sg-humanitix-api-importer
+composer install
+npm install
+
+# Enable WordPress debug mode in wp-config.php
+define('WP_DEBUG', true);
+define('HUMANITIX_DEBUG', true);
+```
+
+#### 2. **Development Branch Workflow**
+```bash
+# Create feature branch
+git checkout -b feature/new-feature
+# Make changes, test locally
+git add .
+git commit -m "Add new feature"
+git push origin feature/new-feature
+# Create PR to staging branch
+```
+
+#### 3. **Staging Deployment**
+- **Trigger**: Push to `staging` branch or PR to `staging`
+- **Server**: `sg.flywheelstaging.com`
+- **SSH User**: `stompingground+staging+stomping-ground`
+- **Path**: `/www/wp-content/plugins/` and `/www/wp-content/themes/`
+- **Auto-deploy**: GitHub Actions workflow runs automatically
+
+#### 4. **Production Deployment**
+- **Trigger**: Push to `production` branch or PR to `production`
+- **Server**: `stompinggroundcomedy.org`
+- **SSH User**: `stompingground+stomping-ground`
+- **Path**: Same as staging but on production server
+- **Auto-deploy**: Same workflow, different environment
+
+#### 5. **Deployment Process**
+```bash
+# Workflow automatically:
+# 1. Detects changed themes/plugins
+# 2. Builds assets (npm run build, composer install)
+# 3. Creates backup on server
+# 4. Deploys via rsync
+# 5. Verifies deployment
+# 6. Rolls back on failure
+```
+
+#### 6. **Manual Deployment Control**
+```bash
+# Force deploy everything
+git commit --allow-empty -m "[deploy:all] Force full deployment"
+
+# Deploy only themes
+git commit --allow-empty -m "[deploy:themes] Update theme files"
+
+# Deploy only plugins
+git commit --allow-empty -m "[deploy:plugins] Update plugin files"
+
+# Skip deployment
+git commit --allow-empty -m "[no-deploy] Documentation update"
+```
+
+#### 7. **Local Testing Before Deploy**
+```bash
+# Run plugin tests
+php tests/execute_template_tests.php
+
+# Check WordPress admin
+# Go to: WordPress Admin → Humanitix → Debug
+
+# Test API connection locally
+# Use "Test API Connection" button in settings
+```
+
+#### 8. **Rollback Process**
+```bash
+# If deployment fails, workflow automatically:
+# 1. Restores from backup on server
+# 2. Logs rollback details
+# 3. Notifies via GitHub Actions
+
+# Manual rollback (if needed)
+git revert <commit-hash>
+git push origin production
+```
+
+#### 9. **Environment Variables & Secrets**
+```bash
+# Required GitHub Secrets:
+# SSH_PRIVATE_KEY - Your Flywheel SSH key
+
+# Local environment:
+# WP_DEBUG=true (for debug mode)
+# HUMANITIX_DEBUG=true (for plugin debug)
+```
+
+#### 10. **Monitoring & Debugging**
+```bash
+# Check deployment status:
+# GitHub → Actions → "Deploy to Flywheel"
+
+# Server logs:
+# Flywheel dashboard → Site → Logs
+
+# Plugin logs:
+# WordPress Admin → Humanitix → Debug → Recent Logs
+
+# API status:
+# WordPress Admin → Humanitix → Settings → Test API Connection
+```
+
 ## Configuration
 
 ### API Settings
