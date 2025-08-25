@@ -17,6 +17,7 @@ use SG\HumanitixApiImporter\Security\ContentGoneHandler;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\AdminInterface;
 use SG\HumanitixApiImporter\Admin\SettingsManager;
+use SG\HumanitixApiImporter\Admin\BulkUpdateManager;
 use SG\HumanitixApiImporter\Templates\TemplateManager;
 use SG\HumanitixApiImporter\Archive\ArchiveManager;
 use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
@@ -129,6 +130,13 @@ class Plugin {
 	 * @var TECIntegration
 	 */
 	private $tec_integration;
+
+	/**
+	 * The bulk update manager instance.
+	 *
+	 * @var BulkUpdateManager
+	 */
+	private $bulk_update_manager;
 
 	/**
 	 * Get the plugin instance.
@@ -289,6 +297,9 @@ class Plugin {
 		
 		// Initialize TEC integration.
 		$this->tec_integration = new TECIntegration();
+		
+		// Initialize bulk update manager.
+		$this->bulk_update_manager = new BulkUpdateManager();
 		
 		// Ensure TEC integration is properly set up
 		add_action( 'tribe_events_register_post_type', array( $this, 'ensure_tec_integration' ) );
