@@ -25,6 +25,8 @@ use SG\HumanitixApiImporter\Admin\ArchiveAdminInterface;
 use SG\HumanitixApiImporter\Admin\TECIntegration;
 use SG\HumanitixApiImporter\Admin\LogManager;
 use SG\HumanitixApiImporter\Admin\LogManagementInterface;
+use SG\HumanitixApiImporter\Admin\RulesManager;
+use SG\HumanitixApiImporter\API\HumanitixAPI;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -137,6 +139,13 @@ class Plugin {
 	 * @var BulkUpdateManager
 	 */
 	private $bulk_update_manager;
+
+	/**
+	 * The rules manager instance.
+	 *
+	 * @var RulesManager
+	 */
+	private $rules_manager;
 
 	/**
 	 * Get the plugin instance.
@@ -271,15 +280,18 @@ class Plugin {
 		// Initialize admin interface with settings.
 		$this->admin = new AdminInterface( null, $this->settings );
 
+		// Initialize rules manager.
+		$this->rules_manager = new RulesManager();
+
 		if ( ! empty( $api_key ) ) {
 			// Initialize API client with organization ID.
 			$this->api = new HumanitixAPI( $api_key, $api_endpoint, $org_id );
 
-			// Initialize importer with logger.
-			$this->importer = new Importer\EventsImporter( $this->api, $this->logger );
+			// Initialize importer with logger and rule engine.
+			$this->importer = new Importer\EventsImporter( $this->api, $this->logger, null, $this->rules_manager->get_rule_engine() );
 
-					// Update admin interface with importer.
-		$this->admin->set_importer( $this->importer );
+			// Update admin interface with importer.
+			$this->admin->set_importer( $this->importer );
 		}
 
 		// Initialize archive manager.

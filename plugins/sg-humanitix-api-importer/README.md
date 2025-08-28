@@ -5,11 +5,57 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 ## Features
 
 - Import events from Humanitix API
+- **Event Import Rules System** - Automatically filter events using configurable rules
 - Automatic venue and organizer creation
 - Comprehensive logging and debugging
 - Admin interface for configuration
 - Support for recurring imports
 - Optional HTTP 410 (Gone) for deleted events with configurable retention (TTL)
+
+## Event Import Rules System
+
+The plugin includes a powerful rules-based filtering system that allows you to automatically control which events are imported based on configurable criteria.
+
+### How Rules Work
+
+- **Include Rules**: Events must match at least one include rule to be imported
+- **Exclude Rules**: Events matching exclude rules are never imported
+- **Priority System**: Lower numbers = higher priority (exclusion rules processed first)
+- **Whitelist Behavior**: If you have rules but no include rules match, events are excluded
+
+### Available Rule Types
+
+#### Title Keyword Rules
+Filter events based on keywords in the event title:
+- **Contains**: Event title contains any of the specified keywords
+- **Starts with**: Event title begins with specified text
+- **Ends with**: Event title ends with specified text
+- **Exact match**: Event title exactly matches specified text
+- **Case sensitivity**: Optional case-sensitive matching
+- **Multiple keywords**: Comma-separated keywords (any can match)
+
+### Managing Rules
+
+1. Go to **WordPress Admin** → **Event Importers** → **Import Rules**
+2. **Create Rules**: Set action (include/exclude), priority, and conditions
+3. **Edit Rules**: Modify existing rules or temporarily disable them
+4. **Delete Rules**: Remove rules you no longer need
+
+### Example Use Cases
+
+- **Include only music events**: Create include rule with keywords "music, concert, band"
+- **Exclude business events**: Create exclude rule with keywords "conference, workshop, seminar"
+- **Include specific event types**: Create include rule with exact match for "Comedy Night"
+- **Filter by organization**: Create include rule for events from specific organizers
+
+### Rule Configuration
+
+Each rule includes:
+- **Name**: Descriptive name for easy identification
+- **Action**: Include or exclude matching events
+- **Priority**: Processing order (1-100, lower = higher priority)
+- **Conditions**: Rule-specific parameters (keywords, match type, etc.)
+- **Active Status**: Enable/disable rules without deleting them
 
 ## Installation
 
@@ -70,6 +116,7 @@ git checkout -b feature/your-feature-name
 
 ### Recent Changes to Remember
 
+- **Event Import Rules System** - New filtering system for automatic event selection
 - Template module is now fully integrated
 - 410 (Gone) handling for deleted events
 - Comprehensive testing framework available

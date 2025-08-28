@@ -113,28 +113,46 @@ class AdminInterface {
 		}
 
 		add_menu_page(
-			'Humanitix Importer',
-			'Humanitix',
+			'Event Importers',
+			'Event Importers',
 			'manage_options',
-			'humanitix-importer',
+			'event-importers',
 			array( $this, 'render_main_page' ),
 			'dashicons-calendar-alt',
 			30
 		);
 
 		add_submenu_page(
+			'event-importers',
+			'Humanitix',
+			'Humanitix',
+			'manage_options',
 			'humanitix-importer',
+			array( $this, 'render_main_page' )
+		);
+
+		add_submenu_page(
+			'event-importers',
+			'Eventbrite',
+			'Eventbrite',
+			'manage_options',
+			'eventbrite-importer',
+			array( $this, 'render_eventbrite_page' )
+		);
+
+		add_submenu_page(
+			'event-importers',
 			'Settings',
 			'Settings',
 			'manage_options',
-			'humanitix-importer-settings',
+			'event-importers-settings',
 			array( $this, 'render_settings_page' )
 		);
 
 		// Only show debug page to plugin authors or when debug is enabled.
 		if ( $this->is_debug_enabled() ) {
 			add_submenu_page(
-				'humanitix-importer',
+				'event-importers',
 				'Debug',
 				'Debug',
 				'manage_options',
@@ -144,7 +162,7 @@ class AdminInterface {
 		}
 
 		add_submenu_page(
-			'humanitix-importer',
+			'event-importers',
 			'Import Logs',
 			'Import Logs',
 			'manage_options',
@@ -167,6 +185,60 @@ class AdminInterface {
 	private function is_debug_enabled() {
 		// Only show debug when HUMANITIX_DEBUG constant is defined and true.
 		return defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG;
+	}
+
+	/**
+	 * Render the Eventbrite admin page.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_page() {
+		// Check if API credentials are configured.
+		$options = get_option( 'eventbrite_importer_options', array() );
+		$api_key = $options['api_key'] ?? '';
+
+		$missing_credentials = array();
+		if ( empty( $api_key ) ) {
+			$missing_credentials[] = 'API key';
+		}
+
+		$is_configured = empty( $missing_credentials );
+		?>
+		<div class="wrap">
+			<h1>Eventbrite Event Importer</h1>
+			
+			<!-- Import Section -->
+			<div class="card">
+				<h2>Import Events</h2>
+				<p>Import events from Eventbrite to The Events Calendar.</p>
+				
+				<?php if ( ! $is_configured ) : ?>
+					<div class="notice notice-warning">
+						<p><strong>Configuration Required:</strong> Please configure your Eventbrite API credentials in the <a href="<?php echo admin_url( 'admin.php?page=event-importers-settings' ); ?>">Settings</a> page.</p>
+						<p>Missing: <?php echo esc_html( implode( ', ', $missing_credentials ) ); ?></p>
+					</div>
+				<?php else : ?>
+					<div class="import-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+						<h3>Import Options</h3>
+						<p><strong>Status:</strong> Ready to import events</p>
+						<p><strong>API:</strong> Eventbrite</p>
+					</div>
+					
+					<button id="import-events-eventbrite" class="button button-primary">Import Events from Eventbrite</button>
+					<button id="test-connection-eventbrite" class="button">Test Connection</button>
+				<?php endif; ?>
+			</div>
+
+			<!-- Status Section -->
+			<div class="card">
+				<h2>Import Status</h2>
+				<div id="import-status-eventbrite">
+					<p>No import activity yet.</p>
+				</div>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
@@ -235,7 +307,7 @@ class AdminInterface {
 				
 				<?php if ( ! $is_configured ) : ?>
 					<div class="notice notice-warning">
-						<p><strong>API Not Configured:</strong> Please set up your Humanitix <?php echo esc_html( implode( ' and ', $missing_credentials ) ); ?> in the <a href="<?php echo esc_url( admin_url( 'admin.php?page=humanitix-importer-settings' ) ); ?>">Settings</a> page to start importing events.</p>
+						<p><strong>API Not Configured:</strong> Please set up your Humanitix <?php echo esc_html( implode( ' and ', $missing_credentials ) ); ?> in the <a href="<?php echo esc_url( admin_url( 'admin.php?page=event-importers-settings' ) ); ?>">Settings</a> page to start importing events.</p>
 					</div>
 				<?php endif; ?>
 				
@@ -736,7 +808,7 @@ class AdminInterface {
 				<?php
 				if ( ! empty( $api_key ) ) {
 					try {
-						$api         = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+						$api         = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key, $api_endpoint, $org_id );
 						$test_result = $api->test_connection();
 
 						echo '<p><strong>Connection Test:</strong> ' . ( $test_result['success'] ? '<span style="color: green;">SUCCESS</span>' : '<span style="color: red;">FAILED</span>' ) . '</p>';
@@ -1171,7 +1243,7 @@ class AdminInterface {
 
 		try {
 			// Create API instance and test connection.
-			$api    = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+			$api    = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key, $api_endpoint, $org_id );
 			$result = $api->test_connection();
 
 			if ( $result['success'] ) {
@@ -1858,7 +1930,7 @@ class AdminInterface {
 
 		try {
 			// Create API instance and validate event ID
-			$api    = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+			$api    = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key, $api_endpoint, $org_id );
 			$result = $api->validate_event_id( $event_id );
 
 			if ( $result['success'] ) {

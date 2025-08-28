@@ -66,37 +66,66 @@ class SettingsManager {
 	 * @return void
 	 */
 	public function init_settings() {
-		register_setting( $this->options_group, $this->options_name, array( $this, 'sanitize_settings' ) );
+		// Register Humanitix settings
+		register_setting( $this->options_group, 'humanitix_importer_options', array( $this, 'sanitize_humanitix_settings' ) );
+		
+		// Register Eventbrite settings
+		register_setting( $this->options_group, 'eventbrite_importer_options', array( $this, 'sanitize_eventbrite_settings' ) );
 
+		// Humanitix API Settings Section
 		add_settings_section(
-			'api_settings',
-			'API Settings',
-			array( $this, 'render_api_section' ),
-			'humanitix-importer-settings'
+			'humanitix_api_settings',
+			'Humanitix API Settings',
+			array( $this, 'render_humanitix_api_section' ),
+			'event-importers-settings'
 		);
 
 		add_settings_field(
-			'api_key',
+			'humanitix_api_key',
 			'Humanitix API Key',
-			array( $this, 'render_api_key_field' ),
-			'humanitix-importer-settings',
-			'api_settings'
+			array( $this, 'render_humanitix_api_key_field' ),
+			'event-importers-settings',
+			'humanitix_api_settings'
 		);
 
 		add_settings_field(
-			'org_id',
+			'humanitix_org_id',
 			'Organization ID',
-			array( $this, 'render_org_id_field' ),
-			'humanitix-importer-settings',
-			'api_settings'
+			array( $this, 'render_humanitix_org_id_field' ),
+			'event-importers-settings',
+			'humanitix_api_settings'
 		);
 
 		add_settings_field(
-			'api_endpoint',
+			'humanitix_api_endpoint',
 			'API Endpoint',
-			array( $this, 'render_api_endpoint_field' ),
-			'humanitix-importer-settings',
-			'api_settings'
+			array( $this, 'render_humanitix_api_endpoint_field' ),
+			'event-importers-settings',
+			'humanitix_api_settings'
+		);
+
+		// Eventbrite API Settings Section
+		add_settings_section(
+			'eventbrite_api_settings',
+			'Eventbrite API Settings',
+			array( $this, 'render_eventbrite_api_section' ),
+			'event-importers-settings'
+		);
+
+		add_settings_field(
+			'eventbrite_api_key',
+			'Eventbrite Private Token',
+			array( $this, 'render_eventbrite_api_key_field' ),
+			'event-importers-settings',
+			'eventbrite_api_settings'
+		);
+
+		add_settings_field(
+			'eventbrite_org_id',
+			'Organization ID (Optional)',
+			array( $this, 'render_eventbrite_org_id_field' ),
+			'event-importers-settings',
+			'eventbrite_api_settings'
 		);
 
 		add_settings_section(
@@ -154,83 +183,7 @@ class SettingsManager {
 			'import_settings'
 		);
 
-		add_settings_field(
-			'import_images',
-			'Import Images',
-			array( $this, 'render_images_field' ),
-			'humanitix-importer-settings',
-			'import_settings'
-		);
 
-		add_settings_section(
-			'logging_settings',
-			'Logging Settings',
-			array( $this, 'render_logging_section' ),
-			'humanitix-importer-settings'
-		);
-
-		add_settings_field(
-			'log_level',
-			'Log Level',
-			array( $this, 'render_log_level_field' ),
-			'humanitix-importer-settings',
-			'logging_settings'
-		);
-
-		add_settings_field(
-			'log_retention',
-			'Log Retention (days)',
-			array( $this, 'render_retention_field' ),
-			'humanitix-importer-settings',
-			'logging_settings'
-		);
-
-		add_settings_field(
-			'filter_log_noise',
-			'Filter Log Noise',
-			array( $this, 'render_filter_log_noise_field' ),
-			'humanitix-importer-settings',
-			'logging_settings'
-		);
-
-		add_settings_section(
-			'archive_settings',
-			'Archive Settings',
-			array( $this, 'render_archive_section' ),
-			'humanitix-importer-settings'
-		);
-
-		add_settings_field(
-			'deleted_410_enable',
-			'410 for Deleted Content',
-			array( $this, 'render_410_enable_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'deleted_410_ttl_days',
-			'410 Retention (days)',
-			array( $this, 'render_410_ttl_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_age_threshold',
-			'Archive Age Threshold (years)',
-			array( $this, 'render_archive_age_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_post_status',
-			'Archive Post Status',
-			array( $this, 'render_archive_status_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
 
 
 	}
@@ -246,21 +199,27 @@ class SettingsManager {
 	public function render_settings_form() {
 		?>
 		<div class="wrap">
-			<h1>Humanitix Importer Settings</h1>
+			<h1>Event Importers Settings</h1>
 			
 			<form method="post" action="options.php">
 				<?php
 				settings_fields( $this->options_group );
-				do_settings_sections( 'humanitix-importer-settings' );
+				do_settings_sections( 'event-importers-settings' );
 				submit_button();
 				?>
 			</form>
 			
 			<div class="card">
 				<h2>API Test</h2>
-				<p>Test your API connection to ensure it's working properly.</p>
-				<button id="test-api" class="button">Test API Connection</button>
-				<div id="api-test-result"></div>
+				<p>Test your API connections to ensure they're working properly.</p>
+				
+				<h3>Humanitix API Test</h3>
+				<button id="test-humanitix-api" class="button">Test Humanitix API Connection</button>
+				<div id="humanitix-api-test-result"></div>
+				
+				<h3>Eventbrite API Test</h3>
+				<button id="test-eventbrite-api" class="button">Test Eventbrite API Connection</button>
+				<div id="eventbrite-api-test-result"></div>
 				
 				<?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : ?>
 					<hr>
@@ -300,7 +259,7 @@ class SettingsManager {
 		$validation_class   = '';
 
 		if ( ! empty( $api_key ) ) {
-			$api        = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key );
+			$api        = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key );
 			$validation = $api->validate_api_key_format( $api_key );
 
 			if ( ! $validation['valid'] ) {
@@ -887,7 +846,172 @@ class SettingsManager {
 		<?php
 	}
 
+	// ============================================================================
+	// Humanitix API Settings Methods
+	// ============================================================================
 
+	/**
+	 * Render the Humanitix API settings section description.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_api_section() {
+		echo '<p>Configure your Humanitix API credentials. You can find these in your <a href="https://console.humanitix.com" target="_blank">Humanitix console</a>.</p>';
+	}
 
+	/**
+	 * Render the Humanitix API key field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_api_key_field() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		$api_key = $options['api_key'] ?? '';
+		?>
+		<input type="password" 
+			   name="humanitix_importer_options[api_key]" 
+			   value="<?php echo esc_attr( $api_key ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Humanitix API key. This is required for importing events.</p>
+		<?php
+	}
+
+	/**
+	 * Render the Humanitix organization ID field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_org_id_field() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		$org_id = $options['org_id'] ?? '';
+		?>
+		<input type="text" 
+			   name="humanitix_importer_options[org_id]" 
+			   value="<?php echo esc_attr( $org_id ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Humanitix organization ID (optional, but recommended for better performance).</p>
+		<?php
+	}
+
+	/**
+	 * Render the Humanitix API endpoint field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_api_endpoint_field() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		$api_endpoint = $options['api_endpoint'] ?? '';
+		?>
+		<input type="url" 
+			   name="humanitix_importer_options[api_endpoint]" 
+			   value="<?php echo esc_attr( $api_endpoint ); ?>" 
+			   class="regular-text" />
+		<p class="description">Custom API endpoint (leave blank to use default: https://api.humanitix.com/v1)</p>
+		<?php
+	}
+
+	// ============================================================================
+	// Eventbrite API Settings Methods
+	// ============================================================================
+
+	/**
+	 * Render the Eventbrite API settings section description.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_api_section() {
+		echo '<p>Configure your Eventbrite API credentials. You can find these in your <a href="https://www.eventbrite.com/platform/api-keys" target="_blank">Eventbrite developer portal</a>.</p>';
+	}
+
+	/**
+	 * Render the Eventbrite API key field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_api_key_field() {
+		$options = get_option( 'eventbrite_importer_options', array() );
+		$api_key = $options['api_key'] ?? '';
+		?>
+		<input type="password" 
+			   name="eventbrite_importer_options[api_key]" 
+			   value="<?php echo esc_attr( $api_key ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Eventbrite private token. This is required for importing events.</p>
+		<?php
+	}
+
+	/**
+	 * Render the Eventbrite organization ID field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_org_id_field() {
+		$options = get_option( 'eventbrite_importer_options', array() );
+		$org_id = $options['org_id'] ?? '';
+		?>
+		<input type="text" 
+			   name="eventbrite_importer_options[org_id]" 
+			   value="<?php echo esc_attr( $org_id ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Eventbrite organization ID (optional, but recommended for better performance).</p>
+		<?php
+	}
+
+	// ============================================================================
+	// Sanitization Methods
+	// ============================================================================
+
+	/**
+	 * Sanitize Humanitix settings.
+	 *
+	 * @since 1.0.0
+	 * @param array $input The input array to sanitize.
+	 * @return array The sanitized input array.
+	 */
+	public function sanitize_humanitix_settings( $input ) {
+		$sanitized = array();
+
+		if ( isset( $input['api_key'] ) ) {
+			$sanitized['api_key'] = sanitize_text_field( $input['api_key'] );
+		}
+
+		if ( isset( $input['org_id'] ) ) {
+			$sanitized['org_id'] = sanitize_text_field( $input['org_id'] );
+		}
+
+		if ( isset( $input['api_endpoint'] ) ) {
+			$sanitized['api_endpoint'] = esc_url_raw( $input['api_endpoint'] );
+		}
+
+		return $sanitized;
+	}
+
+	/**
+	 * Sanitize Eventbrite settings.
+	 *
+	 * @since 1.0.0
+	 * @param array $input The input array to sanitize.
+	 * @return array The sanitized input array.
+	 */
+	public function sanitize_eventbrite_settings( $input ) {
+		$sanitized = array();
+
+		if ( isset( $input['api_key'] ) ) {
+			$sanitized['api_key'] = sanitize_text_field( $input['api_key'] );
+		}
+
+		if ( isset( $input['org_id'] ) ) {
+			$sanitized['org_id'] = sanitize_text_field( $input['org_id'] );
+		}
+
+		return $sanitized;
+	}
 
 }

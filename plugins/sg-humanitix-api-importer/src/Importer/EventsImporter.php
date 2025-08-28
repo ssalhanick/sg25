@@ -11,7 +11,7 @@
 
 namespace SG\HumanitixApiImporter\Importer;
 
-use SG\HumanitixApiImporter\HumanitixAPI;
+use SG\HumanitixApiImporter\API\HumanitixAPI;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\ErrorCode;
 use SG\HumanitixApiImporter\Admin\PerformanceConfig;
@@ -38,8 +38,8 @@ if ( ! class_exists( 'SG\HumanitixApiImporter\Importer\DataMapper' ) ) {
 }
 
 // Ensure HumanitixAPI class is available.
-if ( ! class_exists( 'SG\HumanitixApiImporter\HumanitixAPI' ) ) {
-	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/HumanitixAPI.php';
+if ( ! class_exists( 'SG\HumanitixApiImporter\API\HumanitixAPI' ) ) {
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/API/HumanitixAPI.php';
 }
 
 /**
