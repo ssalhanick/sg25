@@ -15,6 +15,7 @@ use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\ErrorCode;
 use SG\HumanitixApiImporter\Archive\ArchiveQueries;
 use SG\HumanitixApiImporter\Archive\ArchiveValidator;
+use SG\HumanitixApiImporter\Database\DatabaseManager;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -60,6 +61,13 @@ class ArchiveManager {
 	private $settings;
 
 	/**
+	 * The database manager instance.
+	 *
+	 * @var DatabaseManager
+	 */
+	private $db;
+
+	/**
 	 * Static instance to prevent multiple instances.
 	 *
 	 * @var ArchiveManager
@@ -89,6 +97,12 @@ class ArchiveManager {
 		$this->queries = new ArchiveQueries();
 		$this->validator = new ArchiveValidator();
 		$this->settings = $this->get_archive_settings();
+		// Ensure DatabaseManager is loaded
+		if ( ! class_exists( 'SG\\HumanitixApiImporter\\Database\\DatabaseManager' ) ) {
+			require_once __DIR__ . '/../Database/DatabaseManager.php';
+		}
+		// Initialize database manager lazily to avoid autoloader timing issues
+		$this->db = null;
 		
 		// Register custom post status with higher priority to ensure it runs after TEC
 		add_action( 'init', array( $this, 'register_archive_post_status' ), 20 );
@@ -1200,15 +1214,13 @@ class ArchiveManager {
 	 * @return array Results of the restore operation.
 	 */
 	public function restore_from_backup() {
-		global $wpdb;
-		
-		$backup_table = $wpdb->prefix . 'humanitix_event_backups';
+		$backup_table = $this->db->getTablePrefix() . 'humanitix_event_backups';
 		
 		// Check if backup table exists
-		$table_exists = $wpdb->get_var( $wpdb->prepare( 
-			"SHOW TABLES LIKE %s", 
-			$backup_table 
-		) );
+		$table_exists = $this->db->getVar(
+			"SHOW TABLES LIKE %s",
+			[$backup_table]
+		);
 		
 		if ( ! $table_exists ) {
 			return array(
@@ -1218,7 +1230,7 @@ class ArchiveManager {
 		}
 
 		// Get all backup records
-		$backups = $wpdb->get_results( "SELECT * FROM {$backup_table}" );
+		$backups = $this->db->query( "SELECT * FROM {$backup_table}" );
 		
 		if ( empty( $backups ) ) {
 			return array(
@@ -1296,7 +1308,7 @@ class ArchiveManager {
 
 		// Clear backup table after successful restore
 		if ( $results['successful'] > 0 ) {
-			$wpdb->query( "TRUNCATE TABLE {$backup_table}" );
+			$this->db->execute( "TRUNCATE TABLE {$backup_table}" );
 		}
 
 		$this->logger->log(

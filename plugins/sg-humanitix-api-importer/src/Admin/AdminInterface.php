@@ -12,6 +12,7 @@
 namespace SG\HumanitixApiImporter\Admin;
 
 use SG\HumanitixApiImporter\Importer\EventsImporter;
+use SG\HumanitixApiImporter\Importer\EventbriteEventsImporter;
 
 /**
  * Admin Interface Class.
@@ -82,6 +83,23 @@ class AdminInterface {
 	}
 
 	/**
+	 * The Eventbrite events importer instance.
+	 *
+	 * @var EventbriteEventsImporter|null
+	 */
+	private $eventbrite_importer;
+
+	/**
+	 * Set the Eventbrite importer instance.
+	 *
+	 * @param EventbriteEventsImporter $importer The Eventbrite events importer instance.
+	 * @return void
+	 */
+	public function set_eventbrite_importer( $importer ) {
+		$this->eventbrite_importer = $importer;
+	}
+
+	/**
 	 * Initialize WordPress hooks.
 	 *
 	 * @since 1.0.0
@@ -92,6 +110,7 @@ class AdminInterface {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 		add_action( 'wp_ajax_import_events', array( $this, 'handle_import_ajax' ) );
 		add_action( 'wp_ajax_import_single_event', array( $this, 'handle_single_event_import_ajax' ) );
+		add_action( 'wp_ajax_import_events_eventbrite', array( $this, 'handle_eventbrite_import_ajax' ) );
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
@@ -113,28 +132,46 @@ class AdminInterface {
 		}
 
 		add_menu_page(
-			'Humanitix Importer',
-			'Humanitix',
+			'Event Importers',
+			'Event Importers',
 			'manage_options',
-			'humanitix-importer',
+			'event-importers',
 			array( $this, 'render_main_page' ),
 			'dashicons-calendar-alt',
 			30
 		);
 
 		add_submenu_page(
+			'event-importers',
+			'Humanitix',
+			'Humanitix',
+			'manage_options',
 			'humanitix-importer',
+			array( $this, 'render_main_page' )
+		);
+
+		add_submenu_page(
+			'event-importers',
+			'Eventbrite',
+			'Eventbrite',
+			'manage_options',
+			'eventbrite-importer',
+			array( $this, 'render_eventbrite_page' )
+		);
+
+		add_submenu_page(
+			'event-importers',
 			'Settings',
 			'Settings',
 			'manage_options',
-			'humanitix-importer-settings',
+			'event-importers-settings',
 			array( $this, 'render_settings_page' )
 		);
 
 		// Only show debug page to plugin authors or when debug is enabled.
 		if ( $this->is_debug_enabled() ) {
 			add_submenu_page(
-				'humanitix-importer',
+				'event-importers',
 				'Debug',
 				'Debug',
 				'manage_options',
@@ -144,7 +181,7 @@ class AdminInterface {
 		}
 
 		add_submenu_page(
-			'humanitix-importer',
+			'event-importers',
 			'Import Logs',
 			'Import Logs',
 			'manage_options',
@@ -167,6 +204,100 @@ class AdminInterface {
 	private function is_debug_enabled() {
 		// Only show debug when HUMANITIX_DEBUG constant is defined and true.
 		return defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG;
+	}
+
+	/**
+	 * Render the Eventbrite admin page.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_page() {
+		// Check if Eventbrite importer is available.
+		$is_configured = ! empty( $this->eventbrite_importer );
+		
+		// If not configured, check what's missing.
+		$missing_credentials = array();
+		if ( ! $is_configured ) {
+			$options = get_option( 'eventbrite_importer_options', array() );
+			$client_id = $options['client_id'] ?? '';
+			$client_secret = $options['client_secret'] ?? '';
+
+			if ( empty( $client_id ) ) {
+				$missing_credentials[] = 'Client ID';
+			}
+			if ( empty( $client_secret ) ) {
+				$missing_credentials[] = 'Client Secret';
+			}
+		}
+		?>
+		<div class="wrap">
+			<h1>Eventbrite Event Importer</h1>
+			
+			<!-- Import Section -->
+			<div class="card">
+				<h2>Import Events</h2>
+				<p>Import events from Eventbrite to The Events Calendar.</p>
+				
+				<?php if ( ! $is_configured ) : ?>
+					<div class="notice notice-warning">
+						<p><strong>Configuration Required:</strong> Please configure your Eventbrite API credentials in the <a href="<?php echo admin_url( 'admin.php?page=event-importers-settings' ); ?>">Settings</a> page.</p>
+						<p>Missing: <?php echo esc_html( implode( ', ', $missing_credentials ) ); ?></p>
+					</div>
+				<?php else : ?>
+					<div class="notice notice-success">
+						<p><strong>✓ Ready to Import</strong></p>
+						<p><strong>Status:</strong> Ready to import events</p>
+						<p><strong>API:</strong> Eventbrite</p>
+					</div>
+					
+					<div class="import-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+						<h4 style="margin-top: 0;">Import Options</h4>
+						<label for="import-limit-eventbrite" style="display: inline-block; margin-right: 10px;">
+							<strong>Limit Import to:</strong>
+						</label>
+						<select id="import-limit-eventbrite" name="import_limit_eventbrite" style="margin-right: 10px;">
+							<option value="">All Events (No Limit)</option>
+							<option value="1">1 Event</option>
+							<option value="5">5 Events</option>
+							<option value="10">10 Events</option>
+							<option value="25">25 Events</option>
+							<option value="50">50 Events</option>
+							<option value="100">100 Events</option>
+						</select>
+					</div>
+					
+					<div class="import-controls" style="margin-top: 15px;">
+						<button id="import-events-eventbrite" class="button button-primary">Import Events from Eventbrite</button>
+						<button id="test-connection-eventbrite" class="button">Test Connection</button>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- Status Section -->
+			<div class="card">
+				<h2>Import Status</h2>
+				<div id="import-status-eventbrite">
+					<p>No import activity yet.</p>
+				</div>
+				
+				<!-- Progress Section -->
+				<div id="import-progress-eventbrite" style="display: none;">
+					<div class="notice notice-info">
+						<p><span class="spinner is-active"></span> Importing events from Eventbrite...</p>
+					</div>
+				</div>
+				
+				<!-- Results Section -->
+				<div id="import-results-eventbrite" style="display: none;">
+					<h3>Import Results</h3>
+					<div id="eventbrite-results-content">
+						<!-- Results will be populated here -->
+					</div>
+				</div>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
@@ -235,7 +366,7 @@ class AdminInterface {
 				
 				<?php if ( ! $is_configured ) : ?>
 					<div class="notice notice-warning">
-						<p><strong>API Not Configured:</strong> Please set up your Humanitix <?php echo esc_html( implode( ' and ', $missing_credentials ) ); ?> in the <a href="<?php echo esc_url( admin_url( 'admin.php?page=humanitix-importer-settings' ) ); ?>">Settings</a> page to start importing events.</p>
+						<p><strong>API Not Configured:</strong> Please set up your Humanitix <?php echo esc_html( implode( ' and ', $missing_credentials ) ); ?> in the <a href="<?php echo esc_url( admin_url( 'admin.php?page=event-importers-settings' ) ); ?>">Settings</a> page to start importing events.</p>
 					</div>
 				<?php endif; ?>
 				
@@ -736,7 +867,7 @@ class AdminInterface {
 				<?php
 				if ( ! empty( $api_key ) ) {
 					try {
-						$api         = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+						$api         = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key, $api_endpoint, $org_id );
 						$test_result = $api->test_connection();
 
 						echo '<p><strong>Connection Test:</strong> ' . ( $test_result['success'] ? '<span style="color: green;">SUCCESS</span>' : '<span style="color: red;">FAILED</span>' ) . '</p>';
@@ -749,7 +880,7 @@ class AdminInterface {
 						// Test getting events.
 						echo '<h3>Events Test</h3>';
 						try {
-							$events = $api->get_events( 1 );
+							$events = $api->fetch_events( array( 'page' => 1 ) );
 
 							if ( is_wp_error( $events ) ) {
 								echo '<p><strong>Events Test:</strong> <span style="color: red;">FAILED</span></p>';
@@ -1039,6 +1170,82 @@ class AdminInterface {
 	}
 
 	/**
+	 * Handle Eventbrite import AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_eventbrite_import_ajax() {
+		// Add basic error logging for debugging.
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Eventbrite Import: AJAX handler called' );
+		}
+
+		check_ajax_referer( 'humanitix_import_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		// Check if Eventbrite importer is available.
+		if ( ! $this->eventbrite_importer ) {
+			wp_send_json_error( array( 'message' => 'Eventbrite API not configured. Please set up your Eventbrite OAuth credentials in the settings.' ) );
+		}
+
+		// Get import limit if provided.
+		$import_limit = null;
+		if ( isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
+			$import_limit = intval( $_POST['import_limit'] );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Eventbrite Import: Import limit set to: ' . $import_limit );
+			}
+		}
+
+		$start_time = microtime( true );
+
+		try {
+			// Pass import limit to the importer if set.
+			if ( $import_limit ) {
+				$result = $this->eventbrite_importer->import_events( 1, $import_limit );
+			} else {
+				$result = $this->eventbrite_importer->import_events( 1 );
+			}
+
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
+
+			// Clean up debug log if it's getting too large.
+			$this->logger->cleanup_debug_log( 10 );
+
+			// Log the import with duration.
+			$this->logger->log_import_summary( $result['imported'], $result['errors'], $duration );
+
+			wp_send_json_success(
+				array(
+					'message'        => $result['message'],
+					'imported_count' => $result['imported'],
+					'errors'         => $result['errors'],
+					'duration'       => $duration,
+				)
+			);
+
+		} catch ( \Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Eventbrite Import: Exception caught: ' . $e->getMessage() );
+			}
+
+			wp_send_json_error(
+				array(
+					'message' => 'Import failed: ' . $e->getMessage(),
+					'file'    => $e->getFile(),
+					'line'    => $e->getLine(),
+					'trace'   => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
+				)
+			);
+		}
+	}
+
+	/**
 	 * Handling AJAX Logs
 	 */
 	public function handle_logs_ajax() {
@@ -1171,7 +1378,7 @@ class AdminInterface {
 
 		try {
 			// Create API instance and test connection.
-			$api    = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+			$api    = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key, $api_endpoint, $org_id );
 			$result = $api->test_connection();
 
 			if ( $result['success'] ) {
@@ -1252,7 +1459,7 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( strpos( $hook, 'humanitix-importer' ) === false && strpos( $hook, 'humanitix-debug' ) === false ) {
+		if ( strpos( $hook, 'humanitix-importer' ) === false && strpos( $hook, 'humanitix-debug' ) === false && strpos( $hook, 'eventbrite-importer' ) === false ) {
 			return;
 		}
 
@@ -1285,6 +1492,11 @@ class AdminInterface {
 
 		// Add a simple test script.
 		wp_add_inline_script( 'humanitix-admin', 'console.log("Admin script enqueued - humanitixAdmin:", typeof humanitixAdmin !== "undefined" ? "AVAILABLE" : "NOT FOUND");' );
+		
+		// Add debugging for Eventbrite page
+		if ( strpos( $hook, 'eventbrite-importer' ) !== false ) {
+			wp_add_inline_script( 'humanitix-admin', 'console.log("Eventbrite page detected - scripts loaded");' );
+		}
 
 		// Add working Test API Connection functionality.
 		wp_add_inline_script(
@@ -1659,6 +1871,125 @@ class AdminInterface {
 		'
 		);
 
+		// Add Eventbrite Import functionality.
+		wp_add_inline_script(
+			'humanitix-admin',
+			'
+			setTimeout(function() {
+				var eventbriteImportButton = document.getElementById("import-events-eventbrite");
+				console.log("Eventbrite import button found:", eventbriteImportButton ? "YES" : "NO");
+				if (eventbriteImportButton) {
+					eventbriteImportButton.addEventListener("click", function(e) {
+						e.preventDefault();
+						console.log("Eventbrite import button clicked");
+						
+						var statusDiv = document.getElementById("import-status-eventbrite");
+						var progressDiv = document.getElementById("import-progress-eventbrite");
+						var resultsDiv = document.getElementById("import-results-eventbrite");
+						
+						console.log("Eventbrite elements found:", {
+							statusDiv: statusDiv ? "YES" : "NO",
+							progressDiv: progressDiv ? "YES" : "NO", 
+							resultsDiv: resultsDiv ? "YES" : "NO"
+						});
+						
+						// Show progress and disable start button.
+						this.disabled = true;
+						this.textContent = "Importing...";
+						if (progressDiv) {
+							progressDiv.style.display = "block";
+							console.log("Progress div shown");
+						}
+						if (resultsDiv) resultsDiv.style.display = "none";
+						if (statusDiv) {
+							statusDiv.innerHTML = "<span class=\"spinner is-active\"></span> Starting Eventbrite import...";
+							console.log("Status div updated with spinner");
+						}
+						
+						// Get import limit if set
+						var importLimit = "";
+						var importLimitSelect = document.getElementById("import-limit-eventbrite");
+						if (importLimitSelect && importLimitSelect.value) {
+							importLimit = importLimitSelect.value;
+						}
+						
+						// Prepare request data
+						var requestData = {
+							action: "import_events_eventbrite",
+							nonce: humanitixAdmin.nonce
+						};
+						
+						// Add import limit if set
+						if (importLimit) {
+							requestData.import_limit = importLimit;
+						}
+						
+						fetch(humanitixAdmin.ajaxUrl, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/x-www-form-urlencoded",
+							},
+							body: new URLSearchParams(requestData)
+						})
+						.then(response => response.json())
+						.then(data => {
+							if (data.success) {
+								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-yes-alt\"></span> Eventbrite import completed successfully";
+								if (resultsDiv) {
+									var resultsContent = resultsDiv.querySelector("#eventbrite-results-content");
+									if (resultsContent) {
+										var limitText = importLimit ? " (Limited to " + importLimit + " events)" : "";
+										var skippedText = data.data.skipped ? "<p><strong>Events skipped:</strong> " + data.data.skipped + "</p>" : "";
+										resultsContent.innerHTML = 
+											"<p><strong>Events imported:</strong> " + data.data.imported_count + limitText + "</p>" +
+											skippedText +
+											"<p><strong>Duration:</strong> " + data.data.duration + " seconds</p>" +
+											"<p><strong>Message:</strong> " + data.data.message + "</p>" +
+											(data.data.errors.length > 0 ? "<p><strong>Errors:</strong> " + data.data.errors.join(", ") + "</p>" : "");
+									}
+									resultsDiv.style.display = "block";
+								}
+							} else {
+								if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Eventbrite import failed: " + data.data.message;
+								if (resultsDiv) {
+									var resultsContent = resultsDiv.querySelector("#eventbrite-results-content");
+									if (resultsContent) {
+										resultsContent.innerHTML = 
+											"<div style=\"background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px;\">" +
+											"<h4 style=\"margin-top: 0; color: #721c24;\">✗ Import Failed</h4>" +
+											"<p><strong>Error:</strong> " + data.data.message + "</p>" +
+											"</div>";
+									}
+									resultsDiv.style.display = "block";
+								}
+							}
+						})
+						.catch(error => {
+							console.error("Eventbrite import error:", error);
+							if (statusDiv) statusDiv.innerHTML = "<span class=\"dashicons dashicons-no-alt\"></span> Eventbrite import failed. Please try again.";
+							if (resultsDiv) {
+								var resultsContent = resultsDiv.querySelector("#eventbrite-results-content");
+								if (resultsContent) {
+									resultsContent.innerHTML = 
+										"<div style=\"background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px;\">" +
+										"<h4 style=\"margin-top: 0; color: #721c24;\">✗ Import Failed</h4>" +
+										"<p><strong>Error:</strong> Network error occurred. Please check your connection and try again.</p>" +
+										"</div>";
+								}
+								resultsDiv.style.display = "block";
+							}
+						})
+						.finally(() => {
+							this.disabled = false;
+							this.textContent = "Import Events from Eventbrite";
+							if (progressDiv) progressDiv.style.display = "none";
+						});
+					});
+				}
+			}, 1000);
+		'
+		);
+
 		// Add working Filter Logs functionality.
 		wp_add_inline_script(
 			'humanitix-admin',
@@ -1858,7 +2189,7 @@ class AdminInterface {
 
 		try {
 			// Create API instance and validate event ID
-			$api    = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+			$api    = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key, $api_endpoint, $org_id );
 			$result = $api->validate_event_id( $event_id );
 
 			if ( $result['success'] ) {

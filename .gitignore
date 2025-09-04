@@ -112,3 +112,5 @@ themes/sg-twentytwenty-child/
 plugins/plugin-scaffolding/
 plugins/the-events-calendar/
 plugins/events-calendar-pro/
+
+deploy.bat
