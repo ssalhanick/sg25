@@ -26,7 +26,10 @@ use SG\HumanitixApiImporter\Admin\TECIntegration;
 use SG\HumanitixApiImporter\Admin\LogManager;
 use SG\HumanitixApiImporter\Admin\LogManagementInterface;
 use SG\HumanitixApiImporter\Admin\RulesManager;
+
 use SG\HumanitixApiImporter\API\HumanitixAPI;
+use SG\HumanitixApiImporter\API\EventbriteAPI;
+use SG\HumanitixApiImporter\Importer\EventbriteEventsImporter;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -146,6 +149,22 @@ class Plugin {
 	 * @var RulesManager
 	 */
 	private $rules_manager;
+
+	/**
+	 * The Eventbrite API instance.
+	 *
+	 * @var EventbriteAPI
+	 */
+	private $eventbrite_api;
+
+	/**
+	 * The Eventbrite events importer instance.
+	 *
+	 * @var EventbriteEventsImporter
+	 */
+	private $eventbrite_importer;
+
+
 
 	/**
 	 * Get the plugin instance.
@@ -312,6 +331,22 @@ class Plugin {
 		
 		// Initialize bulk update manager.
 		$this->bulk_update_manager = new BulkUpdateManager();
+		
+		// Initialize Eventbrite API if credentials are available.
+		$eventbrite_settings = get_option( 'eventbrite_importer_options', array() );
+		if ( ! empty( $eventbrite_settings['client_id'] ) && ! empty( $eventbrite_settings['client_secret'] ) ) {
+			$this->eventbrite_api = new EventbriteAPI(
+				$eventbrite_settings['client_id'],
+				$eventbrite_settings['client_secret'],
+				$eventbrite_settings['redirect_uri'] ?? null
+			);
+
+			// Initialize Eventbrite importer with logger and rule engine.
+			$this->eventbrite_importer = new EventbriteEventsImporter( $this->eventbrite_api, $this->logger, $this->rules_manager->get_rule_engine() );
+
+			// Update admin interface with Eventbrite importer.
+			$this->admin->set_eventbrite_importer( $this->eventbrite_importer );
+		}
 		
 		// Ensure TEC integration is properly set up
 		add_action( 'tribe_events_register_post_type', array( $this, 'ensure_tec_integration' ) );
@@ -979,6 +1014,28 @@ class Plugin {
 	public function get_tec_integration() {
 		return $this->tec_integration;
 	}
+
+	/**
+	 * Get the Eventbrite API instance.
+	 *
+	 * @since 1.0.0
+	 * @return EventbriteAPI|null
+	 */
+	public function get_eventbrite_api() {
+		return $this->eventbrite_api;
+	}
+
+	/**
+	 * Get the Eventbrite importer instance.
+	 *
+	 * @since 1.0.0
+	 * @return EventbriteEventsImporter|null The Eventbrite importer instance or null if not initialized.
+	 */
+	public function get_eventbrite_importer() {
+		return $this->eventbrite_importer;
+	}
+
+
 
 	/**
 	 * Ensure TEC integration is properly set up.

@@ -463,7 +463,7 @@ class HumanitixAPI extends AbstractEventAPI {
 
 		$debug_helper->log(
 			'API',
-			"get_events called with page: {$page}",
+			"fetch_events called with page: {$page}",
 			array(
 				'endpoint'    => $this->api_endpoint,
 				'has_api_key' => ! empty( $this->api_key ),
@@ -548,7 +548,7 @@ class HumanitixAPI extends AbstractEventAPI {
 			return new \WP_Error( 'invalid_event_id', 'Invalid event ID format. Event ID should contain only letters, numbers, hyphens, and underscores.' );
 		}
 
-		$debug_helper->log( 'API', "Starting get_event with validated event_id: {$event_id}" );
+		$debug_helper->log( 'API', "Starting fetch_event with validated event_id: {$event_id}" );
 
 		// Try to get from cache first
 		$cache_key = 'humanitix_event_' . md5( $event_id );
