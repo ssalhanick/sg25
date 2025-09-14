@@ -1,57 +1,38 @@
 <?php
-require_once(dirname(__DIR__, 4) . '/wp-load.php'); 
-require_once(__DIR__ . '/../src/Database/DatabaseManager.php');
+require_once(dirname(__DIR__, 4) . '/wp-load.php');
 
-// Ensure DatabaseManager is loaded
-if ( ! class_exists( 'SG\\HumanitixApiImporter\\Database\\DatabaseManager' ) ) {
-	require_once __DIR__ . '/../src/Database/DatabaseManager.php';
+// Ensure we're running in WP-CLI context
+if (!defined('WP_CLI') || !WP_CLI) {
+    echo "This script must be run with WP-CLI. Use: wp eval-file bin/delete-old-events.php\n";
+    exit(1);
 }
 
-use SG\HumanitixApiImporter\Database\DatabaseManager;
+use WP_CLI;
 
 try {
-    // Initialize database manager with PDO fallback
-    $db = new DatabaseManager();
+    echo "=== WP-CLI Event Deletion Script ===\n";
     
-    // Check connection type
-    $connection_type = $db->getConnectionType();
-    echo "Using database connection: {$connection_type}\n";
-    
-    if ($db->isUsingPDOFallback()) {
-        echo "PDO fallback mode: WP-CLI database commands failed, using direct PDO connection\n";
-    }
-    
-    // Test connection
-    if (!$db->testConnection()) {
-        throw new Exception("Database connection test failed");
-    }
-    
-    // Get table prefix
-    $prefix = $db->getTablePrefix();
-    echo "Table prefix: {$prefix}\n";
-    
-    // Get total events count
-    $total_sql = "SELECT COUNT(*) FROM {$prefix}posts WHERE post_type = 'tribe_events'";
-    $total_events = $db->getVar($total_sql);
+    // Get total events count using WP-CLI
+    $total_events = WP_CLI::runcommand('post list --post_type=tribe_events --format=count', array('return' => true));
     echo "Total events in database: {$total_events}\n";
     
-    // Get old events (older than 4 years) - simplified query
-    $old_events_sql = "SELECT ID, post_title, post_date FROM {$prefix}posts 
-                       WHERE post_type = 'tribe_events' 
-                       AND post_date < DATE_SUB(NOW(), INTERVAL 4 YEAR)
-                       AND post_status != 'trash'
-                       ORDER BY post_date ASC";
+    // Get old events (older than 4 years) using WP-CLI
+    // We'll use a date filter to find events older than 4 years
+    $cutoff_date = date('Y-m-d', strtotime('-4 years'));
+    echo "Looking for events older than: {$cutoff_date}\n";
     
-    echo "Executing query: {$old_events_sql}\n";
-    $old_events = $db->query($old_events_sql);
+    // Get old event IDs using WP-CLI
+    $old_event_ids = WP_CLI::runcommand("post list --post_type=tribe_events --format=ids --meta_query='[{\"key\":\"_EventStartDate\",\"value\":\"{$cutoff_date}\",\"compare\":\"<\"}]'", array('return' => true));
     
-    echo "Query executed. Checking results...\n";
-    
-    if ($old_events === false || $old_events === null) {
-        throw new Exception("Query returned invalid result");
+    // If no events found with meta query, try with post_date
+    if (empty(trim($old_event_ids))) {
+        echo "No events found with meta query, trying post_date filter...\n";
+        $old_event_ids = WP_CLI::runcommand("post list --post_type=tribe_events --format=ids --date_query='[{\"before\":\"{$cutoff_date}\"}]'", array('return' => true));
     }
     
-    $event_count = count($old_events);
+    $event_ids_array = array_filter(explode("\n", trim($old_event_ids)));
+    $event_count = count($event_ids_array);
+    
     echo "Found {$event_count} old events to delete...\n";
     
     if ($event_count > 0) {
@@ -60,9 +41,11 @@ try {
         // Show first few events for verification
         echo "First few events to delete:\n";
         for ($i = 0; $i < min(5, $event_count); $i++) {
-            if (isset($old_events[$i])) {
-                $event = $old_events[$i];
-                echo "  - ID {$event['ID']}: '{$event['post_title']}' ({$event['post_date']})\n";
+            if (isset($event_ids_array[$i])) {
+                $event_id = $event_ids_array[$i];
+                // Get event title for display
+                $event_title = WP_CLI::runcommand("post get {$event_id} --field=title", array('return' => true));
+                echo "  - ID {$event_id}: '{$event_title}'\n";
             }
         }
         
@@ -75,7 +58,7 @@ try {
         $deleted_count = 0;
         $failed_count = 0;
         
-        // Process events in smaller batches to avoid memory issues
+        // Process events in smaller batches to avoid command line length limits
         $batch_size = 50;
         $total_batches = ceil($event_count / $batch_size);
         
@@ -85,56 +68,33 @@ try {
             
             echo "\n--- Processing Batch " . ($batch + 1) . "/{$total_batches} (Events " . ($start_index + 1) . "-{$end_index}) ---\n";
             
-            for ($i = $start_index; $i < $end_index; $i++) {
-                if (!isset($old_events[$i])) {
-                    echo "  [{$i}] Event not found in array, skipping...\n";
-                    continue;
+            // Get batch of event IDs
+            $batch_ids = array_slice($event_ids_array, $start_index, $batch_size);
+            $batch_ids_string = implode(' ', $batch_ids);
+            
+            echo "Deleting events: {$batch_ids_string}\n";
+            
+            try {
+                // Use WP-CLI to delete the batch
+                $result = WP_CLI::runcommand("post delete {$batch_ids_string} --force", array('return' => true));
+                
+                if (strpos($result, 'Success:') !== false) {
+                    $deleted_count += count($batch_ids);
+                    echo "✓ Batch " . ($batch + 1) . " deleted successfully\n";
+                } else {
+                    echo "✗ Batch " . ($batch + 1) . " deletion failed: {$result}\n";
+                    $failed_count += count($batch_ids);
                 }
                 
-                $event = $old_events[$i];
-                $event_id = $event['ID'];
-                $event_title = $event['post_title'];
-                $event_date = $event['post_date'];
-                
-                echo "  [{$i}] Processing: ID {$event_id} - '{$event_title}' (from {$event_date})... ";
-                
-                try {
-                    // Try to delete using WordPress function first
-                    $result = wp_delete_post($event_id, true);
-                    
-                    if ($result) {
-                        echo "✓ DELETED\n";
-                        $deleted_count++;
-                    } else {
-                        // Fallback: try direct database deletion
-                        echo "WordPress delete failed, trying direct deletion... ";
-                        
-                        // Delete from posts table
-                        $delete_posts = $db->execute("DELETE FROM {$prefix}posts WHERE ID = %d", [$event_id]);
-                        
-                        // Delete from postmeta table
-                        $delete_meta = $db->execute("DELETE FROM {$prefix}postmeta WHERE post_id = %d", [$event_id]);
-                        
-                        if ($delete_posts && $delete_meta) {
-                            echo "✓ DELETED (direct)\n";
-                            $deleted_count++;
-                        } else {
-                            echo "✗ FAILED\n";
-                            $failed_count++;
-                        }
-                    }
-                    
-                } catch (Exception $e) {
-                    echo "✗ ERROR: " . $e->getMessage() . "\n";
-                    $failed_count++;
-                }
-                
-                // Flush output
-                if (ob_get_level()) ob_flush();
-                flush();
+            } catch (Exception $e) {
+                echo "✗ Batch " . ($batch + 1) . " error: " . $e->getMessage() . "\n";
+                $failed_count += count($batch_ids);
             }
             
-            echo "Batch " . ($batch + 1) . " completed. Progress: {$deleted_count} deleted, {$failed_count} failed\n";
+            // Small delay between batches
+            if ($batch < $total_batches - 1) {
+                sleep(1);
+            }
         }
         
         echo "\n=== Deletion Summary ===\n";
@@ -153,7 +113,7 @@ try {
     }
     
     // Verify final count
-    $final_count = $db->getVar($total_sql);
+    $final_count = WP_CLI::runcommand('post list --post_type=tribe_events --format=count', array('return' => true));
     echo "\nFinal event count: {$final_count}\n";
     
 } catch (Exception $e) {

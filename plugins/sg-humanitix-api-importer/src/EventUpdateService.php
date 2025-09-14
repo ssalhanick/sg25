@@ -25,7 +25,7 @@ class EventUpdateService {
             }
             
             // Get fresh data from Humanitix API
-            $humanitix_data = $this->api_client->get_event($event->ID);
+            $humanitix_data = $this->api_client->fetch_event($event->ID);
             
             if (is_wp_error($humanitix_data)) {
                 throw new \Exception('Failed to fetch Humanitix data: ' . $humanitix_data->get_error_message());
@@ -83,7 +83,7 @@ class EventUpdateService {
             }
             
             // Get fresh data from Humanitix API
-            $humanitix_data = $this->api_client->get_event($event->ID);
+            $humanitix_data = $this->api_client->fetch_event($event->ID);
             
             if (is_wp_error($humanitix_data)) {
                 throw new \Exception('Failed to fetch Humanitix data: ' . $humanitix_data->get_error_message());

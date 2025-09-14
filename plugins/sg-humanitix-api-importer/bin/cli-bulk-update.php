@@ -110,11 +110,11 @@ if (!class_exists('Tribe__Events__Main')) {
 }
 
 // Load our classes
-require_once dirname(__DIR__) . '/src/HumanitixAPI.php';
+require_once dirname(__DIR__) . '/src/API/HumanitixAPI.php';
 require_once dirname(__DIR__) . '/src/EventUpdateService.php';
 require_once dirname(__DIR__) . '/src/Logger.php';
 
-use SG\HumanitixApiImporter\HumanitixAPI;
+use SG\HumanitixApiImporter\API\HumanitixAPI;
 use SG\HumanitixApiImporter\EventUpdateService;
 use SG\HumanitixApiImporter\Logger;
 

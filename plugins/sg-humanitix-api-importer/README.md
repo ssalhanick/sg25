@@ -5,11 +5,58 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 ## Features
 
 - Import events from Humanitix API
+- **Event Import Rules System** - Automatically filter events using configurable rules
+- **Eventbrite Integration** - Import individual events from Eventbrite with OAuth 2.0 authentication (development)
 - Automatic venue and organizer creation
 - Comprehensive logging and debugging
 - Admin interface for configuration
 - Support for recurring imports
 - Optional HTTP 410 (Gone) for deleted events with configurable retention (TTL)
+
+## Event Import Rules System
+
+The plugin includes a powerful rules-based filtering system that allows you to automatically control which events are imported based on configurable criteria.
+
+### How Rules Work
+
+- **Include Rules**: Events must match at least one include rule to be imported
+- **Exclude Rules**: Events matching exclude rules are never imported
+- **Priority System**: Lower numbers = higher priority (exclusion rules processed first)
+- **Whitelist Behavior**: If you have rules but no include rules match, events are excluded
+
+### Available Rule Types
+
+#### Title Keyword Rules
+Filter events based on keywords in the event title:
+- **Contains**: Event title contains any of the specified keywords
+- **Starts with**: Event title begins with specified text
+- **Ends with**: Event title ends with specified text
+- **Exact match**: Event title exactly matches specified text
+- **Case sensitivity**: Optional case-sensitive matching
+- **Multiple keywords**: Comma-separated keywords (any can match)
+
+### Managing Rules
+
+1. Go to **WordPress Admin** → **Event Importers** → **Import Rules**
+2. **Create Rules**: Set action (include/exclude), priority, and conditions
+3. **Edit Rules**: Modify existing rules or temporarily disable them
+4. **Delete Rules**: Remove rules you no longer need
+
+### Example Use Cases
+
+- **Include only music events**: Create include rule with keywords "music, concert, band"
+- **Exclude business events**: Create exclude rule with keywords "conference, workshop, seminar"
+- **Include specific event types**: Create include rule with exact match for "Comedy Night"
+- **Filter by organization**: Create include rule for events from specific organizers
+
+### Rule Configuration
+
+Each rule includes:
+- **Name**: Descriptive name for easy identification
+- **Action**: Include or exclude matching events
+- **Priority**: Processing order (1-100, lower = higher priority)
+- **Conditions**: Rule-specific parameters (keywords, match type, etc.)
+- **Active Status**: Enable/disable rules without deleting them
 
 ## Installation
 
@@ -70,6 +117,7 @@ git checkout -b feature/your-feature-name
 
 ### Recent Changes to Remember
 
+- **Event Import Rules System** - New filtering system for automatic event selection
 - Template module is now fully integrated
 - 410 (Gone) handling for deleted events
 - Comprehensive testing framework available
@@ -196,11 +244,34 @@ git push origin production
 
 ### API Settings
 
+#### Humanitix API
 1. Go to **WordPress Admin** → **Humanitix** → **Settings**
 2. Enter your Humanitix API key
 3. Enter your Organization ID
 4. Optionally set a custom API endpoint
 5. Test your connection using the "Test API Connection" button
+
+#### Eventbrite API (OAuth 2.0)
+1. Go to **WordPress Admin** → **Event Importers** → **Eventbrite** → **Settings**
+2. **Get Your Credentials**:
+   - Visit [Eventbrite API Keys](https://www.eventbrite.com/platform/api-keys)
+   - Copy your **API Key** (Client ID)
+   - Copy your **Client Secret**
+3. **Configure OAuth**:
+   - Enter your Eventbrite API Key
+   - Enter your Eventbrite Client Secret
+   - Set your redirect URI (WordPress admin callback URL)
+4. **Complete Authorization**:
+   - Click **"Authorize Eventbrite"** to start OAuth flow
+   - You'll be redirected to Eventbrite to authorize the app
+   - After authorization, you'll return to WordPress with access granted
+5. **Test Connection**: Use the "Test Eventbrite Connection" button
+
+**OAuth Flow Details**:
+- **Server-Side Authorization**: Handled securely through WordPress admin
+- **Token Management**: Private tokens are stored securely and automatically refreshed
+- **User Authorization**: Can perform API requests on behalf of authorized users
+- **Security**: No API keys or secrets are exposed in frontend code
 
 ### Deleted Content (410) Settings
 
@@ -245,9 +316,23 @@ When debug mode is enabled, you'll see a **Debug** menu item that provides:
 
 ### Manual Import
 
+#### Humanitix Events
 1. Go to **WordPress Admin** → **Humanitix**
 2. Click **"Start Import"** to manually import events
 3. Monitor the import progress and results
+
+#### Eventbrite Events
+1. Go to **WordPress Admin** → **Event Importers** → **Eventbrite**
+2. **First Time Setup**: Configure OAuth 2.0 authentication
+   - Enter your Eventbrite API Key
+   - Enter your Eventbrite Client Secret
+   - Set your redirect URI (e.g., `https://yoursite.com/wp-admin/admin.php?page=eventbrite-oauth`)
+   - Click **"Authorize Eventbrite"** to complete OAuth flow
+3. **Import Events**: Once authenticated, enter Eventbrite event URL or ID
+4. Click **"Import Event"** to import a single event
+5. Monitor the import progress and results
+
+*Note: Eventbrite import functionality is currently in development. OAuth 2.0 authentication is required for API access.*
 
 ### Automatic Import
 
@@ -301,10 +386,21 @@ sg-humanitix-api-importer/
 │   ├── Admin/
 │   │   ├── AdminInterface.php
 │   │   ├── Logger.php
-│   │   └── SettingsManager.php
+│   │   ├── SettingsManager.php
+│   │   └── RulesManager.php
+│   ├── API/
+│   │   ├── AbstractEventAPI.php
+│   │   ├── HumanitixAPI.php
+│   │   └── EventbriteAPI.php (planned)
 │   ├── Importer/
+│   │   ├── AbstractEventsImporter.php
 │   │   ├── DataMapper.php
 │   │   └── EventsImporter.php
+│   ├── Rules/
+│   │   ├── AbstractEventRule.php
+│   │   ├── RuleResult.php
+│   │   ├── TitleKeywordRule.php
+│   │   └── RuleEngine.php
 │   ├── Templates/
 │   │   ├── Assets/
 │   │   │   ├── css/
@@ -321,13 +417,13 @@ sg-humanitix-api-importer/
 │   │   ├── SecurityValidator.php
 │   │   └── ContentGoneHandler.php
 │   ├── Assets.php
-│   ├── HumanitixAPI.php
 │   └── Plugin.php
 ├── tests/
 │   ├── test_template_module.php
 │   ├── test_template_validation.php
 │   ├── run_template_tests.php
-│   └── execute_template_tests.php
+│   ├── execute_template_tests.php
+│   └── test-rules.php
 ├── assets/
 ├── composer.json
 └── README.md
@@ -470,6 +566,47 @@ $this->logger->log( 'error', 'Error message', array( 'error_details' => $error )
 // Success logging
 $this->logger->log( 'success', 'Operation completed', array( 'results' => $results ) );
 ```
+
+### Eventbrite OAuth 2.0 Implementation
+
+The Eventbrite integration uses OAuth 2.0 for secure authentication:
+
+#### OAuth Flow Implementation
+```php
+// 1. Authorization URL Generation
+$auth_url = 'https://www.eventbrite.com/oauth/authorize?' . http_build_query([
+    'response_type' => 'code',
+    'client_id' => $api_key,
+    'redirect_uri' => $redirect_uri
+]);
+
+// 2. Token Exchange (after user authorization)
+$token_response = wp_remote_post('https://www.eventbrite.com/oauth/token', [
+    'headers' => ['Content-Type' => 'application/x-www-form-urlencoded'],
+    'body' => [
+        'grant_type' => 'authorization_code',
+        'client_id' => $api_key,
+        'client_secret' => $client_secret,
+        'code' => $access_code,
+        'redirect_uri' => $redirect_uri
+    ]
+]);
+
+// 3. API Request with Token
+$api_response = wp_remote_get($endpoint, [
+    'headers' => [
+        'Authorization' => 'Bearer ' . $access_token,
+        'Content-Type' => 'application/json'
+    ]
+]);
+```
+
+#### Security Considerations
+- **Token Storage**: Access tokens stored securely in WordPress options
+- **Token Refresh**: Automatic token refresh before expiration
+- **HTTPS Only**: OAuth flow requires HTTPS for production
+- **State Parameter**: CSRF protection with state parameter validation
+- **Scope Limitation**: Request only necessary API permissions
 
 ## Development Roadmap
 
