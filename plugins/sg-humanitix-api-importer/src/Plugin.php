@@ -25,6 +25,8 @@ use SG\HumanitixApiImporter\Admin\ArchiveAdminInterface;
 use SG\HumanitixApiImporter\Admin\TECIntegration;
 use SG\HumanitixApiImporter\Admin\LogManager;
 use SG\HumanitixApiImporter\Admin\LogManagementInterface;
+use SG\HumanitixApiImporter\HumanitixAPI;
+use SG\HumanitixApiImporter\Importer\EventsImporter;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
