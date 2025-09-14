@@ -5,10 +5,58 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 ## Features
 
 - Import events from Humanitix API
+- **Event Import Rules System** - Automatically filter events using configurable rules
+- **Eventbrite Integration** - Import individual events from Eventbrite with OAuth 2.0 authentication (development)
 - Automatic venue and organizer creation
 - Comprehensive logging and debugging
 - Admin interface for configuration
 - Support for recurring imports
+- Optional HTTP 410 (Gone) for deleted events with configurable retention (TTL)
+
+## Event Import Rules System
+
+The plugin includes a powerful rules-based filtering system that allows you to automatically control which events are imported based on configurable criteria.
+
+### How Rules Work
+
+- **Include Rules**: Events must match at least one include rule to be imported
+- **Exclude Rules**: Events matching exclude rules are never imported
+- **Priority System**: Lower numbers = higher priority (exclusion rules processed first)
+- **Whitelist Behavior**: If you have rules but no include rules match, events are excluded
+
+### Available Rule Types
+
+#### Title Keyword Rules
+Filter events based on keywords in the event title:
+- **Contains**: Event title contains any of the specified keywords
+- **Starts with**: Event title begins with specified text
+- **Ends with**: Event title ends with specified text
+- **Exact match**: Event title exactly matches specified text
+- **Case sensitivity**: Optional case-sensitive matching
+- **Multiple keywords**: Comma-separated keywords (any can match)
+
+### Managing Rules
+
+1. Go to **WordPress Admin** → **Event Importers** → **Import Rules**
+2. **Create Rules**: Set action (include/exclude), priority, and conditions
+3. **Edit Rules**: Modify existing rules or temporarily disable them
+4. **Delete Rules**: Remove rules you no longer need
+
+### Example Use Cases
+
+- **Include only music events**: Create include rule with keywords "music, concert, band"
+- **Exclude business events**: Create exclude rule with keywords "conference, workshop, seminar"
+- **Include specific event types**: Create include rule with exact match for "Comedy Night"
+- **Filter by organization**: Create include rule for events from specific organizers
+
+### Rule Configuration
+
+Each rule includes:
+- **Name**: Descriptive name for easy identification
+- **Action**: Include or exclude matching events
+- **Priority**: Processing order (1-100, lower = higher priority)
+- **Conditions**: Rule-specific parameters (keywords, match type, etc.)
+- **Active Status**: Enable/disable rules without deleting them
 
 ## Installation
 
@@ -16,15 +64,223 @@ A WordPress plugin to import events from the Humanitix API into The Events Calen
 2. Activate the plugin through the 'Plugins' screen in WordPress
 3. Configure your API settings in the admin panel
 
+## Getting Back Up to Speed
+
+If you haven't worked on this project in a few weeks, here's a quick refresher:
+
+### Quick Start Checklist
+
+1. **Check Current Status**
+   - Go to **WordPress Admin** → **Humanitix** → **Settings**
+   - Verify API key and Organization ID are still valid
+   - Check if automatic imports are running
+
+2. **Test the System**
+   - Use **"Test API Connection"** button in settings
+   - Run a manual import: **Humanitix** → **Start Import**
+   - Check recent logs for any errors
+
+3. **Development Setup**
+   - Ensure `WP_DEBUG` is enabled in `wp-config.php` for debug mode
+   - Check that The Events Calendar plugin is active
+   - Verify your local WordPress environment is running
+
+### Key Commands to Remember
+
+```bash
+# Check plugin status
+git status
+git log --oneline -10
+
+# Pull latest changes
+git pull origin main
+
+# Switch to development branch
+git checkout -b feature/your-feature-name
+
+# Test the plugin
+# Navigate to WordPress admin → Humanitix → Debug
+```
+
+### Common Development Tasks
+
+- **Adding new API fields**: Edit `src/Importer/DataMapper.php`
+- **Customizing templates**: Work in `src/Templates/` directory
+- **Adding hooks**: Modify `src/Templates/Hooks/TemplateHooks.php`
+- **Testing changes**: Use the built-in test framework in `tests/` directory
+
+### Debug Mode Quick Access
+
+1. Enable debug mode (see Debug Mode section below)
+2. Go to **WordPress Admin** → **Humanitix** → **Debug**
+3. Check logs, API status, and plugin configuration
+
+### Recent Changes to Remember
+
+- **Event Import Rules System** - New filtering system for automatic event selection
+- Template module is now fully integrated
+- 410 (Gone) handling for deleted events
+- Comprehensive testing framework available
+- Asset management system for custom CSS/JS
+
+### Technical Development Workflow
+
+Here's how the development, staging, and production pipeline works:
+
+#### 1. **Local Development Setup**
+```bash
+# Clone and setup
+git clone <your-repo>
+cd sg-humanitix-api-importer
+composer install
+npm install
+
+# Enable WordPress debug mode in wp-config.php
+define('WP_DEBUG', true);
+define('HUMANITIX_DEBUG', true);
+```
+
+#### 2. **Development Branch Workflow**
+```bash
+# Create feature branch
+git checkout -b feature/new-feature
+# Make changes, test locally
+git add .
+git commit -m "Add new feature"
+git push origin feature/new-feature
+# Create PR to staging branch
+```
+
+#### 3. **Staging Deployment**
+- **Trigger**: Push to `staging` branch or PR to `staging`
+- **Server**: `sg.flywheelstaging.com`
+- **SSH User**: `stompingground+staging+stomping-ground`
+- **Path**: `/www/wp-content/plugins/` and `/www/wp-content/themes/`
+- **Auto-deploy**: GitHub Actions workflow runs automatically
+
+#### 4. **Production Deployment**
+- **Trigger**: Push to `production` branch or PR to `production`
+- **Server**: `stompinggroundcomedy.org`
+- **SSH User**: `stompingground+stomping-ground`
+- **Path**: Same as staging but on production server
+- **Auto-deploy**: Same workflow, different environment
+
+#### 5. **Deployment Process**
+```bash
+# Workflow automatically:
+# 1. Detects changed themes/plugins
+# 2. Builds assets (npm run build, composer install)
+# 3. Creates backup on server
+# 4. Deploys via rsync
+# 5. Verifies deployment
+# 6. Rolls back on failure
+```
+
+#### 6. **Manual Deployment Control**
+```bash
+# Force deploy everything
+git commit --allow-empty -m "[deploy:all] Force full deployment"
+
+# Deploy only themes
+git commit --allow-empty -m "[deploy:themes] Update theme files"
+
+# Deploy only plugins
+git commit --allow-empty -m "[deploy:plugins] Update plugin files"
+
+# Skip deployment
+git commit --allow-empty -m "[no-deploy] Documentation update"
+```
+
+#### 7. **Local Testing Before Deploy**
+```bash
+# Run plugin tests
+php tests/execute_template_tests.php
+
+# Check WordPress admin
+# Go to: WordPress Admin → Humanitix → Debug
+
+# Test API connection locally
+# Use "Test API Connection" button in settings
+```
+
+#### 8. **Rollback Process**
+```bash
+# If deployment fails, workflow automatically:
+# 1. Restores from backup on server
+# 2. Logs rollback details
+# 3. Notifies via GitHub Actions
+
+# Manual rollback (if needed)
+git revert <commit-hash>
+git push origin production
+```
+
+#### 9. **Environment Variables & Secrets**
+```bash
+# Required GitHub Secrets:
+# SSH_PRIVATE_KEY - Your Flywheel SSH key
+
+# Local environment:
+# WP_DEBUG=true (for debug mode)
+# HUMANITIX_DEBUG=true (for plugin debug)
+```
+
+#### 10. **Monitoring & Debugging**
+```bash
+# Check deployment status:
+# GitHub → Actions → "Deploy to Flywheel"
+
+# Server logs:
+# Flywheel dashboard → Site → Logs
+
+# Plugin logs:
+# WordPress Admin → Humanitix → Debug → Recent Logs
+
+# API status:
+# WordPress Admin → Humanitix → Settings → Test API Connection
+```
+
 ## Configuration
 
 ### API Settings
 
+#### Humanitix API
 1. Go to **WordPress Admin** → **Humanitix** → **Settings**
 2. Enter your Humanitix API key
 3. Enter your Organization ID
 4. Optionally set a custom API endpoint
 5. Test your connection using the "Test API Connection" button
+
+#### Eventbrite API (OAuth 2.0)
+1. Go to **WordPress Admin** → **Event Importers** → **Eventbrite** → **Settings**
+2. **Get Your Credentials**:
+   - Visit [Eventbrite API Keys](https://www.eventbrite.com/platform/api-keys)
+   - Copy your **API Key** (Client ID)
+   - Copy your **Client Secret**
+3. **Configure OAuth**:
+   - Enter your Eventbrite API Key
+   - Enter your Eventbrite Client Secret
+   - Set your redirect URI (WordPress admin callback URL)
+4. **Complete Authorization**:
+   - Click **"Authorize Eventbrite"** to start OAuth flow
+   - You'll be redirected to Eventbrite to authorize the app
+   - After authorization, you'll return to WordPress with access granted
+5. **Test Connection**: Use the "Test Eventbrite Connection" button
+
+**OAuth Flow Details**:
+- **Server-Side Authorization**: Handled securely through WordPress admin
+- **Token Management**: Private tokens are stored securely and automatically refreshed
+- **User Authorization**: Can perform API requests on behalf of authorized users
+- **Security**: No API keys or secrets are exposed in frontend code
+
+### Deleted Content (410) Settings
+
+1. Go to **WordPress Admin** → **Humanitix** → **Settings** → Archive Settings
+2. Enable **410 for Deleted Content** (on by default)
+3. Set **410 Retention (days)**. Default: `365` (set `0` to never expire)
+4. Save changes
+
+What this does: when an event is trashed or deleted, its URL is recorded. Future requests to that exact URL return HTTP 410 Gone instead of 404 Not Found, until the retention period expires or the event is restored.
 
 ### Debug Mode
 
@@ -60,15 +316,38 @@ When debug mode is enabled, you'll see a **Debug** menu item that provides:
 
 ### Manual Import
 
+#### Humanitix Events
 1. Go to **WordPress Admin** → **Humanitix**
 2. Click **"Start Import"** to manually import events
 3. Monitor the import progress and results
+
+#### Eventbrite Events
+1. Go to **WordPress Admin** → **Event Importers** → **Eventbrite**
+2. **First Time Setup**: Configure OAuth 2.0 authentication
+   - Enter your Eventbrite API Key
+   - Enter your Eventbrite Client Secret
+   - Set your redirect URI (e.g., `https://yoursite.com/wp-admin/admin.php?page=eventbrite-oauth`)
+   - Click **"Authorize Eventbrite"** to complete OAuth flow
+3. **Import Events**: Once authenticated, enter Eventbrite event URL or ID
+4. Click **"Import Event"** to import a single event
+5. Monitor the import progress and results
+
+*Note: Eventbrite import functionality is currently in development. OAuth 2.0 authentication is required for API access.*
 
 ### Automatic Import
 
 1. Enable automatic imports in the settings
 2. Set your preferred import frequency
 3. The plugin will automatically import events according to your schedule
+
+### Verifying 410 for a deleted event
+
+- Browser: Open DevTools → Network → request → confirm Status `410`
+- PowerShell (Windows):
+  - `curl -I "https://your-site.test/events/old-event-slug/"`
+  - or `iwr -Method Head "https://your-site.test/events/old-event-slug/" -UseBasicParsing | Select-Object StatusCode,StatusDescription,Headers`
+
+If the slug was reused by a new post, it will no longer be a 404 and won’t return 410.
 
 ## Troubleshooting
 
@@ -107,21 +386,171 @@ sg-humanitix-api-importer/
 │   ├── Admin/
 │   │   ├── AdminInterface.php
 │   │   ├── Logger.php
-│   │   └── SettingsManager.php
+│   │   ├── SettingsManager.php
+│   │   └── RulesManager.php
+│   ├── API/
+│   │   ├── AbstractEventAPI.php
+│   │   ├── HumanitixAPI.php
+│   │   └── EventbriteAPI.php (planned)
 │   ├── Importer/
+│   │   ├── AbstractEventsImporter.php
 │   │   ├── DataMapper.php
 │   │   └── EventsImporter.php
+│   ├── Rules/
+│   │   ├── AbstractEventRule.php
+│   │   ├── RuleResult.php
+│   │   ├── TitleKeywordRule.php
+│   │   └── RuleEngine.php
+│   ├── Templates/
+│   │   ├── Assets/
+│   │   │   ├── css/
+│   │   │   │   └── templates.css
+│   │   │   └── js/
+│   │   │       └── templates.js
+│   │   ├── Hooks/
+│   │   │   └── TemplateHooks.php
+│   │   ├── Overrides/
+│   │   └── TemplateManager.php
 │   ├── Security/
 │   │   ├── AjaxSecurityHandler.php
 │   │   ├── RestApiSecurityHandler.php
-│   │   └── SecurityValidator.php
+│   │   ├── SecurityValidator.php
+│   │   └── ContentGoneHandler.php
 │   ├── Assets.php
-│   ├── HumanitixAPI.php
 │   └── Plugin.php
+├── tests/
+│   ├── test_template_module.php
+│   ├── test_template_validation.php
+│   ├── run_template_tests.php
+│   ├── execute_template_tests.php
+│   └── test-rules.php
 ├── assets/
 ├── composer.json
 └── README.md
 ```
+
+### Template Module
+
+The plugin includes a comprehensive TEC (The Events Calendar) template customization module that allows you to:
+
+- **Customize TEC Templates**: Override default TEC templates with custom versions
+- **Hook into TEC Events**: Add custom functionality to event displays
+- **Manage Assets**: Load custom CSS/JS only on TEC pages
+- **Conditional Loading**: Module only activates when TEC is present
+
+#### Template Module Components
+
+- **TemplateManager**: Main entry point for template functionality
+- **TemplateHooks**: Handles all TEC-specific hooks and filters
+- **TemplateAssets**: Manages CSS/JS assets for template customizations
+- **Template Overrides**: Custom template files in `src/Templates/Overrides/`
+
+#### Template Customization Features
+
+- **Event Title Customization**: Modify event titles via hooks
+- **Event Meta Customization**: Customize event metadata display
+- **Venue Customization**: Customize venue information display
+- **Organizer Customization**: Customize organizer information display
+- **Asset Management**: Load custom CSS/JS conditionally
+- **Template Overrides**: Override TEC template files
+
+### Testing Framework
+
+The plugin includes a comprehensive testing framework for the template module:
+
+#### Test Files
+
+- **`test_template_module.php`**: Unit tests for core template functionality
+- **`test_template_validation.php`**: Real-world validation tests
+- **`run_template_tests.php`**: Comprehensive test runner
+- **`execute_template_tests.php`**: Automated test executor
+
+#### Running Tests
+
+##### Method 1: Individual Test Files
+```php
+// Run unit tests only
+include 'tests/test_template_module.php';
+
+// Run validation tests only
+include 'tests/test_template_validation.php';
+
+// Run comprehensive tests only
+include 'tests/run_template_tests.php';
+```
+
+##### Method 2: Automated Test Runner
+```php
+// Run all tests automatically
+include 'tests/execute_template_tests.php';
+```
+
+##### Method 3: WordPress Admin
+1. Enable `WP_DEBUG` in `wp-config.php`
+2. Navigate to WordPress admin
+3. Tests run automatically when plugin loads
+
+#### Test Coverage
+
+The testing framework covers:
+
+- **Module Initialization**: TemplateManager singleton pattern and TEC detection
+- **Hook System**: All TEC-specific hooks registration and functionality
+- **Asset Management**: CSS/JS file loading and conditional loading
+- **Template Overrides**: Template path system and file existence
+- **Plugin Integration**: Integration with main plugin and module independence
+- **Performance**: Memory usage and initialization time validation
+
+#### Test Categories
+
+1. **Unit Tests**: Core functionality testing
+   - TemplateManager initialization
+   - TemplateHooks method existence
+   - TemplateAssets functionality
+
+2. **Validation Tests**: Real-world scenario testing
+   - Module initialization in WordPress environment
+   - Conditional loading with/without TEC
+   - Asset file existence and readability
+
+3. **Integration Tests**: Plugin integration testing
+   - Template module integration with main plugin
+   - Module independence from importer
+   - Template override system functionality
+
+4. **Performance Tests**: Performance impact testing
+   - Initialization time (target: < 100ms)
+   - Memory usage (target: < 1MB)
+   - Asset loading performance (target: < 50ms)
+
+#### Expected Test Results
+
+All tests should pass with:
+- ✅ **Module Initialization**: TemplateManager creates successfully
+- ✅ **TEC Detection**: Properly detects TEC availability
+- ✅ **Hook Registration**: All TEC hooks registered correctly
+- ✅ **Asset Loading**: CSS/JS files load conditionally
+- ✅ **Template Overrides**: Template path system works
+- ✅ **Plugin Integration**: Integrates with main plugin
+- ✅ **Module Independence**: Works without importer
+- ✅ **Performance**: Acceptable memory and time usage
+
+#### Test Output
+
+Tests provide detailed output including:
+- Pass/fail status for each test
+- Detailed error messages for failed tests
+- Performance metrics (execution time, memory usage)
+- Summary statistics (total tests, success rate)
+
+#### Debugging Failed Tests
+
+If tests fail:
+1. Check that all required files exist
+2. Verify TEC plugin is installed (if testing TEC functionality)
+3. Review error messages for specific issues
+4. Check WordPress debug log for additional information
+5. Ensure proper file permissions on test files
 
 ### Adding Debug Information
 
@@ -138,6 +567,114 @@ $this->logger->log( 'error', 'Error message', array( 'error_details' => $error )
 $this->logger->log( 'success', 'Operation completed', array( 'results' => $results ) );
 ```
 
+### Eventbrite OAuth 2.0 Implementation
+
+The Eventbrite integration uses OAuth 2.0 for secure authentication:
+
+#### OAuth Flow Implementation
+```php
+// 1. Authorization URL Generation
+$auth_url = 'https://www.eventbrite.com/oauth/authorize?' . http_build_query([
+    'response_type' => 'code',
+    'client_id' => $api_key,
+    'redirect_uri' => $redirect_uri
+]);
+
+// 2. Token Exchange (after user authorization)
+$token_response = wp_remote_post('https://www.eventbrite.com/oauth/token', [
+    'headers' => ['Content-Type' => 'application/x-www-form-urlencoded'],
+    'body' => [
+        'grant_type' => 'authorization_code',
+        'client_id' => $api_key,
+        'client_secret' => $client_secret,
+        'code' => $access_code,
+        'redirect_uri' => $redirect_uri
+    ]
+]);
+
+// 3. API Request with Token
+$api_response = wp_remote_get($endpoint, [
+    'headers' => [
+        'Authorization' => 'Bearer ' . $access_token,
+        'Content-Type' => 'application/json'
+    ]
+]);
+```
+
+#### Security Considerations
+- **Token Storage**: Access tokens stored securely in WordPress options
+- **Token Refresh**: Automatic token refresh before expiration
+- **HTTPS Only**: OAuth flow requires HTTPS for production
+- **State Parameter**: CSRF protection with state parameter validation
+- **Scope Limitation**: Request only necessary API permissions
+
+## Development Roadmap
+
+### Step 4: Advanced Template Customization (Next Phase)
+
+The next phase of development will focus on advanced template customization features:
+
+#### Planned Features
+
+1. **Template Builder Interface**
+   - Visual template editor in WordPress admin
+   - Drag-and-drop template customization
+   - Real-time preview of template changes
+   - Template version control and rollback
+
+2. **Advanced Hook System**
+   - Custom hook creation for specific events
+   - Hook priority management
+   - Conditional hook execution based on event properties
+   - Hook performance monitoring
+
+3. **Template Library**
+   - Pre-built template designs
+   - Template import/export functionality
+   - Template sharing between sites
+   - Template marketplace integration
+
+4. **Advanced Asset Management**
+   - CSS/JS minification and optimization
+   - Asset versioning and cache busting
+   - Conditional asset loading based on event properties
+   - Asset performance monitoring
+
+5. **Template Analytics**
+   - Template usage tracking
+   - Performance metrics for custom templates
+   - User interaction analytics
+   - A/B testing for template variations
+
+6. **Developer Tools**
+   - Template debugging tools
+   - Hook inspection and monitoring
+   - Performance profiling
+   - Code generation for common customizations
+
+#### Technical Implementation
+
+- **Admin Interface**: New admin pages for template management
+- **Database Schema**: Tables for template storage and versioning
+- **API Endpoints**: REST API for template operations
+- **Caching System**: Template and asset caching
+- **Security**: Template validation and sanitization
+
+#### Testing Strategy
+
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Template system integration
+- **Performance Tests**: Template rendering performance
+- **User Acceptance Tests**: End-to-end template customization workflows
+
+### Future Enhancements
+
+- **Multi-site Support**: Template sharing across WordPress networks
+- **Third-party Integrations**: Integration with popular page builders
+- **Mobile Optimization**: Responsive template customization
+- **Accessibility**: WCAG compliance tools for templates
+- **Internationalization**: Multi-language template support
+
 ## Support
 
 For support and bug reports, please use the plugin's debug features to gather detailed information about any issues.
@@ -145,3 +682,14 @@ For support and bug reports, please use the plugin's debug features to gather de
 ## License
 
 This plugin is licensed under the GPL v2 or later. 
+
+---
+
+## Developer Notes
+
+- The 410 feature stores tombstones in the non-autoloaded option `sg_hai_410_tombstones` and only checks them on 404 requests.
+- Filters:
+  - `sg_hai_410_post_types` (array): post types to track for 410s. Default: `['tribe_events']`.
+- Settings (stored under `humanitix_importer_options`):
+  - `deleted_410_enable` (bool, default true)
+  - `deleted_410_ttl_days` (int days, default 365; `0` means never expire)

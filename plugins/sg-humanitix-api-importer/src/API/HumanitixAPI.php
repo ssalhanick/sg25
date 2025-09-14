@@ -8,7 +8,9 @@
  * @since 1.0.0
  */
 
-namespace SG\HumanitixApiImporter;
+namespace SG\HumanitixApiImporter\API;
+
+use SG\HumanitixApiImporter\API\AbstractEventAPI;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -22,28 +24,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @package SG\HumanitixApiImporter
  * @since 1.0.0
  */
-class HumanitixAPI {
+class HumanitixAPI extends AbstractEventAPI {
 
-	/**
-	 * The API key for authentication.
-	 *
-	 * @var string
-	 */
-	private $api_key;
 
-	/**
-	 * The API endpoint base URL.
-	 *
-	 * @var string
-	 */
-	private $api_endpoint;
-
-	/**
-	 * The organization ID for scoping requests.
-	 *
-	 * @var string
-	 */
-	private $org_id;
 
 	/**
 	 * Constructor.
@@ -53,38 +36,8 @@ class HumanitixAPI {
 	 * @param string $org_id The Humanitix organization ID.
 	 */
 	public function __construct( $api_key, $api_endpoint = '', $org_id = '' ) {
-		// Clean and validate API key.
-		$this->api_key = $this->clean_api_key( $api_key );
-		$this->org_id  = sanitize_text_field( $org_id );
-
-		// Default to Humanitix API endpoint if not provided.
-		$this->api_endpoint = ! empty( $api_endpoint )
-			? esc_url_raw( $api_endpoint )
-			: 'https://api.humanitix.com/v1';
-	}
-
-	/**
-	 * Clean and validate API key format.
-	 *
-	 * @param string $api_key The raw API key.
-	 * @return string The cleaned API key.
-	 */
-	private function clean_api_key( $api_key ) {
-		$api_key = sanitize_text_field( $api_key );
-
-		// Remove any whitespace.
-		$api_key = trim( $api_key );
-
-		// Remove any "Bearer " prefix if it was accidentally included.
-		$api_key = preg_replace( '/^Bearer\s+/i', '', $api_key );
-
-		// Remove any quotes if they were included.
-		$api_key = trim( $api_key, '"\'`' );
-
-		// Remove any newlines.
-		$api_key = str_replace( array( "\n", "\r" ), '', $api_key );
-
-		return $api_key;
+		$this->provider_name = 'humanitix';
+		parent::__construct( $api_key, $api_endpoint, $org_id );
 	}
 
 	/**
@@ -222,26 +175,17 @@ class HumanitixAPI {
 				);
 			}
 
-			if ( empty( $this->org_id ) ) {
-				$error_message = 'Organization ID is required for connection test.';
-				$logger->log( 'error', $error_message, array( 'test_type' => 'connection_test' ) );
-				return array(
-					'success' => false,
-					'message' => $error_message,
-					'debug'   => array( 'missing_org_id' => true ),
-				);
-			}
-
 			// Try different endpoints to test the connection.
-			$test_endpoints = array(
-				'/'       => 'Root endpoint',
-				'/health' => 'Health check',
-				'/ping'   => 'Ping endpoint',
-				'/events' => 'Events endpoint',
-			);
+		$test_endpoints = array(
+			'/'       => 'Root endpoint',
+			'/events' => 'Events endpoint',
+			'/v1/events' => 'V1 Events endpoint',
+			'/api/v1/events' => 'API V1 Events endpoint',
+			'/v2/events' => 'V2 Events endpoint',
+		);
 
 			foreach ( $test_endpoints as $endpoint => $description ) {
-				$response = $this->make_request( 'GET', $endpoint, array(), true );
+				$response = $this->make_request( $endpoint, array( 'method' => 'GET', 'timeout' => 15 ) );
 
 				if ( is_wp_error( $response ) ) {
 					// Log failed endpoint attempt.
@@ -507,42 +451,43 @@ class HumanitixAPI {
 	}
 
 	/**
-	 * Get events from Humanitix API.
+	 * Fetch events from Humanitix API.
 	 *
-	 * @param int $page Page number to fetch (>= 1).
+	 * @param array $params Query parameters.
 	 * @return array|WP_Error Events data or error.
 	 */
-	public function get_events( $page = 1 ) {
+	public function fetch_events( $params = array() ) {
 		// Initialize debug helper.
 		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
 
 		$debug_helper->log(
 			'API',
-			"get_events called with page: {$page}",
+			"fetch_events called with page: {$page}",
 			array(
 				'endpoint'    => $this->api_endpoint,
 				'has_api_key' => ! empty( $this->api_key ),
 				'has_org_id'  => ! empty( $this->org_id ),
+				'api_url'     => trailingslashit( $this->api_endpoint ) . 'events',
 			)
 		);
 
+		// Extract page from params or default to 1
+		$page = isset( $params['page'] ) ? max( 1, absint( $params['page'] ) ) : 1;
+		
 		$params = array(
-			'page' => max( 1, absint( $page ) ),
+			'page' => $page,
 		);
 
-		// Try different possible endpoint structures.
+		// Use the correct Humanitix API endpoint for events.
 		$possible_endpoints = array(
-			'/events',
-			'/event',
-			'/organiser/events',
-			'/organiser/' . $this->org_id . '/events',
+			'/events', // Primary endpoint according to Humanitix API docs.
 		);
 
 		foreach ( $possible_endpoints as $endpoint ) {
 			$debug_helper->log( 'API', "Trying endpoint: {$endpoint}" );
 
-			$response = $this->make_request( 'GET', $endpoint, $params );
+			$response = $this->make_request( $endpoint, array( 'method' => 'GET' ) );
 
 			if ( is_wp_error( $response ) ) {
 				$debug_helper->log_critical_error(
@@ -580,38 +525,183 @@ class HumanitixAPI {
 	}
 
 	/**
-	 * Get a single event by ID.
+	 * Fetch a single event by ID with improved error handling and validation.
 	 *
 	 * @param string $event_id The event ID.
 	 * @return array|WP_Error Event data or error.
 	 */
-	public function get_event( $event_id ) {
-		$response = $this->make_request( 'GET', '/events/' . sanitize_text_field( $event_id ) );
+	public function fetch_event( $event_id ) {
+		// Initialize debug helper.
+		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
+		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
+
+		// Validate event ID format
+		$event_id = sanitize_text_field( $event_id );
+		if ( empty( $event_id ) ) {
+			$debug_helper->log_critical_error( 'API', 'Empty event ID provided' );
+			return new \WP_Error( 'invalid_event_id', 'Event ID cannot be empty.' );
+		}
+
+		// Check if event ID looks valid (basic format check)
+		if ( ! preg_match( '/^[a-zA-Z0-9_-]+$/', $event_id ) ) {
+			$debug_helper->log_critical_error( 'API', 'Invalid event ID format', array( 'event_id' => $event_id ) );
+			return new \WP_Error( 'invalid_event_id', 'Invalid event ID format. Event ID should contain only letters, numbers, hyphens, and underscores.' );
+		}
+
+		$debug_helper->log( 'API', "Starting fetch_event with validated event_id: {$event_id}" );
+
+		// Try to get from cache first
+		$cache_key = 'humanitix_event_' . md5( $event_id );
+		$cached_event = wp_cache_get( $cache_key, 'humanitix_events' );
+		
+		if ( $cached_event !== false ) {
+			$debug_helper->log( 'API', "Event found in cache for event_id: {$event_id}" );
+			return $cached_event;
+		}
+
+		$debug_helper->log( 'API', "Fetching event_id: {$event_id}" );
+
+		$response = $this->make_request( '/events/' . $event_id, array( 'method' => 'GET' ) );
 
 		if ( is_wp_error( $response ) ) {
+			// Check if it's a 404 (event not found)
+			if ( strpos( $response->get_error_message(), '404' ) !== false ) {
+				$debug_helper->log_critical_error( 'API', "Event not found: {$event_id}" );
+				return new \WP_Error( 'event_not_found', "Event with ID '{$event_id}' was not found. Please verify the event ID is correct." );
+			}
+
+			// For other errors, return immediately
+			$debug_helper->log_critical_error( 'API', "API request failed", array(
+				'event_id' => $event_id,
+				'error' => $response->get_error_message()
+			) );
 			return $response;
 		}
 
-		// Handle different response formats.
-		if ( isset( $response['data'] ) ) {
-			return $response['data'];
-		} elseif ( isset( $response['event'] ) ) {
-			return $response['event'];
+			// Handle different response formats
+			$event_data = null;
+			if ( isset( $response['data'] ) ) {
+				$event_data = $response['data'];
+			} elseif ( isset( $response['event'] ) ) {
+				$event_data = $response['event'];
+			} elseif ( is_array( $response ) && ! empty( $response ) ) {
+				$event_data = $response;
+			}
+
+			if ( empty( $event_data ) ) {
+				$debug_helper->log_critical_error( 'API', "Empty or invalid response for event_id: {$event_id}", array(
+					'response_keys' => array_keys( $response ),
+					'response_type' => gettype( $response )
+				) );
+				return new \WP_Error( 'invalid_response', 'Invalid or empty response from API for event ID: ' . $event_id );
+			}
+
+			// Validate that we have the expected event data structure
+			if ( ! isset( $event_data['_id'] ) && ! isset( $event_data['id'] ) ) {
+				$debug_helper->log_critical_error( 'API', "Response missing event ID for event_id: {$event_id}", array(
+					'response_keys' => array_keys( $event_data )
+				) );
+				return new \WP_Error( 'invalid_event_data', 'Response does not contain valid event data structure.' );
+			}
+
+			// Cache the successful response for 5 minutes
+			wp_cache_set( $cache_key, $event_data, 'humanitix_events', 300 );
+
+			$debug_helper->log( 'API', "Successfully fetched event data for event_id: {$event_id}", array(
+				'event_name' => $event_data['name'] ?? $event_data['title'] ?? 'Unknown',
+				'event_id' => $event_data['_id'] ?? $event_data['id'] ?? 'unknown'
+			) );
+
+			return $event_data;
 		}
 
-		return $response;
+	/**
+	 * Validate event ID format and provide helpful feedback.
+	 *
+	 * @param string $event_id The event ID to validate.
+	 * @return array Validation result with success status and message.
+	 */
+	public function validate_event_id( $event_id ) {
+		$event_id = trim( $event_id );
+		
+		if ( empty( $event_id ) ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID cannot be empty.',
+				'suggestion' => 'Please enter a valid Humanitix event ID.'
+			);
+		}
+
+		// Check for common mistakes
+		if ( strpos( $event_id, ' ' ) !== false ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID contains spaces.',
+				'suggestion' => 'Please remove any spaces from the event ID.'
+			);
+		}
+
+		if ( strpos( $event_id, 'https://' ) !== false || strpos( $event_id, 'http://' ) !== false ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID appears to be a URL.',
+				'suggestion' => 'Please enter only the event ID, not the full URL. The event ID is usually found in the URL after /events/.'
+			);
+		}
+
+		// Check if it looks like a valid Humanitix event ID format
+		if ( ! preg_match( '/^[a-zA-Z0-9_-]+$/', $event_id ) ) {
+			return array(
+				'success' => false,
+				'message' => 'Invalid event ID format.',
+				'suggestion' => 'Event ID should contain only letters, numbers, hyphens, and underscores. Please check the event ID from your Humanitix console.'
+			);
+		}
+
+		// Check length (Humanitix IDs are typically 24 characters)
+		if ( strlen( $event_id ) < 10 ) {
+			return array(
+				'success' => false,
+				'message' => 'Event ID seems too short.',
+				'suggestion' => 'Humanitix event IDs are typically longer. Please verify you have the correct event ID from your Humanitix console.'
+			);
+		}
+
+		return array(
+			'success' => true,
+			'message' => 'Event ID format looks valid.',
+			'suggestion' => 'You can proceed with the import.'
+		);
+	}
+
+	/**
+	 * Get helpful information about finding event IDs.
+	 *
+	 * @return array Information about finding event IDs.
+	 */
+	public function get_event_id_help() {
+		return array(
+			'title' => 'How to Find Your Event ID',
+			'steps' => array(
+				'1. Log into your Humanitix console at https://console.humanitix.com',
+				'2. Navigate to the event you want to import',
+				'3. Look at the URL in your browser - it will look like: https://console.humanitix.com/console/events/{event_id}/overview',
+				'4. Copy the {event_id} part (the string of letters and numbers)',
+				'5. Paste it into the Event ID field above'
+			),
+			'example' => 'Example: If your URL is https://console.humanitix.com/console/events/507f1f77bcf86cd799439011/overview, then your Event ID is: 507f1f77bcf86cd799439011',
+			'note' => 'Note: Event IDs are case-sensitive and should not include any extra characters or spaces.'
+		);
 	}
 
 	/**
 	 * Make HTTP request to Humanitix API.
 	 *
-	 * @param string $method HTTP method (GET, POST, etc.).
-	 * @param string $endpoint API endpoint.
-	 * @param array  $params Query parameters or body data.
-	 * @param bool   $is_test Whether this is a test request.
+	 * @param string $endpoint The API endpoint.
+	 * @param array  $args     Request arguments.
 	 * @return array|WP_Error Response data or error.
 	 */
-	private function make_request( $method, $endpoint, $params = array(), $is_test = false ) {
+	protected function make_request( $endpoint, $args = array() ) {
 		// Initialize debug helper.
 		$logger       = new \SG\HumanitixApiImporter\Admin\Logger();
 		$debug_helper = new \SG\HumanitixApiImporter\Admin\DebugHelper( $logger );
@@ -623,40 +713,37 @@ class HumanitixAPI {
 			"Making request to {$endpoint}",
 			array(
 				'url'          => $url,
-				'method'       => $method,
-				'params_count' => count( $params ),
-				'is_test'      => $is_test,
+				'args'         => $args,
 			)
 		);
 
-		$headers = array(
-			'x-api-key'    => $this->api_key,  // Humanitix API expects x-api-key header.
-			'Content-Type' => 'application/json',
-			'Accept'       => 'application/json',
-		);
-
+		// Set default method to GET if not specified
+		$method = isset( $args['method'] ) ? $args['method'] : 'GET';
+		
+		// Set default timeout
+		if ( ! isset( $args['timeout'] ) ) {
+			$args['timeout'] = 60;
+		}
+		
+		// Set default headers
+		if ( ! isset( $args['headers'] ) ) {
+			$args['headers'] = array();
+		}
+		
+		// Add Humanitix-specific headers
+		$args['headers']['x-api-key'] = $this->api_key;
+		$args['headers']['Content-Type'] = 'application/json';
+		$args['headers']['Accept'] = 'application/json';
+		
 		// Add organization ID header if available.
 		if ( ! empty( $this->org_id ) ) {
-			$headers['X-Organiser-ID'] = $this->org_id;
+			$args['headers']['X-Organiser-ID'] = $this->org_id;
 		}
-
-		$args = array(
-			'method'  => $method,
-			'headers' => $headers,
-			'timeout' => 30,
-		);
-
-		// Add parameters based on method.
-		if ( 'GET' === $method && ! empty( $params ) ) {
-			$url = add_query_arg( $params, $url );
-		} elseif ( in_array( $method, array( 'POST', 'PUT', 'PATCH' ), true ) && ! empty( $params ) ) {
-			$args['body'] = wp_json_encode( $params );
-		}
-
-		// For test requests, limit the response size.
-		if ( $is_test ) {
-			$args['timeout'] = 10;
-		}
+		
+		// Set method
+		$args['method'] = $method;
+		$args['httpversion'] = '1.1';
+		$args['user-agent'] = 'Humanitix-API-Importer/1.0';
 
 		$response = wp_remote_request( $url, $args );
 
@@ -685,6 +772,43 @@ class HumanitixAPI {
 				'body_preview' => substr( $body, 0, 200 ),
 			)
 		);
+
+		// Handle specific HTTP error codes.
+		if ( $status_code >= 500 ) {
+			$debug_helper->log_critical_error(
+				'API',
+				'Server error received',
+				array(
+					'status_code' => $status_code,
+					'url'         => $url,
+					'method'      => $method,
+				)
+			);
+			return new \WP_Error( 'server_error', "Server error: HTTP {$status_code}" );
+		}
+
+		if ( $status_code >= 400 ) {
+			// Parse error response for better debugging
+			$error_data = json_decode( $body, true );
+			$error_message = "Client error: HTTP {$status_code}";
+			
+			if ( $error_data && isset( $error_data['message'] ) ) {
+				$error_message .= " - " . $error_data['message'];
+			}
+			
+			$debug_helper->log_critical_error(
+				'API',
+				'Client error received',
+				array(
+					'status_code' => $status_code,
+					'url'         => $url,
+					'method'      => $method,
+					'body'        => $body,
+					'error_data'  => $error_data,
+				)
+			);
+			return new \WP_Error( 'client_error', $error_message );
+		}
 
 		// For test requests, return the full response for debugging.
 		if ( $is_test ) {
@@ -771,7 +895,7 @@ class HumanitixAPI {
 		);
 
 		foreach ( $schema_endpoints as $endpoint => $description ) {
-			$response = $this->make_request( 'GET', $endpoint, array(), true );
+			$response = $this->make_request( $endpoint, array( 'method' => 'GET', 'timeout' => 15 ) );
 
 			if ( is_wp_error( $response ) ) {
 				continue;
@@ -812,7 +936,7 @@ class HumanitixAPI {
 			'page' => max( 1, absint( $page ) ),
 		);
 
-		$response = $this->make_request( 'GET', '/events', $params );
+					$response = $this->make_request( '/events', array( 'method' => 'GET' ) );
 
 		if ( is_wp_error( $response ) ) {
 			return $response;
@@ -886,5 +1010,26 @@ class HumanitixAPI {
 		}
 
 		return $analysis;
+	}
+
+	/**
+	 * Get the default API endpoint for Humanitix.
+	 *
+	 * @return string
+	 */
+	protected function get_default_endpoint() {
+		return 'https://api.humanitix.com/v1';
+	}
+
+	/**
+	 * Get authentication headers for Humanitix API requests.
+	 *
+	 * @return array
+	 */
+	protected function get_auth_headers() {
+		return array(
+			'Authorization' => 'Bearer ' . $this->api_key,
+			'Content-Type'  => 'application/json',
+		);
 	}
 }

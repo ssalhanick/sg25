@@ -46,6 +46,18 @@ class Logger {
 	 * @param array  $context Optional - Additional structured data.
 	 */
 	public function log( $level, $message, $context = array() ) {
+		// Check if we should skip this log based on level
+		if ( ! $this->should_log_level( $level ) ) {
+			return false;
+		}
+
+		// Check if we should skip this log based on content
+		if ( $this->should_skip_log( $message, $context ) ) {
+			return false;
+		}
+
+		// Truncate context if it's too large
+		$context = $this->truncate_context( $context );
 		global $wpdb;
 
 		// Sanitize level.
@@ -86,22 +98,25 @@ class Logger {
 	 * @param array  $data Optional - Additional structured data.
 	 */
 	public function log_error_code( $error_code, $context = '', $data = array() ) {
-		// Check if HUMANITIX_DEBUG is enabled
+		// Check if HUMANITIX_DEBUG is enabled.
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
-			// Full debugging - log everything
-			$message = ErrorCode::format_error( $error_code, $context );
-			$log_data = array_merge( $data, array(
-				'error_code' => $error_code,
-				'category' => ErrorCode::get_category( $error_code ),
-				'is_critical' => ErrorCode::is_critical( $error_code ),
-				'context' => $context,
-			) );
+			// Full debugging - log everything.
+			$message  = ErrorCode::format_error( $error_code, $context );
+			$log_data = array_merge(
+				$data,
+				array(
+					'error_code'  => $error_code,
+					'category'    => ErrorCode::get_category( $error_code ),
+					'is_critical' => ErrorCode::is_critical( $error_code ),
+					'context'     => $context,
+				)
+			);
 		} else {
-			// Minimal logging - just error code and basic message
-			$message = ErrorCode::format_error( $error_code, $context );
+			// Minimal logging - just error code and basic message.
+			$message  = ErrorCode::format_error( $error_code, $context );
 			$log_data = array(
-				'error_code' => $error_code,
-				'category' => ErrorCode::get_category( $error_code ),
+				'error_code'  => $error_code,
+				'category'    => ErrorCode::get_category( $error_code ),
 				'is_critical' => ErrorCode::is_critical( $error_code ),
 			);
 		}
@@ -129,13 +144,13 @@ class Logger {
 
 		$context = array(
 			'imported_count' => $imported_count,
-			'updated_count' => $updated_count,
+			'updated_count'  => $updated_count,
 			'existing_count' => $existing_count,
-			'duration' => $duration,
-			'error_count' => count( $errors ),
+			'duration'       => $duration,
+			'error_count'    => count( $errors ),
 		);
 
-		// If HUMANITIX_DEBUG is enabled, include detailed error information
+		// If HUMANITIX_DEBUG is enabled, include detailed error information.
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG && ! empty( $errors ) ) {
 			$context['errors'] = $errors;
 		}
@@ -153,6 +168,17 @@ class Logger {
 	 */
 	public function get_logs( $level = '', $date = '', $limit = 100, $offset = 0 ) {
 		global $wpdb;
+
+		// Memory optimization: Check available memory
+		$memory_limit = ini_get( 'memory_limit' );
+		$memory_usage = memory_get_usage( true );
+		$memory_limit_bytes = $this->return_bytes( $memory_limit );
+		$available_memory = $memory_limit_bytes - $memory_usage;
+		
+		// If we have less than 10MB available, reduce the limit
+		if ( $available_memory < 10 * 1024 * 1024 ) {
+			$limit = min( $limit, 10 ); // Reduce to max 10 records
+		}
 
 		$where_conditions = array();
 		$where_values     = array();
@@ -186,6 +212,170 @@ class Logger {
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		return $wpdb->get_results( $wpdb->prepare( $sql, ...$prepare_values ) );
+	}
+
+	/**
+	 * Check if we should log based on current level settings.
+	 *
+	 * @param string $level The log level to check.
+	 * @return bool Whether to log this level.
+	 */
+	private function should_log_level( $level ) {
+		// Get current settings
+		$settings = get_option( 'humanitix_importer_options', array() );
+		$log_level = isset( $settings['log_level'] ) ? $settings['log_level'] : 'info';
+		
+		// Define level hierarchy
+		$levels = array(
+			'debug' => 0,
+			'info' => 1,
+			'warning' => 2,
+			'error' => 3,
+			'critical' => 4,
+		);
+		
+		$current_level = isset( $levels[ $log_level ] ) ? $levels[ $log_level ] : 1;
+		$message_level = isset( $levels[ $level ] ) ? $levels[ $level ] : 1;
+		
+		return $message_level >= $current_level;
+	}
+
+	/**
+	 * Check if we should skip logging this message based on content.
+	 *
+	 * @param string $message The log message.
+	 * @param array  $context The log context.
+	 * @return bool Whether to skip this log.
+	 */
+	private function should_skip_log( $message, $context ) {
+		// Check if noise filtering is enabled
+		$settings = get_option( 'humanitix_importer_options', array() );
+		$filter_noise = isset( $settings['filter_log_noise'] ) ? $settings['filter_log_noise'] : true;
+		
+		if ( ! $filter_noise ) {
+			return false;
+		}
+		// Skip template assets and hooks initiations
+		$skip_patterns = array(
+			// Template assets
+			'template assets',
+			'template-assets',
+			'assets/css/',
+			'assets/js/',
+			'assets/src/',
+			'TemplateAssets',
+			'TemplateManager',
+			'template manager',
+			'template initialization',
+			'template loaded',
+			'template hooks',
+			'TemplateHooks',
+			'template hooks registered',
+			'template hooks initialized',
+			'template override',
+			'single-event.php',
+			'templates.css',
+			'templates.js',
+			
+			// Hooks initiations
+			'hooks initialized',
+			'hooks registered',
+			'add_action',
+			'add_filter',
+			'register_hook',
+			'init_hooks',
+			'WordPress hooks',
+			'admin_menu',
+			'admin_init',
+			'wp_ajax_',
+			'wp_rest_',
+			'init',
+			'plugins_loaded',
+			'after_setup_theme',
+			
+			// General noise
+			'initialized successfully',
+			'loaded successfully',
+			'registered successfully',
+			'created successfully',
+			'setup complete',
+			'initialization complete',
+			'constructor called',
+			'class instantiated',
+		);
+
+		$message_lower = strtolower( $message );
+		$context_json = wp_json_encode( $context );
+		$context_lower = strtolower( $context_json );
+
+		foreach ( $skip_patterns as $pattern ) {
+			if ( strpos( $message_lower, $pattern ) !== false ) {
+				return true;
+			}
+			if ( strpos( $context_lower, $pattern ) !== false ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Truncate context data to prevent oversized logs.
+	 *
+	 * @param array $context The context data to truncate.
+	 * @return array Truncated context data.
+	 */
+	private function truncate_context( $context ) {
+		if ( empty( $context ) ) {
+			return $context;
+		}
+
+		$max_context_size = 500; // Maximum context size in characters
+		$context_json = wp_json_encode( $context );
+		
+		if ( strlen( $context_json ) > $max_context_size ) {
+			// Truncate large context
+			$truncated = array();
+			$current_size = 0;
+			
+			foreach ( $context as $key => $value ) {
+				$item_json = wp_json_encode( array( $key => $value ) );
+				
+				if ( $current_size + strlen( $item_json ) > $max_context_size ) {
+					$truncated['_truncated'] = 'Context truncated due to size limit';
+					break;
+				}
+				
+				$truncated[ $key ] = $value;
+				$current_size += strlen( $item_json );
+			}
+			
+			return $truncated;
+		}
+		
+		return $context;
+	}
+
+	/**
+	 * Convert memory limit string to bytes
+	 *
+	 * @param string $val Memory limit string (e.g., '128M', '1G').
+	 * @return int Memory limit in bytes.
+	 */
+	private function return_bytes( $val ) {
+		$val = trim( $val );
+		$last = strtolower( $val[ strlen( $val ) - 1 ] );
+		$val = (int) $val;
+		switch ( $last ) {
+			case 'g':
+				$val *= 1024;
+			case 'm':
+				$val *= 1024;
+			case 'k':
+				$val *= 1024;
+		}
+		return $val;
 	}
 
 	/**

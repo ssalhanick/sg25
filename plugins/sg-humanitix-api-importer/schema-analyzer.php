@@ -39,7 +39,7 @@ $sg_org_id       = $sg_options['org_id'] ?? '';
 $sg_api_endpoint = $sg_options['api_endpoint'] ?? 'https://api.humanitix.com/v1';
 
 echo 'API Endpoint: ' . esc_html( $sg_api_endpoint ) . "\n";
-echo 'API Key: ' . ( empty( $sg_api_key ) ? 'NOT SET - Please configure in WordPress Admin' : esc_html( substr( $sg_api_key, 0, 8 ) ) . '...' ) . "\n";
+echo 'API Key: ' . ( empty( $sg_api_key ) ? 'NOT SET - Please configure in WordPress Admin' : esc_html( substr( $sg_api_key, 0, 8 ) . '...' . substr( $sg_api_key, -4 ) ) ) . "\n";
 echo 'Organization ID: ' . ( empty( $sg_org_id ) ? 'NOT SET - Please configure in WordPress Admin' : esc_html( $sg_org_id ) ) . "\n\n";
 
 // Check if API key is configured.
@@ -61,7 +61,7 @@ if ( empty( $sg_org_id ) ) {
 }
 
 // Check if the plugin classes are available.
-if ( ! class_exists( 'SG\HumanitixApiImporter\HumanitixAPI' ) ) {
+if ( ! class_exists( 'SG\HumanitixApiImporter\API\HumanitixAPI' ) ) {
 	echo "❌ HumanitixAPI class not found. Make sure the plugin is loaded.\n";
 	exit( 1 );
 }
@@ -73,7 +73,7 @@ if ( ! class_exists( 'SG\HumanitixApiImporter\Importer\DataMapper' ) ) {
 
 try {
 	// Initialize API and DataMapper.
-	$sg_api    = new SG\HumanitixApiImporter\HumanitixAPI( $sg_api_key, $sg_api_endpoint, $sg_org_id );
+	$sg_api    = new SG\HumanitixApiImporter\API\HumanitixAPI( $sg_api_key, $sg_api_endpoint, $sg_org_id );
 	$sg_mapper = new SG\HumanitixApiImporter\Importer\DataMapper();
 
 	echo "1. Testing API connection...\n";

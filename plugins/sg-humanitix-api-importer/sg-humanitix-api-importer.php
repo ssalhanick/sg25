@@ -51,10 +51,13 @@ add_action(
 	}
 );
 
-// Load translations at the right time
-add_action( 'init', function() {
-	load_plugin_textdomain( 'sg-humanitix-api-importer', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
-} );
+// Load translations at the right time.
+add_action(
+	'init',
+	function () {
+		load_plugin_textdomain( 'sg-humanitix-api-importer', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	}
+);
 
 // Initialize hooks early for admin functionality.
 add_action(
