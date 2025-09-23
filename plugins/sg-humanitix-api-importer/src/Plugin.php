@@ -167,7 +167,10 @@ class Plugin {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin activated' );
 		}
-		$this->create_logs_table();
+		// Guard: create_logs_table may not exist yet. Avoid fatal on activation.
+		if ( method_exists( $this, 'create_logs_table' ) ) {
+			$this->create_logs_table();
+		}
 
 		// Check if auto import should be scheduled on activation.
 		$options = get_option( 'humanitix_importer_options', array() );
