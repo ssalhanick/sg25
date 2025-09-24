@@ -528,7 +528,7 @@ jobs:
           
           # Deploy themes with dry-run first
           echo "Performing dry run for themes..."
-          if ! rsync -avzn --update --stats \
+          if ! rsync -avzn --update --delete --stats \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -562,7 +562,7 @@ jobs:
             ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes dry run failed"
             echo "::group::Themes Dry Run Debug Info"
-            rsync -avzn --update --stats --verbose \
+            rsync -avzn --update --delete --stats --verbose \
               --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
@@ -601,7 +601,7 @@ jobs:
           
           # Actual themes deployment
           echo "Starting actual themes deployment..."
-          if ! rsync -avz --update --stats --compress --partial \
+          if ! rsync -avz --update --delete --stats --compress --partial \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -635,7 +635,7 @@ jobs:
             ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes deployment failed"
             echo "::group::Themes Deployment Debug Info"
-            rsync -avz --update --stats --verbose \
+            rsync -avz --update --delete --stats --verbose \
               --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
@@ -681,7 +681,7 @@ jobs:
           
           # Deploy plugins with dry-run first
           echo "Performing dry run for plugins..."
-          if ! rsync -avzn --update --stats \
+          if ! rsync -avzn --update --delete --stats \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -715,7 +715,7 @@ jobs:
             ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins dry run failed"
             echo "::group::Plugins Dry Run Debug Info"
-            rsync -avzn --update --stats --verbose \
+            rsync -avzn --update --delete --stats --verbose \
               --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
@@ -758,7 +758,7 @@ jobs:
           
           # Actual plugins deployment
           echo "Starting actual plugins deployment..."
-          if ! rsync -avz --update --stats --compress --partial \
+          if ! rsync -avz --update --delete --stats --compress --partial \
             --include='composer.json' \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -792,7 +792,7 @@ jobs:
             ./plugins/ $SSH_USER@ssh.getflywheel.com:$PLUGINS_PATH; then
             echo "::error::Plugins deployment failed"
             echo "::group::Plugins Deployment Debug Info"
-            rsync -avz --update --stats --verbose \
+            rsync -avz --update --delete --stats --verbose \
               --include='composer.json' \
               --exclude='node_modules' \
               --exclude='.git' \
