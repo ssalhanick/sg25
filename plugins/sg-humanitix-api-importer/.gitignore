@@ -48,9 +48,9 @@ node_modules/.cache/
 # Unit Test Scripts
 tests/
 
-# Deployment to local by flywheel instance of wordpress.
+# deployment to local by flywheel instance of wordpress.
 deploy.bat
 
 # cleaning up my development environement
 clean.bat
-clean.sh    
+clean.sh

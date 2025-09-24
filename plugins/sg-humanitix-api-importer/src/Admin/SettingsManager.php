@@ -11,6 +11,8 @@
 
 namespace SG\HumanitixApiImporter\Admin;
 
+use SG\HumanitixApiImporter\API\EventbriteAPI;
+
 /**
  * Settings Manager Class.
  *
@@ -53,6 +55,15 @@ class SettingsManager {
 	public function __construct() {
 		if ( ! self::$settings_initialized ) {
 			add_action( 'admin_init', array( $this, 'init_settings' ) );
+			add_action( 'admin_init', array( $this, 'handle_oauth_callback' ) );
+			add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_eventbrite_scripts' ) );
+			add_action( 'admin_menu', array( $this, 'add_oauth_callback_page' ) );
+			
+			// AJAX handlers for Eventbrite OAuth
+			add_action( 'wp_ajax_eventbrite_test_connection', array( $this, 'ajax_test_eventbrite_connection' ) );
+			add_action( 'wp_ajax_eventbrite_authorize', array( $this, 'ajax_start_eventbrite_authorization' ) );
+			add_action( 'wp_ajax_eventbrite_logout', array( $this, 'ajax_eventbrite_logout' ) );
+			
 			self::$settings_initialized = true;
 		}
 	}
@@ -66,37 +77,74 @@ class SettingsManager {
 	 * @return void
 	 */
 	public function init_settings() {
-		register_setting( $this->options_group, $this->options_name, array( $this, 'sanitize_settings' ) );
+		// Register Humanitix settings
+		register_setting( $this->options_group, 'humanitix_importer_options', array( $this, 'sanitize_humanitix_settings' ) );
 
+		// Register Eventbrite settings
+		register_setting( $this->options_group, 'eventbrite_importer_options', array( $this, 'sanitize_eventbrite_settings' ) );
+
+		// Humanitix API Settings Section
 		add_settings_section(
-			'api_settings',
-			'API Settings',
-			array( $this, 'render_api_section' ),
-			'humanitix-importer-settings'
+			'humanitix_api_settings',
+			'Humanitix API Settings',
+			array( $this, 'render_humanitix_api_section' ),
+			'event-importers-settings'
 		);
 
 		add_settings_field(
-			'api_key',
+			'humanitix_api_key',
 			'Humanitix API Key',
-			array( $this, 'render_api_key_field' ),
-			'humanitix-importer-settings',
-			'api_settings'
+			array( $this, 'render_humanitix_api_key_field' ),
+			'event-importers-settings',
+			'humanitix_api_settings'
 		);
 
 		add_settings_field(
-			'org_id',
+			'humanitix_org_id',
 			'Organization ID',
-			array( $this, 'render_org_id_field' ),
-			'humanitix-importer-settings',
-			'api_settings'
+			array( $this, 'render_humanitix_org_id_field' ),
+			'event-importers-settings',
+			'humanitix_api_settings'
 		);
 
 		add_settings_field(
-			'api_endpoint',
+			'humanitix_api_endpoint',
 			'API Endpoint',
-			array( $this, 'render_api_endpoint_field' ),
-			'humanitix-importer-settings',
-			'api_settings'
+			array( $this, 'render_humanitix_api_endpoint_field' ),
+			'event-importers-settings',
+			'humanitix_api_settings'
+		);
+
+		// Eventbrite API Settings Section
+		add_settings_section(
+			'eventbrite_api_settings',
+			'Eventbrite API Settings',
+			array( $this, 'render_eventbrite_api_section' ),
+			'event-importers-settings'
+		);
+
+		add_settings_field(
+			'eventbrite_client_id',
+			'API Key (Client ID)',
+			array( $this, 'render_eventbrite_client_id_field' ),
+			'event-importers-settings',
+			'eventbrite_api_settings'
+		);
+
+		add_settings_field(
+			'eventbrite_client_secret',
+			'Client Secret',
+			array( $this, 'render_eventbrite_client_secret_field' ),
+			'event-importers-settings',
+			'eventbrite_api_settings'
+		);
+
+		add_settings_field(
+			'eventbrite_redirect_uri',
+			'Redirect URI',
+			array( $this, 'render_eventbrite_redirect_uri_field' ),
+			'event-importers-settings',
+			'eventbrite_api_settings'
 		);
 
 		add_settings_section(
@@ -154,83 +202,7 @@ class SettingsManager {
 			'import_settings'
 		);
 
-		add_settings_field(
-			'import_images',
-			'Import Images',
-			array( $this, 'render_images_field' ),
-			'humanitix-importer-settings',
-			'import_settings'
-		);
 
-		add_settings_section(
-			'logging_settings',
-			'Logging Settings',
-			array( $this, 'render_logging_section' ),
-			'humanitix-importer-settings'
-		);
-
-		add_settings_field(
-			'log_level',
-			'Log Level',
-			array( $this, 'render_log_level_field' ),
-			'humanitix-importer-settings',
-			'logging_settings'
-		);
-
-		add_settings_field(
-			'log_retention',
-			'Log Retention (days)',
-			array( $this, 'render_retention_field' ),
-			'humanitix-importer-settings',
-			'logging_settings'
-		);
-
-		add_settings_field(
-			'filter_log_noise',
-			'Filter Log Noise',
-			array( $this, 'render_filter_log_noise_field' ),
-			'humanitix-importer-settings',
-			'logging_settings'
-		);
-
-		add_settings_section(
-			'archive_settings',
-			'Archive Settings',
-			array( $this, 'render_archive_section' ),
-			'humanitix-importer-settings'
-		);
-
-		add_settings_field(
-			'deleted_410_enable',
-			'410 for Deleted Content',
-			array( $this, 'render_410_enable_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'deleted_410_ttl_days',
-			'410 Retention (days)',
-			array( $this, 'render_410_ttl_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_age_threshold',
-			'Archive Age Threshold (years)',
-			array( $this, 'render_archive_age_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
-
-		add_settings_field(
-			'archive_post_status',
-			'Archive Post Status',
-			array( $this, 'render_archive_status_field' ),
-			'humanitix-importer-settings',
-			'archive_settings'
-		);
 
 
 	}
@@ -246,21 +218,82 @@ class SettingsManager {
 	public function render_settings_form() {
 		?>
 		<div class="wrap">
-			<h1>Humanitix Importer Settings</h1>
+			<h1>Event Importers Settings</h1>
+			
+			<?php
+			// Show Eventbrite OAuth success/error messages
+			if ( isset( $_GET['eventbrite_success'] ) ) {
+				echo '<div class="notice notice-success"><p>Eventbrite authorization successful!</p></div>';
+			}
+			if ( isset( $_GET['eventbrite_error'] ) ) {
+				echo '<div class="notice notice-error"><p>Eventbrite Error: ' . esc_html( $_GET['eventbrite_error'] ) . '</p></div>';
+			}
+			
+			// Debug: Show all Eventbrite settings (with client secret truncated)
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				$all_eventbrite_settings = get_option( 'eventbrite_importer_options', array() );
+				$debug_settings = $all_eventbrite_settings;
+				if ( isset( $debug_settings['client_secret'] ) ) {
+					$debug_settings['client_secret'] = $this->truncate_client_secret( $debug_settings['client_secret'] );
+				}
+				echo '<div class="notice notice-info"><p><strong>Debug - All Eventbrite Settings:</strong><br><pre>' . esc_html( print_r( $debug_settings, true ) ) . '</pre></p></div>';
+			}
+			?>
 			
 			<form method="post" action="options.php">
 				<?php
 				settings_fields( $this->options_group );
-				do_settings_sections( 'humanitix-importer-settings' );
+				do_settings_sections( 'event-importers-settings' );
 				submit_button();
 				?>
 			</form>
 			
 			<div class="card">
 				<h2>API Test</h2>
-				<p>Test your API connection to ensure it's working properly.</p>
-				<button id="test-api" class="button">Test API Connection</button>
-				<div id="api-test-result"></div>
+				<p>Test your API connections to ensure they're working properly.</p>
+				
+				<h3>Humanitix API Test</h3>
+				<button id="test-humanitix-api" class="button">Test Humanitix API Connection</button>
+				<div id="humanitix-api-test-result"></div>
+				
+				<h3>Eventbrite API Test</h3>
+				<?php
+				$eventbrite_settings = get_option( 'eventbrite_importer_options', array() );
+				$api = $this->get_eventbrite_api();
+				$is_authenticated = $api && $api->is_authenticated();
+				?>
+				
+				<?php 
+				// Debug: Show what settings are actually loaded (with client secret truncated)
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					$debug_settings = $eventbrite_settings;
+					if ( isset( $debug_settings['client_secret'] ) ) {
+						$debug_settings['client_secret'] = $this->truncate_client_secret( $debug_settings['client_secret'] );
+					}
+					echo '<div class="notice notice-info inline"><p><strong>Debug Info:</strong> Settings loaded: ' . esc_html( print_r( $debug_settings, true ) ) . '</p></div>';
+				}
+				?>
+				
+				<?php if ( ! empty( $eventbrite_settings['client_id'] ) && ! empty( $eventbrite_settings['client_secret'] ) ) : ?>
+					<?php if ( $is_authenticated ) : ?>
+						<div class="notice notice-success inline">
+							<p><strong>✓ Authenticated</strong> - You are connected to Eventbrite</p>
+						</div>
+						<button id="test-eventbrite-api" class="button">Test Eventbrite API Connection</button>
+						<button id="eventbrite-logout" class="button">Logout</button>
+					<?php else : ?>
+						<div class="notice notice-warning inline">
+							<p><strong>⚠ Not Authenticated</strong> - Click "Authorize Eventbrite" to connect</p>
+						</div>
+						<button id="start-eventbrite-authorization" class="button button-primary">Authorize Eventbrite</button>
+					<?php endif; ?>
+				<?php else : ?>
+					<div class="notice notice-info inline">
+						<p><strong>ℹ Configuration Required</strong> - Please enter your Eventbrite API credentials above first</p>
+					</div>
+				<?php endif; ?>
+				
+				<div id="eventbrite-api-test-result"></div>
 				
 				<?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : ?>
 					<hr>
@@ -300,7 +333,7 @@ class SettingsManager {
 		$validation_class   = '';
 
 		if ( ! empty( $api_key ) ) {
-			$api        = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key );
+			$api        = new \SG\HumanitixApiImporter\API\HumanitixAPI( $api_key );
 			$validation = $api->validate_api_key_format( $api_key );
 
 			if ( ! $validation['valid'] ) {
@@ -887,7 +920,447 @@ class SettingsManager {
 		<?php
 	}
 
+	// ============================================================================
+	// Humanitix API Settings Methods
+	// ============================================================================
 
+	/**
+	 * Render the Humanitix API settings section description.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_api_section() {
+		echo '<p>Configure your Humanitix API credentials. You can find these in your <a href="https://console.humanitix.com" target="_blank">Humanitix console</a>.</p>';
+	}
 
+	/**
+	 * Render the Humanitix API key field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_api_key_field() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		$api_key = $options['api_key'] ?? '';
+		?>
+		<input type="password" 
+			   name="humanitix_importer_options[api_key]" 
+			   value="<?php echo esc_attr( $api_key ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Humanitix API key. This is required for importing events.</p>
+		<?php
+	}
+
+	/**
+	 * Render the Humanitix organization ID field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_org_id_field() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		$org_id = $options['org_id'] ?? '';
+		?>
+		<input type="text" 
+			   name="humanitix_importer_options[org_id]" 
+			   value="<?php echo esc_attr( $org_id ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Humanitix organization ID (optional, but recommended for better performance).</p>
+		<?php
+	}
+
+	/**
+	 * Render the Humanitix API endpoint field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_humanitix_api_endpoint_field() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		$api_endpoint = $options['api_endpoint'] ?? '';
+		?>
+		<input type="url" 
+			   name="humanitix_importer_options[api_endpoint]" 
+			   value="<?php echo esc_attr( $api_endpoint ); ?>" 
+			   class="regular-text" />
+		<p class="description">Custom API endpoint (leave blank to use default: https://api.humanitix.com/v1)</p>
+		<?php
+	}
+
+	// ============================================================================
+	// Eventbrite API Settings Methods
+	// ============================================================================
+
+	/**
+	 * Render the Eventbrite API settings section description.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_api_section() {
+		echo '<p>Configure your Eventbrite OAuth 2.0 credentials. You can find these in your <a href="https://www.eventbrite.com/platform/api-keys" target="_blank">Eventbrite developer portal</a>.</p>';
+		echo '<p><strong>🔒 Security Note:</strong> Client secrets are stored securely and never displayed in full. Only the first 8 and last 4 characters are shown in debug output.</p>';
+	}
+
+	/**
+	 * Render the Eventbrite Client ID field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_client_id_field() {
+		$options = get_option( 'eventbrite_importer_options', array() );
+		$client_id = $options['client_id'] ?? '';
+		?>
+		<input type="text" 
+			   name="eventbrite_importer_options[client_id]" 
+			   value="<?php echo esc_attr( $client_id ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Eventbrite API Key (Client ID). This is required for OAuth 2.0 authentication.</p>
+		<?php
+	}
+
+	/**
+	 * Render the Eventbrite Client Secret field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_client_secret_field() {
+		$options = get_option( 'eventbrite_importer_options', array() );
+		$client_secret = $options['client_secret'] ?? '';
+		?>
+		<input type="password" 
+			   name="eventbrite_importer_options[client_secret]" 
+			   value="<?php echo esc_attr( $client_secret ); ?>" 
+			   class="regular-text" />
+		<p class="description">Your Eventbrite Client Secret. This is required for OAuth 2.0 authentication.</p>
+		<?php
+	}
+
+	/**
+	 * Render the Eventbrite Redirect URI field.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function render_eventbrite_redirect_uri_field() {
+		$options = get_option( 'eventbrite_importer_options', array() );
+		$redirect_uri = $options['redirect_uri'] ?? admin_url( 'admin.php?page=eventbrite-oauth-callback' );
+		?>
+		<input type="url" 
+			   name="eventbrite_importer_options[redirect_uri]" 
+			   value="<?php echo esc_attr( $redirect_uri ); ?>" 
+			   class="regular-text" />
+		<p class="description">OAuth redirect URI (usually auto-generated).</p>
+		<p class="description"><strong>Current URI:</strong> <code><?php echo esc_html( $redirect_uri ); ?></code></p>
+		<p class="description"><strong>⚠️ Important:</strong> This exact URI must be added to your Eventbrite app settings in the developer portal.</p>
+		<?php
+	}
+
+	// ============================================================================
+	// Sanitization Methods
+	// ============================================================================
+
+	/**
+	 * Sanitize Humanitix settings.
+	 *
+	 * @since 1.0.0
+	 * @param array $input The input array to sanitize.
+	 * @return array The sanitized input array.
+	 */
+	public function sanitize_humanitix_settings( $input ) {
+		$sanitized = array();
+
+		if ( isset( $input['api_key'] ) ) {
+			$sanitized['api_key'] = sanitize_text_field( $input['api_key'] );
+		}
+
+		if ( isset( $input['org_id'] ) ) {
+			$sanitized['org_id'] = sanitize_text_field( $input['org_id'] );
+		}
+
+		if ( isset( $input['api_endpoint'] ) ) {
+			$sanitized['api_endpoint'] = esc_url_raw( $input['api_endpoint'] );
+		}
+
+		return $sanitized;
+	}
+
+	/**
+	 * Sanitize Eventbrite settings.
+	 *
+	 * @since 1.0.0
+	 * @param array $input The input array to sanitize.
+	 * @return array The sanitized input array.
+	 */
+	public function sanitize_eventbrite_settings( $input ) {
+		$sanitized = array();
+
+		if ( isset( $input['client_id'] ) ) {
+			$sanitized['client_id'] = sanitize_text_field( $input['client_id'] );
+		}
+
+		if ( isset( $input['client_secret'] ) ) {
+			$sanitized['client_secret'] = sanitize_text_field( $input['client_secret'] );
+		}
+
+		if ( isset( $input['redirect_uri'] ) ) {
+			$sanitized['redirect_uri'] = esc_url_raw( $input['redirect_uri'] );
+		}
+
+		return $sanitized;
+	}
+
+	// ============================================================================
+	// Eventbrite OAuth 2.0 Methods
+	// ============================================================================
+
+	/**
+	 * Truncate client secret for safe display
+	 */
+	private function truncate_client_secret( $client_secret ) {
+		if ( empty( $client_secret ) || strlen( $client_secret ) < 12 ) {
+			return '***';
+		}
+		return substr( $client_secret, 0, 8 ) . '...' . substr( $client_secret, -4 );
+	}
+
+	/**
+	 * Add OAuth callback page (hidden from menu)
+	 */
+	public function add_oauth_callback_page() {
+		add_submenu_page(
+			null, // Hidden from menu
+			'Eventbrite OAuth Callback',
+			'Eventbrite OAuth Callback',
+			'manage_options',
+			'eventbrite-oauth-callback',
+			array( $this, 'render_oauth_callback_page' )
+		);
+	}
+
+	/**
+	 * Render OAuth callback page (this should never be seen)
+	 */
+	public function render_oauth_callback_page() {
+		// This page should never be rendered as the callback is handled in admin_init
+		wp_die( 'OAuth callback handled automatically. You should not see this page.' );
+	}
+
+	/**
+	 * Handle OAuth callback
+	 */
+	public function handle_oauth_callback() {
+		if ( ! isset( $_GET['page'] ) || $_GET['page'] !== 'eventbrite-oauth-callback' ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$api = $this->get_eventbrite_api();
+		if ( ! $api ) {
+			wp_die( 'Eventbrite API not configured' );
+		}
+
+		// Check for authorization code
+		if ( isset( $_GET['code'] ) ) {
+			$code = sanitize_text_field( $_GET['code'] );
+			$state = isset( $_GET['state'] ) ? sanitize_text_field( $_GET['state'] ) : null;
+
+			$result = $api->exchange_code_for_token( $code, $state );
+
+			if ( is_wp_error( $result ) ) {
+				wp_redirect( admin_url( 'admin.php?page=event-importers-settings&eventbrite_error=' . urlencode( $result->get_error_message() ) ) );
+				exit;
+			}
+
+			wp_redirect( admin_url( 'admin.php?page=event-importers-settings&eventbrite_success=1' ) );
+			exit;
+		}
+
+		// Check for error
+		if ( isset( $_GET['error'] ) ) {
+			$error = sanitize_text_field( $_GET['error'] );
+			wp_redirect( admin_url( 'admin.php?page=event-importers-settings&eventbrite_error=' . urlencode( $error ) ) );
+			exit;
+		}
+	}
+
+	/**
+	 * Get Eventbrite API instance
+	 */
+	private function get_eventbrite_api() {
+		$settings = get_option( 'eventbrite_importer_options', array() );
+		
+		// Debug: Log settings for troubleshooting (with client secret truncated)
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			$debug_settings = $settings;
+			if ( isset( $debug_settings['client_secret'] ) ) {
+				$debug_settings['client_secret'] = $this->truncate_client_secret( $debug_settings['client_secret'] );
+			}
+			error_log( '[Eventbrite API] Settings: ' . print_r( $debug_settings, true ) );
+		}
+		
+		if ( empty( $settings['client_id'] ) || empty( $settings['client_secret'] ) ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[Eventbrite API] Missing credentials - client_id: ' . ( $settings['client_id'] ?? 'empty' ) . ', client_secret: ' . ( ! empty( $settings['client_secret'] ) ? 'present' : 'empty' ) );
+			}
+			return null;
+		}
+
+		try {
+			return new EventbriteAPI(
+				$settings['client_id'],
+				$settings['client_secret'],
+				$settings['redirect_uri'] ?? null
+			);
+		} catch ( Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( '[Eventbrite API] Error creating API instance: ' . $e->getMessage() );
+			}
+			return null;
+		}
+	}
+
+	/**
+	 * Enqueue Eventbrite scripts
+	 */
+	public function enqueue_eventbrite_scripts( $hook ) {
+		if ( strpos( $hook, 'event-importers' ) === false ) {
+			return;
+		}
+
+		wp_enqueue_script( 'jquery' );
+		wp_add_inline_script( 'jquery', $this->get_eventbrite_inline_js() );
+	}
+
+	/**
+	 * Get inline JavaScript for Eventbrite OAuth
+	 */
+	private function get_eventbrite_inline_js() {
+		return "
+		jQuery(document).ready(function($) {
+			// Test Eventbrite connection
+			$('#test-eventbrite-api').on('click', function(e) {
+				e.preventDefault();
+				var button = $(this);
+				button.prop('disabled', true).text('Testing...');
+				
+				$.post(ajaxurl, {
+					action: 'eventbrite_test_connection',
+					nonce: '" . wp_create_nonce( 'eventbrite_test' ) . "'
+				}, function(response) {
+					if (response.success) {
+						$('#eventbrite-api-test-result').html('<div class=\"notice notice-success inline\"><p>Connection successful! User: ' + response.data.user.name + '</p></div>');
+					} else {
+						$('#eventbrite-api-test-result').html('<div class=\"notice notice-error inline\"><p>Connection failed: ' + response.data + '</p></div>');
+					}
+					button.prop('disabled', false).text('Test Eventbrite API Connection');
+				});
+			});
+
+			// Start Eventbrite authorization
+			$('#start-eventbrite-authorization').on('click', function(e) {
+				e.preventDefault();
+				var button = $(this);
+				button.prop('disabled', true).text('Redirecting...');
+				
+				$.post(ajaxurl, {
+					action: 'eventbrite_authorize',
+					nonce: '" . wp_create_nonce( 'eventbrite_authorize' ) . "'
+				}, function(response) {
+					if (response.success) {
+						window.location.href = response.data.auth_url;
+					} else {
+						alert('Authorization failed: ' + response.data);
+						button.prop('disabled', false).text('Authorize Eventbrite');
+					}
+				});
+			});
+
+			// Eventbrite logout
+			$('#eventbrite-logout').on('click', function(e) {
+				e.preventDefault();
+				if (confirm('Are you sure you want to logout from Eventbrite?')) {
+					$.post(ajaxurl, {
+						action: 'eventbrite_logout',
+						nonce: '" . wp_create_nonce( 'eventbrite_logout' ) . "'
+					}, function(response) {
+						location.reload();
+					});
+				}
+			});
+		});
+		";
+	}
+
+	/**
+	 * AJAX: Test Eventbrite connection
+	 */
+	public function ajax_test_eventbrite_connection() {
+		check_ajax_referer( 'eventbrite_test', 'nonce' );
+		
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$api = $this->get_eventbrite_api();
+		if ( ! $api ) {
+			wp_send_json_error( 'Eventbrite API not configured' );
+		}
+
+		$result = $api->test_connection();
+		
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message() );
+		}
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Start Eventbrite authorization
+	 */
+	public function ajax_start_eventbrite_authorization() {
+		check_ajax_referer( 'eventbrite_authorize', 'nonce' );
+		
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$api = $this->get_eventbrite_api();
+		if ( ! $api ) {
+			wp_send_json_error( 'Eventbrite API not configured' );
+		}
+
+		$state = wp_generate_password( 32, false );
+		set_transient( 'eventbrite_oauth_state_' . get_current_user_id(), $state, 600 );
+
+		$auth_url = $api->get_authorization_url( $state );
+		
+		wp_send_json_success( array( 'auth_url' => $auth_url ) );
+	}
+
+	/**
+	 * AJAX: Eventbrite logout
+	 */
+	public function ajax_eventbrite_logout() {
+		check_ajax_referer( 'eventbrite_logout', 'nonce' );
+		
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$api = $this->get_eventbrite_api();
+		if ( $api ) {
+			$api->clear_tokens();
+		}
+
+		wp_send_json_success();
+	}
 
 }

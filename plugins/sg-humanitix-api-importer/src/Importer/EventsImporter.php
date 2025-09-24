@@ -11,7 +11,7 @@
 
 namespace SG\HumanitixApiImporter\Importer;
 
-use SG\HumanitixApiImporter\HumanitixAPI;
+use SG\HumanitixApiImporter\API\HumanitixAPI;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\ErrorCode;
 use SG\HumanitixApiImporter\Admin\PerformanceConfig;
@@ -38,8 +38,8 @@ if ( ! class_exists( 'SG\HumanitixApiImporter\Importer\DataMapper' ) ) {
 }
 
 // Ensure HumanitixAPI class is available.
-if ( ! class_exists( 'SG\HumanitixApiImporter\HumanitixAPI' ) ) {
-	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/HumanitixAPI.php';
+if ( ! class_exists( 'SG\HumanitixApiImporter\API\HumanitixAPI' ) ) {
+	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/API/HumanitixAPI.php';
 }
 
 /**
@@ -150,7 +150,7 @@ class EventsImporter {
 			}
 
 			// Get events from Humanitix API.
-			$debug_helper->log( 'API', 'Calling get_events()' );
+			$debug_helper->log( 'API', 'Calling fetch_events()' );
 
 			// Log API call start when HUMANITIX_DEBUG is enabled.
 			if ( $debug_helper->is_humanitix_debug_enabled() ) {
@@ -158,7 +158,7 @@ class EventsImporter {
 					'API',
 					'Making API request',
 					array(
-						'endpoint'       => 'get_events',
+						'endpoint'       => 'fetch_events',
 						'page'           => $page,
 						'api_key_length' => strlen( defined( 'HUMANITIX_API_KEY' ) ? HUMANITIX_API_KEY : '' ),
 					)
@@ -179,7 +179,7 @@ class EventsImporter {
 
 			while ( $retry_count < $max_retries && is_null( $events ) ) {
 				try {
-					$events = $this->api->get_events( $page );
+					$events = $this->api->fetch_events( array( 'page' => $page ) );
 
 					// If we get a WP_Error, throw an exception.
 					if ( is_wp_error( $events ) ) {
@@ -417,9 +417,9 @@ class EventsImporter {
 			}
 
 			// Get the specific event from Humanitix API with retry logic.
-			$debug_helper->log( 'API', "Calling get_event() for event_id: {$event_id} with {$retry_attempts} retry attempts" );
+			$debug_helper->log( 'API', "Calling fetch_event() for event_id: {$event_id}" );
 
-			$event_data = $this->api->get_event( $event_id, $retry_attempts );
+			$event_data = $this->api->fetch_event( $event_id );
 
 			if ( is_wp_error( $event_data ) ) {
 				$error_code = $event_data->get_error_code();
