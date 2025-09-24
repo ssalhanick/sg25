@@ -145,19 +145,18 @@ jobs:
             exit 0
           fi
           
-          # Update Composer keys first to avoid verification issues
-          echo "Updating Composer keys..."
-          composer self-update --update-keys --no-interaction || echo "Composer key update failed, continuing..."
-          
           # Try to install dependencies (permissive)
           composer install --no-dev --optimize-autoloader --verbose 2>/dev/null || {
-            echo "::warning::Standard composer install failed, trying with disabled verification..."
-            composer install --no-dev --optimize-autoloader --disable-tls --ignore-platform-reqs --verbose 2>/dev/null || {
-              echo "::warning::Composer install failed - continuing with deployment"
-              echo "::group::Composer Debug Info"
-              composer diagnose 2>/dev/null || echo "Composer diagnose failed"
-              composer show 2>/dev/null || echo "Composer show failed"
-              echo "::endgroup::"
+            echo "::warning::Standard composer install failed, trying with relaxed settings..."
+            composer install --no-dev --ignore-platform-reqs --verbose 2>/dev/null || {
+              echo "::warning::Optimized install failed, trying basic install..."
+              composer install --no-dev --verbose 2>/dev/null || {
+                echo "::warning::Composer install failed - continuing with deployment"
+                echo "::group::Composer Debug Info"
+                composer diagnose 2>/dev/null || echo "Composer diagnose failed"
+                composer show 2>/dev/null || echo "Composer show failed"
+                echo "::endgroup::"
+              }
             }
           }
           echo "Composer dependencies installation completed."
@@ -196,19 +195,18 @@ jobs:
             if [ -f "composer.json" ]; then
               echo "Installing Composer dependencies for $component_name..."
               
-              # Update Composer keys first to avoid verification issues
-              echo "Updating Composer keys..."
-              composer self-update --update-keys --no-interaction || echo "Composer key update failed, continuing..."
-              
               # Try composer install with various fallback options
               if ! composer install --no-dev --optimize-autoloader --no-interaction --no-progress; then
-                echo "::warning::Standard composer install failed, trying with disabled verification..."
-                if ! composer install --no-dev --optimize-autoloader --no-interaction --no-progress --disable-tls --ignore-platform-reqs; then
-                  echo "::error::Composer install failed for $component_name"
-                  echo "::group::Composer Debug for $component_name"
-                  composer diagnose || echo "Composer diagnose failed"
-                  echo "::endgroup::"
-                  return 1
+                echo "::warning::Standard composer install failed, trying with relaxed settings..."
+                if ! composer install --no-dev --no-interaction --no-progress --ignore-platform-reqs; then
+                  echo "::warning::Optimized install failed, trying basic install..."
+                  if ! composer install --no-dev --no-interaction --no-progress; then
+                    echo "::error::Composer install failed for $component_name"
+                    echo "::group::Composer Debug for $component_name"
+                    composer diagnose || echo "Composer diagnose failed"
+                    echo "::endgroup::"
+                    return 1
+                  fi
                 fi
               fi
               echo "Composer dependencies installed successfully for $component_name"
@@ -594,7 +592,6 @@ jobs:
               --exclude='.eslintrc*' \
               --exclude='.prettierrc*' \
               --exclude='.stylelintrc*' \
-              --exclude='src' \
               --exclude='assets/src' \
               ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
@@ -634,7 +631,6 @@ jobs:
             --exclude='.eslintrc*' \
             --exclude='.prettierrc*' \
             --exclude='.stylelintrc*' \
-            --exclude='src' \
             --exclude='assets/src' \
             ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH; then
             echo "::error::Themes deployment failed"
@@ -669,7 +665,6 @@ jobs:
               --exclude='.eslintrc*' \
               --exclude='.prettierrc*' \
               --exclude='.stylelintrc*' \
-              --exclude='src' \
               --exclude='assets/src' \
               ./themes/ $SSH_USER@ssh.getflywheel.com:$THEMES_PATH
             echo "::endgroup::"
