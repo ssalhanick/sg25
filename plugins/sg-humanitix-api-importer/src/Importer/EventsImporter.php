@@ -749,6 +749,39 @@ class EventsImporter {
 			$humanitix_id = $event_data['_id'] ?? '';
 			update_post_meta( $post_id, '_humanitix_event_id', $humanitix_id );
 
+			// Assign shows category if available.
+			$shows_category_id = $this->ensure_shows_category_exists();
+			if ( $shows_category_id ) {
+				$category_assigned = wp_set_post_terms( $post_id, array( $shows_category_id ), 'tribe_events_cat' );
+				
+				if ( $category_assigned && ! is_wp_error( $category_assigned ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Successfully assigned shows category to event ID {$post_id}" );
+					}
+					$this->logger->log(
+						'info',
+						"Successfully assigned shows category to event: {$event_name}",
+						array(
+							'wordpress_id' => $post_id,
+							'category_id'  => $shows_category_id,
+						)
+					);
+				} else {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Failed to assign shows category to event ID {$post_id}" );
+					}
+					$this->logger->log(
+						'warning',
+						"Failed to assign shows category to event: {$event_name}",
+						array(
+							'wordpress_id' => $post_id,
+							'category_id'  => $shows_category_id,
+							'error'        => is_wp_error( $category_assigned ) ? $category_assigned->get_error_message() : 'Unknown error',
+						)
+					);
+				}
+			}
+
 			// Store event fingerprint for enhanced duplicate detection
 			$event_fingerprint = $this->generate_event_fingerprint( $event_data );
 			update_post_meta( $post_id, '_humanitix_event_fingerprint', $event_fingerprint );
@@ -842,13 +875,49 @@ class EventsImporter {
 			$featured_image_id = $tec_event_data['_thumbnail_id'] ?? null;
 			unset( $tec_event_data['_thumbnail_id'] );
 
-			// Create the event using TEC functions.
-			$event_id = tribe_create_event( $tec_event_data );
+		// Extract shows category ID before creating event.
+		$shows_category_id = $tec_event_data['_shows_category_id'] ?? null;
+		unset( $tec_event_data['_shows_category_id'] );
 
-			if ( $event_id ) {
-				// Store external ID for future reference.
-				update_post_meta( $event_id, '_humanitix_event_id', $event_data['_id'] );
-				update_post_meta( $event_id, '_humanitix_last_import', current_time( 'mysql' ) );
+		// Create the event using TEC functions.
+		$event_id = tribe_create_event( $tec_event_data );
+
+		if ( $event_id ) {
+			// Store external ID for future reference.
+			update_post_meta( $event_id, '_humanitix_event_id', $event_data['_id'] );
+			update_post_meta( $event_id, '_humanitix_last_import', current_time( 'mysql' ) );
+
+			// Assign shows category if available.
+			if ( $shows_category_id ) {
+				$category_assigned = wp_set_post_terms( $event_id, array( $shows_category_id ), 'tribe_events_cat' );
+				
+				if ( $category_assigned && ! is_wp_error( $category_assigned ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Successfully assigned shows category to event ID {$event_id}" );
+					}
+					$this->logger->log(
+						'info',
+						"Successfully assigned shows category to event: {$event_title}",
+						array(
+							'wordpress_id' => $event_id,
+							'category_id'  => $shows_category_id,
+						)
+					);
+				} else {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Failed to assign shows category to event ID {$event_id}" );
+					}
+					$this->logger->log(
+						'warning',
+						"Failed to assign shows category to event: {$event_title}",
+						array(
+							'wordpress_id' => $event_id,
+							'category_id'  => $shows_category_id,
+							'error'        => is_wp_error( $category_assigned ) ? $category_assigned->get_error_message() : 'Unknown error',
+						)
+					);
+				}
+			}
 
 				// Set featured image if available.
 				if ( $featured_image_id ) {
@@ -1124,12 +1193,19 @@ class EventsImporter {
 			$tec_event_data['_thumbnail_id'] = $featured_image_id;
 		}
 
-		// Add "shows" event category if it exists or create it.
+		// Store shows category ID for later assignment after event creation
 		$shows_category_id = $this->ensure_shows_category_exists();
 		if ( $shows_category_id ) {
-			$tec_event_data['tax_input'] = array(
-				'tribe_events_cat' => array( $shows_category_id )
-			);
+			$tec_event_data['_shows_category_id'] = $shows_category_id;
+			
+			// Debug logging
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Storing shows category ID {$shows_category_id} for later assignment" );
+			}
+		} else {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Failed to get shows category ID" );
+			}
 		}
 
 		return $tec_event_data;
@@ -1146,6 +1222,9 @@ class EventsImporter {
 		$existing_category = get_term_by( 'name', 'shows', 'tribe_events_cat' );
 		
 		if ( $existing_category && ! is_wp_error( $existing_category ) ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Found existing shows category with ID: {$existing_category->term_id}" );
+			}
 			return $existing_category->term_id;
 		}
 
