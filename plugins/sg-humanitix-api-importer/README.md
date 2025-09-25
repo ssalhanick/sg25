@@ -556,3 +556,4 @@ This plugin is licensed under the GPL v2 or later.
 - Settings (stored under `humanitix_importer_options`):
   - `deleted_410_enable` (bool, default true)
   - `deleted_410_ttl_days` (int days, default 365; `0` means never expire)
+- adding something to trigger deployment.
