@@ -1124,7 +1124,55 @@ class EventsImporter {
 			$tec_event_data['_thumbnail_id'] = $featured_image_id;
 		}
 
+		// Add "shows" event category if it exists or create it.
+		$shows_category_id = $this->ensure_shows_category_exists();
+		if ( $shows_category_id ) {
+			$tec_event_data['tax_input'] = array(
+				'tribe_events_cat' => array( $shows_category_id )
+			);
+		}
+
 		return $tec_event_data;
+	}
+
+	/**
+	 * Ensure the "shows" event category exists, create it if it doesn't.
+	 *
+	 * @since 1.0.0
+	 * @return int|null The category ID or null if creation failed.
+	 */
+	private function ensure_shows_category_exists() {
+		// Check if "shows" category already exists.
+		$existing_category = get_term_by( 'name', 'shows', 'tribe_events_cat' );
+		
+		if ( $existing_category && ! is_wp_error( $existing_category ) ) {
+			return $existing_category->term_id;
+		}
+
+		// Create the "shows" category if it doesn't exist.
+		$category_data = wp_insert_term(
+			'shows',
+			'tribe_events_cat',
+			array(
+				'description' => 'Events imported from Humanitix',
+				'slug'        => 'shows'
+			)
+		);
+
+		if ( is_wp_error( $category_data ) ) {
+			$this->logger->log_error(
+				'Failed to create shows category: ' . $category_data->get_error_message()
+			);
+			return null;
+		}
+
+		$this->logger->log(
+			'info',
+			'Created shows event category',
+			array( 'category_id' => $category_data['term_id'] )
+		);
+
+		return $category_data['term_id'];
 	}
 
 	/**
