@@ -71,7 +71,7 @@ class TemplateAssets {
 		// Check if TEC plugin is active.
 		$this->tec_active = class_exists( 'Tribe__Events__Main' );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] TemplateAssets: TEC active: ' . ( $this->tec_active ? 'true' : 'false' ) );
 		}
 	}

@@ -83,7 +83,7 @@ class TemplateManager {
 	 * @param Logger $logger The logger instance.
 	 */
 	public function __construct( Logger $logger ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] TemplateManager constructor called' );
 		}
 
@@ -125,9 +125,9 @@ class TemplateManager {
 		// Check if TEC plugin is active.
 		$this->tec_active = class_exists( 'Tribe__Events__Main' );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[sg-humanitix-api-importer] TEC active: ' . ( $this->tec_active ? 'true' : 'false' ) );
-		}
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] TEC active: ' . ( $this->tec_active ? 'true' : 'false' ) );
+			}
 	}
 
 	/**
