@@ -323,10 +323,10 @@ class DataMapper {
 		if ( isset( $humanitix_event['_id'] ) ) {
 			$mapped_event['meta_input']['_humanitix_event_id'] = $this->sanitize_custom_field_optimized( $humanitix_event['_id'], $optimization_settings );
 
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "DataMapper: Mapped _id '{$humanitix_event['_id']}' to _humanitix_event_id meta field" );
 			}
-		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		} elseif ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'DataMapper: No _id field found in humanitix_event data' );
 		}
 
@@ -558,7 +558,7 @@ class DataMapper {
 			}
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Found images: ' . wp_json_encode( $images ) );
 		}
 
@@ -567,33 +567,33 @@ class DataMapper {
 
 			// Set featured image if available - prioritize featureImage over bannerImage.
 			if ( isset( $images['featureImage'] ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( 'DataMapper: Processing featureImage: ' . $images['featureImage'] );
 				}
 				$thumbnail_id = $this->process_event_image( $images['featureImage'] );
 				if ( $thumbnail_id ) {
 					$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( 'DataMapper: Set featured image ID: ' . $thumbnail_id );
 					}
-				} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				} elseif ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( 'DataMapper: Failed to process featureImage' );
 				}
 			} elseif ( isset( $images['bannerImage'] ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( 'DataMapper: Processing bannerImage: ' . $images['bannerImage'] );
 				}
 				$thumbnail_id = $this->process_event_image( $images['bannerImage'] );
 				if ( $thumbnail_id ) {
 					$mapped_event['meta_input']['_thumbnail_id'] = $thumbnail_id;
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( 'DataMapper: Set featured image ID: ' . $thumbnail_id );
 					}
-				} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				} elseif ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( 'DataMapper: Failed to process bannerImage' );
 				}
 			}
-		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		} elseif ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'DataMapper: No images found in event data' );
 		}
 
@@ -999,13 +999,13 @@ class DataMapper {
 	 */
 	private function process_event_image( $image_url ) {
 		if ( empty( $image_url ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'DataMapper: process_event_image called with empty URL' );
 			}
 			return false;
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Processing image URL: ' . $image_url );
 		}
 
@@ -1014,7 +1014,7 @@ class DataMapper {
 		$cache_key          = md5( $image_url );
 
 		if ( isset( $image_cache[ $cache_key ] ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'DataMapper: Using cached image ID: ' . $image_cache[ $cache_key ] );
 			}
 			return $image_cache[ $cache_key ];
@@ -1023,7 +1023,7 @@ class DataMapper {
 		// Check if image already exists in database.
 		$existing_attachment = $this->find_existing_image( $image_url );
 		if ( $existing_attachment ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'DataMapper: Found existing image ID: ' . $existing_attachment );
 			}
 			$image_cache[ $cache_key ] = $existing_attachment;
@@ -1032,7 +1032,7 @@ class DataMapper {
 
 		// Check if image download is enabled.
 		$image_download_enabled = \SG\HumanitixApiImporter\Admin\PerformanceConfig::should_enable_image_download();
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Image download enabled: ' . ( $image_download_enabled ? 'true' : 'false' ) );
 		}
 
@@ -1040,7 +1040,7 @@ class DataMapper {
 		// Images can be processed separately or on-demand.
 		// Only download images if explicitly enabled.
 		if ( ! $image_download_enabled ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'DataMapper: Image download disabled, skipping' );
 			}
 			$image_cache[ $cache_key ] = false;
@@ -1048,12 +1048,12 @@ class DataMapper {
 		}
 
 		// Download and attach image.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Downloading and attaching image' );
 		}
 		$attachment_id = $this->download_and_attach_image( $image_url );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Download result - attachment ID: ' . ( $attachment_id ? $attachment_id : 'false' ) );
 		}
 
@@ -1231,13 +1231,13 @@ class DataMapper {
 		$timezone          = trim( $timezone );
 
 		// Debug logging for timezone conversion.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( "Humanitix DataMapper: Converting timezone '{$original_timezone}' to geographic timezone" );
 		}
 
 		// If it's already a geographic timezone, return as is.
 		if ( $this->is_geographic_timezone( $timezone ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix DataMapper: Timezone '{$timezone}' is already geographic" );
 			}
 			return $timezone;
@@ -1266,14 +1266,14 @@ class DataMapper {
 			// Use WordPress site timezone as fallback.
 			$wp_timezone = get_option( 'timezone_string' );
 			if ( ! empty( $wp_timezone ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( "Humanitix DataMapper: Converting UTC timezone to WordPress timezone: {$wp_timezone}" );
 				}
 				return $wp_timezone;
 			}
 
 			// If WordPress timezone is not set, use a default.
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix DataMapper: Converting UTC timezone to default: America/New_York' );
 			}
 			return 'America/New_York';
@@ -1291,7 +1291,7 @@ class DataMapper {
 				$offset              = $matches[1];
 				$geographic_timezone = $this->get_geographic_timezone_from_offset( $offset );
 				if ( $geographic_timezone ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( "Humanitix DataMapper: Converting offset '{$offset}' to geographic timezone: {$geographic_timezone}" );
 					}
 					return $geographic_timezone;
@@ -1302,14 +1302,14 @@ class DataMapper {
 		// If we can't convert it, use WordPress site timezone as fallback.
 		$wp_timezone = get_option( 'timezone_string' );
 		if ( ! empty( $wp_timezone ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix DataMapper: Using WordPress timezone as fallback: {$wp_timezone}" );
 			}
 			return $wp_timezone;
 		}
 
 		// Final fallback.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix DataMapper: Using final fallback timezone: America/New_York' );
 		}
 		return 'America/New_York';

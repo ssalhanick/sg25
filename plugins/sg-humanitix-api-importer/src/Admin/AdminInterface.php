@@ -60,7 +60,7 @@ class AdminInterface {
 	 * @param SettingsManager $settings The settings manager instance.
 	 */
 	public function __construct( $importer = null, SettingsManager $settings = null ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] AdminInterface constructor called' );
 		}
 		$this->importer         = $importer;
@@ -105,12 +105,12 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function add_admin_menu() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[sg-humanitix-api-importer] Adding admin menu' );
-			error_log( '[sg-humanitix-api-importer] Current user ID: ' . get_current_user_id() );
-			error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
-			error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
-		}
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] Adding admin menu' );
+				error_log( '[sg-humanitix-api-importer] Current user ID: ' . get_current_user_id() );
+				error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
+				error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
+			}
 
 		add_menu_page(
 			'Humanitix Importer',
@@ -154,9 +154,9 @@ class AdminInterface {
 
 
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
-		}
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
+			}
 	}
 
 	/**
@@ -964,7 +964,7 @@ class AdminInterface {
 	 */
 	public function handle_import_ajax() {
 		// Add basic error logging for debugging.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix Import: AJAX handler called' );
 		}
 
@@ -983,7 +983,7 @@ class AdminInterface {
 		$import_limit = null;
 		if ( isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
 			$import_limit = intval( $_POST['import_limit'] );
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix Import: Import limit set to: ' . $import_limit );
 			}
 		}
@@ -1019,10 +1019,10 @@ class AdminInterface {
 			);
 
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
-				error_log( 'Humanitix Import: Exception trace: ' . $e->getTraceAsString() );
-			}
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
+					error_log( 'Humanitix Import: Exception trace: ' . $e->getTraceAsString() );
+				}
 			$this->logger->log( 'error', 'Import failed: ' . $e->getMessage() );
 
 			// Send more detailed error information.
@@ -1069,7 +1069,7 @@ class AdminInterface {
 	 */
 	public function handle_single_event_import_ajax() {
 		// Add basic error logging for debugging.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix Import: Single event AJAX handler called' );
 		}
 
@@ -1119,7 +1119,7 @@ class AdminInterface {
 			);
 
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix Import: Single event exception caught: ' . $e->getMessage() );
 				error_log( 'Humanitix Import: Single event exception trace: ' . $e->getTraceAsString() );
 			}

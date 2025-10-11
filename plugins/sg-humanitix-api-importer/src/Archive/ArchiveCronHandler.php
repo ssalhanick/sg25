@@ -105,21 +105,21 @@ class ArchiveCronHandler {
 		$this->logger->log( 'info', 'Starting automated archive process' );
 		
 		// Debug logging
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[ArchiveCronHandler] Starting automated archive process' );
 		}
 		
 		$settings = $this->get_archive_settings();
 		
 		// Debug logging for settings
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			$obfuscated_settings = $this->obfuscate_sensitive_data( $settings );
 			error_log( '[ArchiveCronHandler] Archive settings: ' . print_r( $obfuscated_settings, true ) );
 		}
 		
 		if ( ! $settings['archive_enabled'] ) {
 			$this->logger->log( 'info', 'Archive feature is disabled' );
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveCronHandler] Archive feature is disabled' );
 			}
 			return array(
@@ -135,7 +135,7 @@ class ArchiveCronHandler {
 		);
 
 		// Debug logging for events found
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[ArchiveCronHandler] Events to archive: ' . count( $events_to_archive ) );
 			if ( ! empty( $events_to_archive ) ) {
 				error_log( '[ArchiveCronHandler] Event IDs: ' . print_r( $events_to_archive, true ) );
@@ -144,7 +144,7 @@ class ArchiveCronHandler {
 
 		if ( empty( $events_to_archive ) ) {
 			$this->logger->log( 'info', 'No events to archive' );
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveCronHandler] No events to archive' );
 			}
 			return array(
@@ -161,7 +161,7 @@ class ArchiveCronHandler {
 		);
 
 		// Debug logging for results
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[ArchiveCronHandler] Archive batch results: ' . print_r( $results, true ) );
 		}
 
