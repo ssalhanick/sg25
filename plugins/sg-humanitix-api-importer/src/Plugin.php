@@ -148,7 +148,7 @@ class Plugin {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin constructor called' );
 		}
 		self::$instance = $this;
@@ -164,7 +164,7 @@ class Plugin {
 	 * @return void
 	 */
 	public function activate() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin activated' );
 		}
 		// Guard: create_logs_table may not exist yet. Avoid fatal on activation.
@@ -190,7 +190,7 @@ class Plugin {
 	 * @return void
 	 */
 	public function deactivate() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin deactivated' );
 		}
 
@@ -309,9 +309,9 @@ class Plugin {
 		// Initialize template manager with logger.
 		$this->template_manager = new TemplateManager( $this->logger );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[sg-humanitix-api-importer] Template module initialized' );
-		}
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] Template module initialized' );
+			}
 	}
 
 	/**

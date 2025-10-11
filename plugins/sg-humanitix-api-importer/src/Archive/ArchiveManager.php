@@ -113,13 +113,13 @@ class ArchiveManager {
 		add_action( 'admin_footer-edit.php', array( $this, 'add_tec_count_adjustment' ) );
 		
 		// Add debug logging for post status registration
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			add_action( 'init', array( $this, 'debug_post_status_registration' ), 25 );
 			add_action( 'admin_notices', array( $this, 'debug_admin_notice' ) );
 		}
 		
 		// Add debug admin interface for manual testing
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 	
 		}
 		
@@ -244,12 +244,14 @@ class ArchiveManager {
 		global $post_type;
 		
 		if ( is_admin() && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'tribe_events' ) {
-			$statuses = get_post_stati();
-			$tec_statuses = apply_filters( 'tribe_events_admin_list_table_statuses', array() );
-			
-			error_log( '[ArchiveManager] Available post statuses: ' . print_r( array_keys( $statuses ), true ) );
-			error_log( '[ArchiveManager] TEC admin statuses: ' . print_r( $tec_statuses, true ) );
-			error_log( '[ArchiveManager] Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) );
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				$statuses = get_post_stati();
+				$tec_statuses = apply_filters( 'tribe_events_admin_list_table_statuses', array() );
+				
+				error_log( '[ArchiveManager] Available post statuses: ' . print_r( array_keys( $statuses ), true ) );
+				error_log( '[ArchiveManager] TEC admin statuses: ' . print_r( $tec_statuses, true ) );
+				error_log( '[ArchiveManager] Archived status registered: ' . ( isset( $statuses['archived'] ) ? 'YES' : 'NO' ) );
+			}
 		}
 	}
 
@@ -389,10 +391,10 @@ class ArchiveManager {
 		$settings = wp_parse_args( $options, $defaults );
 		
 		// Debug logging for settings (obfuscated)
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$obfuscated_settings = $this->obfuscate_sensitive_data( $settings );
-			error_log( '[ArchiveManager] Archive settings: ' . print_r( $obfuscated_settings, true ) );
-		}
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				$obfuscated_settings = $this->obfuscate_sensitive_data( $settings );
+				error_log( '[ArchiveManager] Archive settings: ' . print_r( $obfuscated_settings, true ) );
+			}
 		
 		return $settings;
 	}
@@ -570,14 +572,14 @@ class ArchiveManager {
 			}
 
 			// Debug logging
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveManager] Getting events to archive with threshold: ' . $age_threshold . ' years, limit: ' . $limit );
 			}
 
 			$events = $this->queries->get_events_older_than( $age_threshold, $limit );
 
 			// Debug logging
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveManager] Found ' . count( $events ) . ' events to archive' );
 				if ( ! empty( $events ) ) {
 					error_log( '[ArchiveManager] Event IDs to archive: ' . print_r( $events, true ) );
@@ -586,7 +588,7 @@ class ArchiveManager {
 
 			return $events;
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveManager] Error getting events to archive: ' . $e->getMessage() );
 			}
 			return array();
@@ -686,7 +688,7 @@ class ArchiveManager {
 		}
 		if ( empty( $start_date ) ) {
 			// If no start date found, we'll still allow archiving but log it
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveManager] Event ' . $event_id . ' has no start date, but allowing archive' );
 			}
 		}
@@ -757,7 +759,7 @@ class ArchiveManager {
 			}
 			return $this->queries->get_archive_statistics();
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveManager] Error getting archive statistics: ' . $e->getMessage() );
 			}
 			// Return default statistics if there's an error
@@ -779,7 +781,7 @@ class ArchiveManager {
 	 * @return array Archive results.
 	 */
 	public function manual_trigger_archive( $age_threshold = null, $limit = null ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[ArchiveManager] Manual archive trigger called with threshold: ' . ( $age_threshold ?? 'default' ) . ', limit: ' . ( $limit ?? 'default' ) );
 		}
 
@@ -787,7 +789,7 @@ class ArchiveManager {
 		$events_to_archive = $this->get_events_to_archive( $age_threshold, $limit );
 
 		if ( empty( $events_to_archive ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( '[ArchiveManager] No events found for manual archive' );
 			}
 			return array(
@@ -800,7 +802,7 @@ class ArchiveManager {
 		// Process archive batch
 		$results = $this->process_archive_batch( $events_to_archive, false );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[ArchiveManager] Manual archive results: ' . print_r( $results, true ) );
 		}
 

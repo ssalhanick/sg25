@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Debug: Check if this template is being loaded
-if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
     error_log( '[sg-humanitix-api-importer] Custom single-event.php template is being loaded!' );
 }
 
