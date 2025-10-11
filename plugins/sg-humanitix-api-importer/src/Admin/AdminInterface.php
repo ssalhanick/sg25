@@ -60,7 +60,7 @@ class AdminInterface {
 	 * @param SettingsManager $settings The settings manager instance.
 	 */
 	public function __construct( $importer = null, SettingsManager $settings = null ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] AdminInterface constructor called' );
 		}
 		$this->importer         = $importer;
@@ -91,9 +91,11 @@ class AdminInterface {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 		add_action( 'wp_ajax_import_events', array( $this, 'handle_import_ajax' ) );
+		add_action( 'wp_ajax_import_single_event', array( $this, 'handle_single_event_import_ajax' ) );
 		add_action( 'wp_ajax_get_import_logs', array( $this, 'handle_logs_ajax' ) );
 		add_action( 'wp_ajax_get_import_stats', array( $this, 'handle_stats_ajax' ) );
 		add_action( 'wp_ajax_test_api_connection', array( $this, 'handle_api_test_ajax' ) );
+		add_action( 'wp_ajax_validate_event_id', array( $this, 'handle_event_id_validation_ajax' ) );
 	}
 
 	/**
@@ -103,13 +105,13 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function add_admin_menu() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[sg-humanitix-api-importer] Adding admin menu' );
-			error_log( '[sg-humanitix-api-importer] Current user ID: ' . get_current_user_id() );
-			error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
-			error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
-		}
-		
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] Adding admin menu' );
+				error_log( '[sg-humanitix-api-importer] Current user ID: ' . get_current_user_id() );
+				error_log( '[sg-humanitix-api-importer] Current user role: ' . implode( ', ', wp_get_current_user()->roles ) );
+				error_log( '[sg-humanitix-api-importer] Can manage_options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
+			}
+
 		add_menu_page(
 			'Humanitix Importer',
 			'Humanitix',
@@ -126,8 +128,7 @@ class AdminInterface {
 			'Settings',
 			'manage_options',
 			'humanitix-importer-settings',
-			array( $this, 'render_settings_page' ),
-			10
+			array( $this, 'render_settings_page' )
 		);
 
 		// Only show debug page to plugin authors or when debug is enabled.
@@ -138,8 +139,7 @@ class AdminInterface {
 				'Debug',
 				'manage_options',
 				'humanitix-debug',
-				array( $this, 'render_debug_page' ),
-				20
+				array( $this, 'render_debug_page' )
 			);
 		}
 
@@ -149,23 +149,14 @@ class AdminInterface {
 			'Import Logs',
 			'manage_options',
 			'humanitix-importer-logs',
-			array( $this, 'render_logs_page' ),
-			30
+			array( $this, 'render_logs_page' )
 		);
 
-		add_submenu_page(
-			'humanitix-importer',
-			'Dashboard',
-			'Dashboard',
-			'manage_options',
-			'humanitix-importer-dashboard',
-			array( $this, 'render_dashboard_page' ),
-			40
-		);
-		
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
-		}
+
+
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] Admin menu added successfully' );
+			}
 	}
 
 	/**
@@ -188,14 +179,11 @@ class AdminInterface {
 		// Check if API credentials are configured.
 		$options = get_option( 'humanitix_importer_options', array() );
 		$api_key = $options['api_key'] ?? '';
-		$org_id  = $options['org_id'] ?? '';
+		$org_id  = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 
 		$missing_credentials = array();
 		if ( empty( $api_key ) ) {
 			$missing_credentials[] = 'API key';
-		}
-		if ( empty( $org_id ) ) {
-			$missing_credentials[] = 'Organization ID';
 		}
 
 		$is_configured = empty( $missing_credentials );
@@ -204,9 +192,46 @@ class AdminInterface {
 		<div class="wrap">
 			<h1>Humanitix Event Importer</h1>
 			
+			<!-- Import Section -->
 			<div class="card">
-				<h2>Quick Import</h2>
+				<h2>Import Events</h2>
 				<p>Import events from Humanitix to The Events Calendar.</p>
+				
+				<div class="import-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+					<h4 style="margin-top: 0;">Import Options</h4>
+					<label for="import-limit" style="display: inline-block; margin-right: 10px;">
+						<strong>Limit Import to:</strong>
+					</label>
+					<select id="import-limit" name="import_limit" style="margin-right: 10px;">
+						<option value="">All Events (No Limit)</option>
+						<option value="1">1 Event</option>
+						<option value="5">5 Events</option>
+						<option value="10">10 Events</option>
+						<option value="25">25 Events</option>
+						<option value="50">50 Events</option>
+						<option value="100">100 Events</option>
+					</select>
+					
+					<div class="import-controls" style="margin-top: 15px;">
+						<button id="start-import" class="button button-primary" <?php echo ! $is_configured ? 'disabled' : ''; ?>>
+							<?php echo $is_configured ? 'Start Import All Events' : 'API Not Configured'; ?>
+						</button>
+						<button id="stop-import" class="button button-secondary" style="display:none;">Stop Import</button>
+						<span id="import-status"></span>
+					</div>
+					
+					<div id="import-progress" style="display:none;">
+						<div class="progress-bar">
+							<div class="progress-fill"></div>
+						</div>
+						<div class="progress-text">Processing events...</div>
+					</div>
+					
+					<div id="import-results" style="display:none;">
+						<h3>Import Results</h3>
+						<div id="results-content"></div>
+					</div>
+				</div>
 				
 				<?php if ( ! $is_configured ) : ?>
 					<div class="notice notice-warning">
@@ -214,46 +239,84 @@ class AdminInterface {
 					</div>
 				<?php endif; ?>
 				
-				<?php if ( $is_debug_mode ) : ?>
-					<div class="debug-options" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 4px solid #0073aa;">
-						<h4 style="margin-top: 0;">Debug Mode Options</h4>
-						<label for="import-limit" style="display: inline-block; margin-right: 10px;">
-							<strong>Limit Import to:</strong>
-						</label>
-						<select id="import-limit" name="import_limit" style="margin-right: 10px;">
-							<option value="">All Events (No Limit)</option>
-							<option value="1">1 Event</option>
-							<option value="5">5 Events</option>
-							<option value="10">10 Events</option>
-							<option value="25">25 Events</option>
-							<option value="50">50 Events</option>
-							<option value="100">100 Events</option>
-						</select>
-						<span style="color: #666; font-size: 12px;">
-							<i class="dashicons dashicons-info"></i> 
-							This option is only available in debug mode to help with testing.
-						</span>
-					</div>
-				<?php endif; ?>
+
 				
-				<div class="import-controls">
-					<button id="start-import" class="button button-primary" <?php echo ! $is_configured ? 'disabled' : ''; ?>>
-						<?php echo $is_configured ? 'Start Import' : 'API Not Configured'; ?>
+							<!-- Single Event Import Section -->
+			<div class="single-event-import" style="margin: 20px 0; padding: 15px; background: #f0f8ff; border-left: 4px solid #0066cc;">
+				<h3 style="margin-top: 0;">Import Single Event</h3>
+
+				<p>Import a specific event by Humanitix Event ID:</p>
+				
+				<div class="event-inputs" style="margin-bottom: 15px;">
+					<div>
+						<label for="event-id" style="font-weight: bold; display: block; margin-bottom: 5px;">Event ID:</label>
+						<input type="text" id="event-id" name="event_id" placeholder="Enter the Humanitix event ID" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
+						<div id="event-id-validation" style="margin-top: 5px; font-size: 12px;"></div>
+					</div>
+				</div>
+				
+				<div id="event-id-help" style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 15px; display: none;">
+					<h4 style="margin-top: 0;">How to Find Your Event ID</h4>
+					<ol style="margin: 0; padding-left: 20px;">
+						<li>Log into your <a href="https://console.humanitix.com" target="_blank">Humanitix console</a></li>
+						<li>Navigate to the event you want to import</li>
+						<li>Look at the URL in your browser - it will look like: <code>https://console.humanitix.com/console/events/{event_id}/overview</code></li>
+						<li>Copy the <code>{event_id}</code> part (the string of letters and numbers)</li>
+						<li>Paste it into the Event ID field above</li>
+					</ol>
+					<p style="margin: 10px 0 0 0; font-size: 11px; color: #666;">
+						<strong>Example:</strong> If your URL is <code>https://console.humanitix.com/console/events/507f1f77bcf86cd799439011/overview</code>, then your Event ID is: <code>507f1f77bcf86cd799439011</code>
+					</p>
+				</div>
+				
+				<div class="import-controls" style="margin-top: 15px;">
+					<button id="start-import-single" class="button button-primary">
+						Import Single Event
 					</button>
-					<button id="stop-import" class="button button-secondary" style="display:none;">Stop Import</button>
-					<span id="import-status"></span>
+					<button id="stop-import-single" class="button button-secondary" style="display:none;">Stop Import</button>
+					<span id="import-single-status"></span>
 				</div>
 				
-				<div id="import-progress" style="display:none;">
-					<div class="progress-bar">
-						<div class="progress-fill"></div>
+				<div id="import-single-progress" style="display:none;">
+					<div class="progress-bar" style="width: 100%; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 10px 0;">
+						<div class="progress-fill" style="height: 100%; background-color: #0066cc; width: 0%; transition: width 0.3s ease;"></div>
 					</div>
-					<div class="progress-text">Processing events...</div>
+					<div class="progress-text" style="text-align: center; font-style: italic; color: #666;">Processing event...</div>
 				</div>
 				
-				<div id="import-results" style="display:none;">
+				<div id="import-single-results" style="display:none;">
 					<h3>Import Results</h3>
-					<div id="results-content"></div>
+					<div id="single-results-content"></div>
+				</div>
+			</div>
+			</div>
+			
+			<!-- Dashboard Stats Section -->
+			<div class="card">
+				<h2>Import Statistics</h2>
+				<?php
+				$stats = $this->get_dashboard_stats();
+				?>
+				<div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Total Events Imported</h3>
+						<div class="stat-number" style="font-size: 2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['total_events'] ); ?></div>
+					</div>
+					
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Total Venues</h3>
+						<div class="stat-number" style="font-size: 2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['total_venues'] ); ?></div>
+					</div>
+					
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Total Organizers</h3>
+						<div class="stat-number" style="font-size: 2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['total_organizers'] ); ?></div>
+					</div>
+					
+					<div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+						<h3 style="margin: 0 0 10px 0; color: #333;">Last Import</h3>
+						<div class="stat-number" style="font-size: 1.2em; font-weight: bold; color: #0073aa;"><?php echo esc_html( $stats['last_import'] ); ?></div>
+					</div>
 				</div>
 			</div>
 			
@@ -400,10 +463,36 @@ class AdminInterface {
 			color: #a00;
 			text-decoration: underline;
 		}
+		
+
+		.import-controls {
+			margin-top: 15px;
+		}
+		.progress-bar {
+			width: 100%;
+			height: 20px;
+			background-color: #f0f0f0;
+			border-radius: 10px;
+			overflow: hidden;
+			margin: 10px 0;
+		}
+		.progress-fill {
+			height: 100%;
+			background-color: #0073aa;
+			width: 0%;
+			transition: width 0.3s ease;
+		}
+		.progress-text {
+			text-align: center;
+			font-style: italic;
+			color: #666;
+		}
 		</style>
 		
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			
+
 			
 			<div class="dashboard-stats">
 				<div class="stat-card">
@@ -624,12 +713,12 @@ class AdminInterface {
 				$options      = get_option( 'humanitix_importer_options', array() );
 				$api_key      = $options['api_key'] ?? '';
 				$api_endpoint = $options['api_endpoint'] ?? '';
-				$org_id       = $options['org_id'] ?? '';
+				$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 				?>
 				<table class="form-table">
 					<tr>
 						<th>API Key:</th>
-						<td><?php echo ! empty( $api_key ) ? esc_html( 'Set (' . substr( $api_key, 0, 8 ) . '...)' ) : esc_html( '<span style="color: red;">Not set</span>' ); ?></td>
+						<td><?php echo ! empty( $api_key ) ? esc_html( 'Set (' . substr( $api_key, 0, 8 ) . '...' . substr( $api_key, -4 ) . ')' ) : esc_html( '<span style="color: red;">Not set</span>' ); ?></td>
 					</tr>
 					<tr>
 						<th>API Endpoint:</th>
@@ -671,7 +760,11 @@ class AdminInterface {
 
 								// Debug: Show the actual structure.
 								echo esc_html( '<p><strong>Events Type:</strong> ' . gettype( $events ) . '</p>' );
-								echo '<p><strong>Events Structure:</strong></p><pre style="max-height: 200px; overflow-y: auto;">' . esc_html( print_r( $events, true ) ) . '</pre>';
+								echo '<p><strong>Events Structure:</strong></p>';
+								echo '<div style="position: relative;">';
+								echo '<button type="button" class="button button-secondary select-all-btn" data-target="events-structure" style="position: absolute; top: 5px; right: 5px; z-index: 10;">Select All</button>';
+								echo '<pre id="events-structure" style="max-height: 200px; overflow-y: auto; position: relative;">' . esc_html( print_r( $events, true ) ) . '</pre>';
+								echo '</div>';
 
 								if ( ! empty( $events ) && is_array( $events ) ) {
 									$first_event = reset( $events ); // Get the first element.
@@ -679,7 +772,11 @@ class AdminInterface {
 									echo '<p><strong>First Event Value:</strong> ' . ( $first_event ? 'NOT NULL' : 'NULL/FALSE' ) . '</p>';
 
 									if ( $first_event ) {
-										echo '<p><strong>First Event:</strong></p><pre style="max-height: 300px; overflow-y: auto;">' . esc_html( print_r( $first_event, true ) ) . '</pre>';
+										echo '<p><strong>First Event:</strong></p>';
+										echo '<div style="position: relative;">';
+										echo '<button type="button" class="button button-secondary select-all-btn" data-target="first-event" style="position: absolute; top: 5px; right: 5px; z-index: 10;">Select All</button>';
+										echo '<pre id="first-event" style="max-height: 300px; overflow-y: auto; position: relative;">' . esc_html( print_r( $first_event, true ) ) . '</pre>';
+										echo '</div>';
 									} else {
 										echo '<p><strong>First Event:</strong> No events available to display</p>';
 									}
@@ -700,17 +797,79 @@ class AdminInterface {
 			</div>
 
 			<div class="card">
+				<h2>Memory Status</h2>
+				<?php
+				$memory_limit = ini_get( 'memory_limit' );
+				$memory_usage = memory_get_usage( true );
+				$memory_peak = memory_get_peak_usage( true );
+				$memory_limit_bytes = $this->return_bytes( $memory_limit );
+				$memory_usage_percent = round( ( $memory_usage / $memory_limit_bytes ) * 100, 2 );
+				
+				echo '<p><strong>Memory Limit:</strong> ' . esc_html( $memory_limit ) . '</p>';
+				echo '<p><strong>Current Usage:</strong> ' . esc_html( size_format( $memory_usage ) ) . ' (' . esc_html( $memory_usage_percent ) . '%)</p>';
+				echo '<p><strong>Peak Usage:</strong> ' . esc_html( size_format( $memory_peak ) ) . '</p>';
+				echo '<p><strong>Available:</strong> ' . esc_html( size_format( $memory_limit_bytes - $memory_usage ) ) . '</p>';
+				
+				if ( $memory_usage_percent > 80 ) {
+					echo '<p style="color: red;"><strong>⚠️ WARNING:</strong> High memory usage detected!</p>';
+				} elseif ( $memory_usage_percent > 60 ) {
+					echo '<p style="color: orange;"><strong>⚠️ WARNING:</strong> Moderate memory usage detected.</p>';
+				} else {
+					echo '<p style="color: green;"><strong>✅ OK:</strong> Memory usage is normal.</p>';
+				}
+				?>
+			</div>
+
+			<div class="card">
 				<h2>Debug Logs</h2>
 				<?php
 				$log_file = WP_CONTENT_DIR . '/debug.log';
 				if ( file_exists( $log_file ) ) {
-					$log_contents = file_get_contents( $log_file );
-					if ( ! empty( $log_contents ) ) {
-						echo '<p><strong>WordPress Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
-						echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( filesize( $log_file ) ) ) . '</p>';
-						echo '<p><strong>Last Modified:</strong> ' . esc_html( gmdate( 'Y-m-d H:i:s', filemtime( $log_file ) ) ) . '</p>';
+					$file_size = filesize( $log_file );
+					echo '<p><strong>WordPress Debug Log File:</strong> ' . esc_html( $log_file ) . '</p>';
+					echo '<p><strong>Log Size:</strong> ' . esc_html( size_format( $file_size ) ) . '</p>';
+					echo '<p><strong>Last Modified:</strong> ' . esc_html( gmdate( 'Y-m-d H:i:s', filemtime( $log_file ) ) ) . '</p>';
+					
+					// Memory-efficient way to get last 50 lines
+					if ( $file_size > 0 ) {
 						echo '<h3>Recent Log Entries (Last 50 lines):</h3>';
-						echo '<pre style="max-height: 400px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;">' . esc_html( implode( '', array_slice( explode( PHP_EOL, $log_contents ), -50 ) ) ) . '</pre>';
+						echo '<pre style="max-height: 400px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;">';
+						
+						// Use memory-efficient file reading
+						$lines = array();
+						$handle = fopen( $log_file, 'r' );
+						
+						if ( $handle ) {
+							// Read file backwards to get last 50 lines
+							$pos = -2; // Start from end
+							$line_count = 0;
+							$max_lines = 50;
+							
+							while ( $line_count < $max_lines && $pos > -$file_size ) {
+								fseek( $handle, $pos, SEEK_END );
+								$char = fgetc( $handle );
+								
+								if ( $char === "\n" ) {
+									$line = fgets( $handle );
+									if ( $line !== false ) {
+										array_unshift( $lines, $line );
+										$line_count++;
+									}
+								}
+								$pos--;
+							}
+							
+							fclose( $handle );
+							
+							// Display the lines
+							foreach ( $lines as $line ) {
+								echo esc_html( $line );
+							}
+						} else {
+							echo 'Error: Could not open debug log file for reading.';
+						}
+						
+						echo '</pre>';
 					} else {
 						echo '<p>Debug log file exists but is empty.</p>';
 					}
@@ -725,10 +884,19 @@ class AdminInterface {
 				<h2>Recent Logs</h2>
 				<?php
 				try {
+					// Memory optimization: Check available memory before loading logs
+					$memory_usage = memory_get_usage( true );
+					$memory_limit_bytes = $this->return_bytes( ini_get( 'memory_limit' ) );
+					$available_memory = $memory_limit_bytes - $memory_usage;
+					
+					// Reduce log limit if memory is low
+					$log_limit = ( $available_memory < 10 * 1024 * 1024 ) ? 5 : 10;
+					
 					$logger      = new \SG\HumanitixApiImporter\Admin\Logger();
-					$recent_logs = $logger->get_recent_logs( 10 );
+					$recent_logs = $logger->get_recent_logs( $log_limit );
 
 					if ( ! empty( $recent_logs ) ) {
+						echo '<p><em>Showing last ' . count( $recent_logs ) . ' logs (memory optimized)</em></p>';
 						echo '<table class="wp-list-table widefat fixed striped" style="width: 100%;">';
 						echo '<thead><tr><th style="width: 15%;">Time</th><th style="width: 10%;">Type</th><th style="width: 25%;">Message</th><th style="width: 50%;">Context</th></tr></thead>';
 						echo '<tbody>';
@@ -738,7 +906,7 @@ class AdminInterface {
 							echo '<td>' . esc_html( $log->created_at ) . '</td>';
 							echo '<td>' . esc_html( $log->level ) . '</td>';
 							echo '<td>' . esc_html( $log->message ) . '</td>';
-							$context_data = !empty($log->context) ? json_decode( $log->context, true ) : array();
+							$context_data = ! empty( $log->context ) ? json_decode( $log->context, true ) : array();
 							echo '<td><pre style="max-height: 100px; overflow-y: auto;">' . esc_html( print_r( $context_data, true ) ) . '</pre></td>';
 							echo '</tr>';
 						}
@@ -749,6 +917,7 @@ class AdminInterface {
 					}
 				} catch ( Exception $e ) {
 					echo '<p><strong>Error loading logs:</strong> ' . esc_html( $e->getMessage() ) . '</p>';
+					echo '<p><em>This might be due to memory constraints on the server.</em></p>';
 				}
 				?>
 			</div>
@@ -770,11 +939,32 @@ class AdminInterface {
 	}
 
 	/**
+	 * Convert memory limit string to bytes
+	 *
+	 * @param string $val Memory limit string (e.g., '128M', '1G').
+	 * @return int Memory limit in bytes.
+	 */
+	private function return_bytes( $val ) {
+		$val = trim( $val );
+		$last = strtolower( $val[ strlen( $val ) - 1 ] );
+		$val = (int) $val;
+		switch ( $last ) {
+			case 'g':
+				$val *= 1024;
+			case 'm':
+				$val *= 1024;
+			case 'k':
+				$val *= 1024;
+		}
+		return $val;
+	}
+
+	/**
 	 * Handling AJAX Imports
 	 */
 	public function handle_import_ajax() {
 		// Add basic error logging for debugging.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix Import: AJAX handler called' );
 		}
 
@@ -789,14 +979,16 @@ class AdminInterface {
 			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
 		}
 
-		// Get import limit if provided (only in debug mode).
+		// Get import limit if provided.
 		$import_limit = null;
-		if ( $this->is_debug_enabled() && isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
+		if ( isset( $_POST['import_limit'] ) && ! empty( $_POST['import_limit'] ) ) {
 			$import_limit = intval( $_POST['import_limit'] );
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix Import: Import limit set to: ' . $import_limit );
 			}
 		}
+
+
 
 		$start_time = microtime( true );
 
@@ -805,7 +997,7 @@ class AdminInterface {
 			if ( $import_limit ) {
 				$result = $this->importer->import_events( 1, $import_limit );
 			} else {
-				$result = $this->importer->import_events();
+				$result = $this->importer->import_events( 1 );
 			}
 
 			$end_time = microtime( true );
@@ -827,11 +1019,22 @@ class AdminInterface {
 			);
 
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
-			}
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( 'Humanitix Import: Exception caught: ' . $e->getMessage() );
+					error_log( 'Humanitix Import: Exception trace: ' . $e->getTraceAsString() );
+				}
 			$this->logger->log( 'error', 'Import failed: ' . $e->getMessage() );
-			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+
+			// Send more detailed error information.
+			wp_send_json_error(
+				array(
+					'message'    => $e->getMessage(),
+					'error_type' => get_class( $e ),
+					'file'       => $e->getFile(),
+					'line'       => $e->getLine(),
+					'trace'      => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
+				)
+			);
 		}
 	}
 
@@ -859,6 +1062,84 @@ class AdminInterface {
 	}
 
 	/**
+	 * Handle single event import AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_single_event_import_ajax() {
+		// Add basic error logging for debugging.
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+			error_log( 'Humanitix Import: Single event AJAX handler called' );
+		}
+
+		check_ajax_referer( 'humanitix_import_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		// Check if importer is available.
+		if ( ! $this->importer ) {
+			wp_send_json_error( array( 'message' => 'API not configured. Please set up your Humanitix API key in the settings.' ) );
+		}
+
+		// Get event ID
+		$event_id = isset( $_POST['event_id'] ) ? sanitize_text_field( $_POST['event_id'] ) : '';
+
+		if ( empty( $event_id ) ) {
+			wp_send_json_error( array( 'message' => 'Please provide an event ID.' ) );
+		}
+
+		$start_time = microtime( true );
+
+		try {
+
+			// Import the single event
+			$result = $this->importer->import_single_event_by_id( $event_id );
+
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
+
+			// Handle the result structure from single event import
+			$imported_count = $result['success'] ? 1 : 0;
+			$errors = $result['success'] ? array() : array( $result['message'] );
+
+			// Log the import with duration.
+			$this->logger->log_import_summary( $imported_count, $errors, $duration );
+
+			wp_send_json_success(
+				array(
+					'message'     => $result['message'],
+					'event_title' => $result['event_title'] ?? 'Unknown Event',
+					'imported_count' => $imported_count,
+					'errors'      => $errors,
+					'duration'    => $duration,
+				)
+			);
+
+		} catch ( \Exception $e ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( 'Humanitix Import: Single event exception caught: ' . $e->getMessage() );
+				error_log( 'Humanitix Import: Single event exception trace: ' . $e->getTraceAsString() );
+			}
+			$this->logger->log( 'error', 'Single event import failed: ' . $e->getMessage() );
+
+			wp_send_json_error(
+				array(
+					'message'    => $e->getMessage(),
+					'error_type' => get_class( $e ),
+					'file'       => $e->getFile(),
+					'line'       => $e->getLine(),
+					'trace'      => defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getTraceAsString() : null,
+				)
+			);
+		}
+	}
+
+
+
+	/**
 	 * Handle API test AJAX request.
 	 *
 	 * @since 1.0.0
@@ -874,7 +1155,7 @@ class AdminInterface {
 		// Get API settings.
 		$options      = get_option( 'humanitix_importer_options', array() );
 		$api_key      = $options['api_key'] ?? '';
-		$org_id       = $options['org_id'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
 		if ( empty( $api_key ) ) {
@@ -886,14 +1167,7 @@ class AdminInterface {
 			);
 		}
 
-		if ( empty( $org_id ) ) {
-			wp_send_json_error(
-				array(
-					'message' => 'Organization ID is required. Please enter your Humanitix organization ID in the settings.',
-					'debug'   => array( 'missing_org_id' => true ),
-				)
-			);
-		}
+
 
 		try {
 			// Create API instance and test connection.
@@ -978,7 +1252,7 @@ class AdminInterface {
 	 * @return void
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( strpos( $hook, 'humanitix-importer' ) === false ) {
+		if ( strpos( $hook, 'humanitix-importer' ) === false && strpos( $hook, 'humanitix-debug' ) === false ) {
 			return;
 		}
 
@@ -1067,6 +1341,241 @@ class AdminInterface {
 		'
 		);
 
+		// Add Select All functionality for debug page.
+		wp_add_inline_script(
+			'humanitix-admin',
+			'
+			// Function for selecting all text in a container
+			function selectAllInContainer(elementId) {
+				var element = document.getElementById(elementId);
+				if (element) {
+					// Create a range
+					var range = document.createRange();
+					range.selectNodeContents(element);
+					
+					// Create a selection
+					var selection = window.getSelection();
+					selection.removeAllRanges();
+					selection.addRange(range);
+					
+					// Optional: Copy to clipboard
+					try {
+						document.execCommand("copy");
+						return true;
+					} catch (e) {
+						// Copy failed, but selection still works
+						console.log("Copy to clipboard failed, but text is selected");
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			// Add event listeners for select all buttons
+			document.addEventListener("DOMContentLoaded", function() {
+				var selectAllButtons = document.querySelectorAll(".select-all-btn");
+				selectAllButtons.forEach(function(button) {
+					button.addEventListener("click", function(e) {
+						e.preventDefault();
+						
+						var targetId = this.getAttribute("data-target");
+						if (targetId) {
+							var copied = selectAllInContainer(targetId);
+							
+							// Show visual feedback
+							var originalText = this.textContent;
+							var originalBg = this.style.backgroundColor;
+							var originalColor = this.style.color;
+							
+							if (copied) {
+								this.textContent = "Copied!";
+								this.style.backgroundColor = "#46b450";
+								this.style.color = "white";
+							} else {
+								this.textContent = "Selected!";
+								this.style.backgroundColor = "#0073aa";
+								this.style.color = "white";
+							}
+							
+							setTimeout(function() {
+								button.textContent = originalText;
+								button.style.backgroundColor = originalBg;
+								button.style.color = originalColor;
+							}, 1000);
+						}
+					});
+				});
+			});
+		'
+		);
+
+
+
+		// Add Single Event Import functionality.
+		wp_add_inline_script(
+			'humanitix-admin',
+			'
+			setTimeout(function() {
+				var startImportSingleButton = document.getElementById("start-import-single");
+				var eventIdInput = document.getElementById("event-id");
+				var validationDiv = document.getElementById("event-id-validation");
+				var helpDiv = document.getElementById("event-id-help");
+				
+				// Real-time validation
+				if (eventIdInput) {
+					eventIdInput.addEventListener("input", function() {
+						var eventId = this.value.trim();
+						
+						if (eventId.length === 0) {
+							validationDiv.innerHTML = "";
+							helpDiv.style.display = "none";
+							return;
+						}
+						
+						// Show help on first input
+						if (helpDiv.style.display === "none") {
+							helpDiv.style.display = "block";
+						}
+						
+						// Basic validation
+						var isValid = true;
+						var message = "";
+						var color = "#666";
+						
+						if (eventId.indexOf(" ") !== -1) {
+							isValid = false;
+							message = "Event ID contains spaces. Please remove them.";
+							color = "#d63638";
+						} else if (eventId.indexOf("http") !== -1) {
+							isValid = false;
+							message = "Please enter only the event ID, not the full URL.";
+							color = "#d63638";
+						} else if (!/^[a-zA-Z0-9_-]+$/.test(eventId)) {
+							isValid = false;
+							message = "Invalid characters detected. Event ID should contain only letters, numbers, hyphens, and underscores.";
+							color = "#d63638";
+						} else if (eventId.length < 10) {
+							isValid = false;
+							message = "Event ID seems too short. Humanitix event IDs are typically longer.";
+							color = "#d63638";
+						} else {
+							message = "Event ID format looks valid ✓";
+							color = "#00a32a";
+						}
+						
+						validationDiv.innerHTML = "<span style=\"color: " + color + ";\">" + message + "</span>";
+						
+						// Enable/disable import button based on validation
+						if (startImportSingleButton) {
+							startImportSingleButton.disabled = !isValid;
+						}
+					});
+				}
+				
+				if (startImportSingleButton) {
+					startImportSingleButton.addEventListener("click", function(e) {
+						e.preventDefault();
+						
+						var stopButton = document.getElementById("stop-import-single");
+						var statusDiv = document.getElementById("import-single-status");
+						var progressDiv = document.getElementById("import-single-progress");
+						var resultsDiv = document.getElementById("import-single-results");
+						var eventId = document.getElementById("event-id");
+						
+						// Validate inputs
+						if (!eventId.value.trim()) {
+							alert("Please enter an Event ID");
+							return;
+						}
+						
+						// Show progress and disable start button.
+						this.disabled = true;
+						this.textContent = "Importing...";
+						if (stopButton) stopButton.style.display = "inline-block";
+						if (progressDiv) progressDiv.style.display = "block";
+						if (resultsDiv) resultsDiv.style.display = "none";
+						if (statusDiv) statusDiv.innerHTML = "<span class=\"spinner is-active\"></span> Starting import...";
+						
+						// Prepare request data
+						var requestData = {
+							action: "import_single_event",
+							nonce: humanitixAdmin.nonce,
+							event_id: eventId.value.trim()
+						};
+						
+						fetch(humanitixAdmin.ajaxUrl, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/x-www-form-urlencoded",
+							},
+							body: new URLSearchParams(requestData)
+						})
+						.then(response => response.json())
+						.then(data => {
+							if (data.success) {
+								var resultsContent = document.getElementById("single-results-content");
+								var eventTitle = data.data.event_title || "Unknown Event";
+								var message = data.data.message || "Import completed successfully";
+								var duration = data.data.duration || 0;
+								
+								resultsContent.innerHTML = `
+									<div style="background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+										<h4 style="margin-top: 0; color: #0c5460;">✓ Import Successful</h4>
+										<p><strong>Event:</strong> ${eventTitle}</p>
+										<p><strong>Message:</strong> ${message}</p>
+										<p><strong>Duration:</strong> ${duration} seconds</p>
+									</div>
+								`;
+								
+								if (statusDiv) statusDiv.innerHTML = "<span style=\"color: #00a32a;\">✓ Import completed successfully</span>";
+							} else {
+								var resultsContent = document.getElementById("single-results-content");
+								var errorMessage = data.data.message || "Import failed";
+								
+								resultsContent.innerHTML = `
+									<div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+										<h4 style="margin-top: 0; color: #721c24;">✗ Import Failed</h4>
+										<p><strong>Error:</strong> ${errorMessage}</p>
+										${data.data.suggestion ? "<p><strong>Suggestion:</strong> " + data.data.suggestion + "</p>" : ""}
+									</div>
+								`;
+								
+								if (statusDiv) statusDiv.innerHTML = "<span style=\"color: #d63638;\">✗ Import failed</span>";
+							}
+							
+							// Show results and reset UI
+							if (resultsDiv) resultsDiv.style.display = "block";
+							if (progressDiv) progressDiv.style.display = "none";
+							if (stopButton) stopButton.style.display = "none";
+							
+							this.disabled = false;
+							this.textContent = "Import Single Event";
+						})
+						.catch(error => {
+							console.error("Import error:", error);
+							
+							var resultsContent = document.getElementById("single-results-content");
+							resultsContent.innerHTML = `
+								<div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+									<h4 style="margin-top: 0; color: #721c24;">✗ Import Failed</h4>
+									<p><strong>Error:</strong> Network error occurred. Please check your connection and try again.</p>
+								</div>
+							`;
+							
+							if (resultsDiv) resultsDiv.style.display = "block";
+							if (progressDiv) progressDiv.style.display = "none";
+							if (stopButton) stopButton.style.display = "none";
+							if (statusDiv) statusDiv.innerHTML = "<span style=\"color: #d63638;\">✗ Network error</span>";
+							
+							this.disabled = false;
+							this.textContent = "Import Single Event";
+						});
+					});
+				}
+			}, 1000);
+		'
+		);
+
 		// Add working Start Import functionality.
 		wp_add_inline_script(
 			'humanitix-admin',
@@ -1082,7 +1591,7 @@ class AdminInterface {
 						var progressDiv = document.getElementById("import-progress");
 						var resultsDiv = document.getElementById("import-results");
 						
-						// Get import limit if debug mode is enabled
+						// Get import limit if set
 						var importLimit = "";
 						var importLimitSelect = document.getElementById("import-limit");
 						if (importLimitSelect && importLimitSelect.value) {
@@ -1313,5 +1822,62 @@ class AdminInterface {
 			}
 		'
 		);
+	}
+
+	/**
+	 * Handle event ID validation AJAX request.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function handle_event_id_validation_ajax() {
+		check_ajax_referer( 'humanitix_api_test_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Unauthorized' );
+		}
+
+		$event_id = sanitize_text_field( $_POST['event_id'] ?? '' );
+
+		if ( empty( $event_id ) ) {
+			wp_send_json_error( array( 'message' => 'Event ID is required.' ) );
+		}
+
+		// Get API settings for validation
+		$options      = get_option( 'humanitix_importer_options', array() );
+		$api_key      = $options['api_key'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
+		$api_endpoint = $options['api_endpoint'] ?? '';
+
+		if ( empty( $api_key ) ) {
+			wp_send_json_error( array( 
+				'message' => 'API configuration incomplete.',
+				'suggestion' => 'Please configure your API key in the settings first.'
+			) );
+		}
+
+		try {
+			// Create API instance and validate event ID
+			$api    = new \SG\HumanitixApiImporter\HumanitixAPI( $api_key, $api_endpoint, $org_id );
+			$result = $api->validate_event_id( $event_id );
+
+			if ( $result['success'] ) {
+				wp_send_json_success( array(
+					'message' => $result['message'],
+					'suggestion' => $result['suggestion']
+				) );
+			} else {
+				wp_send_json_error( array(
+					'message' => $result['message'],
+					'suggestion' => $result['suggestion']
+				) );
+			}
+
+		} catch ( \Exception $e ) {
+			wp_send_json_error( array(
+				'message' => 'Validation failed: ' . $e->getMessage(),
+				'suggestion' => 'Please check your API configuration and try again.'
+			) );
+		}
 	}
 }

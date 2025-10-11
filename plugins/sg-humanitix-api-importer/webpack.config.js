@@ -24,6 +24,7 @@ const entry = {
 	editor: JS_DIR + '/editor.js',
 	frontend: JS_DIR + '/frontend.js',
 	admin: JS_DIR + '/admin.js',
+	tec_templates: JS_DIR + '/tec_templates.js',
 };
 
 const output = {

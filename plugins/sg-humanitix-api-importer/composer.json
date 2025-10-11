@@ -15,7 +15,8 @@
 	"autoload": {
 		"psr-4": {
 			"SG\\HumanitixApiImporter\\": "src/"
-		}
+		},
+		"classmap": ["src/"]
 	},
 	"autoload-dev": {
 		"psr-4": {

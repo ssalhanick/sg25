@@ -13,9 +13,17 @@ namespace SG\HumanitixApiImporter;
 
 use SG\HumanitixApiImporter\Security\AjaxSecurityHandler;
 use SG\HumanitixApiImporter\Security\RestApiSecurityHandler;
+use SG\HumanitixApiImporter\Security\ContentGoneHandler;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\AdminInterface;
 use SG\HumanitixApiImporter\Admin\SettingsManager;
+use SG\HumanitixApiImporter\Templates\TemplateManager;
+use SG\HumanitixApiImporter\Archive\ArchiveManager;
+use SG\HumanitixApiImporter\Archive\ArchiveCronHandler;
+use SG\HumanitixApiImporter\Admin\ArchiveAdminInterface;
+use SG\HumanitixApiImporter\Admin\TECIntegration;
+use SG\HumanitixApiImporter\Admin\LogManager;
+use SG\HumanitixApiImporter\Admin\LogManagementInterface;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -31,6 +39,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 1.0.0
  */
 class Plugin {
+	/**
+	 * The plugin instance.
+	 *
+	 * @var Plugin
+	 */
+	private static $instance = null;
 
 	/**
 	 * The Humanitix API instance.
@@ -68,6 +82,65 @@ class Plugin {
 	private $logger;
 
 	/**
+	 * The template manager instance.
+	 *
+	 * @var TemplateManager
+	 */
+	private $template_manager;
+
+	/**
+	 * The archive manager instance.
+	 *
+	 * @var ArchiveManager
+	 */
+	private $archive_manager;
+
+	/**
+	 * The archive cron handler instance.
+	 *
+	 * @var ArchiveCronHandler
+	 */
+	private $archive_cron_handler;
+
+	/**
+	 * The archive admin interface instance.
+	 *
+	 * @var ArchiveAdminInterface
+	 */
+	private $archive_admin_interface;
+
+	/**
+	 * The log manager instance.
+	 *
+	 * @var LogManager
+	 */
+	private $log_manager;
+
+	/**
+	 * The log management interface instance.
+	 *
+	 * @var LogManagementInterface
+	 */
+	private $log_management_interface;
+
+	/**
+	 * The TEC integration instance.
+	 *
+	 * @var TECIntegration
+	 */
+	private $tec_integration;
+
+	/**
+	 * Get the plugin instance.
+	 *
+	 * @since 1.0.0
+	 * @return Plugin|null The plugin instance or null if not initialized.
+	 */
+	public static function get_instance() {
+		return self::$instance;
+	}
+
+	/**
 	 * Constructor.
 	 *
 	 * Initializes the plugin and sets up all necessary components.
@@ -75,9 +148,10 @@ class Plugin {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin constructor called' );
 		}
+		self::$instance = $this;
 		$this->init();
 	}
 
@@ -90,10 +164,21 @@ class Plugin {
 	 * @return void
 	 */
 	public function activate() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin activated' );
 		}
-		$this->create_logs_table();
+		// Guard: create_logs_table may not exist yet. Avoid fatal on activation.
+		if ( method_exists( $this, 'create_logs_table' ) ) {
+			$this->create_logs_table();
+		}
+
+		// Check if auto import should be scheduled on activation.
+		$options = get_option( 'humanitix_importer_options', array() );
+		if ( ! empty( $options['auto_import'] ) ) {
+			$frequency   = $options['import_frequency'] ?? 'daily';
+			$import_time = $options['import_time'] ?? '00:00';
+			$this->schedule_auto_import( $frequency, $import_time );
+		}
 	}
 
 	/**
@@ -105,9 +190,12 @@ class Plugin {
 	 * @return void
 	 */
 	public function deactivate() {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( '[sg-humanitix-api-importer] Plugin deactivated' );
 		}
+
+		// Clear any scheduled auto import cron jobs.
+		wp_clear_scheduled_hook( 'humanitix_auto_import' );
 	}
 
 	/**
@@ -144,8 +232,14 @@ class Plugin {
 		// Initialize security utilities.
 		$this->init_security_utilities();
 
+		// Initialize template module.
+		$this->init_template_module();
+
 		// Check database version and update if needed.
 		$this->check_database_version();
+
+		// Initialize WordPress hooks.
+		$this->init_hooks();
 	}
 
 	/**
@@ -166,22 +260,58 @@ class Plugin {
 		// Get API settings from options.
 		$options      = get_option( 'humanitix_importer_options', array() );
 		$api_key      = $options['api_key'] ?? '';
-		$org_id       = $options['org_id'] ?? '';
+		$org_id       = $options['org_id'] ?? '5ac597aed8fe7c0c0f212e27';
 		$api_endpoint = $options['api_endpoint'] ?? '';
 
 		// Initialize admin interface with settings.
 		$this->admin = new AdminInterface( null, $this->settings );
 
-		if ( ! empty( $api_key ) && ! empty( $org_id ) ) {
+		if ( ! empty( $api_key ) ) {
 			// Initialize API client with organization ID.
 			$this->api = new HumanitixAPI( $api_key, $api_endpoint, $org_id );
 
 			// Initialize importer with logger.
 			$this->importer = new Importer\EventsImporter( $this->api, $this->logger );
 
-			// Update admin interface with importer.
-			$this->admin->set_importer( $this->importer );
+					// Update admin interface with importer.
+		$this->admin->set_importer( $this->importer );
 		}
+
+		// Initialize archive manager.
+		$this->archive_manager = new ArchiveManager();
+		
+		// Initialize archive cron handler.
+		$this->archive_cron_handler = new ArchiveCronHandler();
+		
+		// Initialize archive admin interface.
+		$this->archive_admin_interface = new ArchiveAdminInterface();
+
+		// Initialize log management components.
+		$this->log_manager = new LogManager();
+		$this->log_management_interface = new LogManagementInterface();
+		
+		// Initialize TEC integration.
+		$this->tec_integration = new TECIntegration();
+		
+		// Ensure TEC integration is properly set up
+		add_action( 'tribe_events_register_post_type', array( $this, 'ensure_tec_integration' ) );
+	}
+
+	/**
+	 * Initialize template module.
+	 *
+	 * Sets up the template manager for TEC template customizations.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function init_template_module() {
+		// Initialize template manager with logger.
+		$this->template_manager = new TemplateManager( $this->logger );
+
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( '[sg-humanitix-api-importer] Template module initialized' );
+			}
 	}
 
 	/**
@@ -228,6 +358,9 @@ class Plugin {
 				'max_requests_per_minute' => 100,
 			)
 		);
+
+		// Initialize 410 content handler.
+		new ContentGoneHandler();
 	}
 
 	/**
@@ -305,6 +438,381 @@ class Plugin {
 				echo '<script>console.log("sg-humanitix-api-importer:", window.sgHumanitixApiImporter);</script>';
 			}
 		);
+
+		// Initialize auto import functionality.
+		$this->init_auto_import();
+	}
+
+	/**
+	 * Initialize auto import functionality.
+	 *
+	 * Sets up cron jobs and hooks for automatic event imports.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function init_auto_import() {
+		// Register the auto import hook.
+		add_action( 'humanitix_auto_import', array( $this, 'run_auto_import' ) );
+
+		// Handle settings changes to schedule/unschedule cron jobs.
+		add_action( 'update_option_humanitix_importer_options', array( $this, 'handle_settings_update' ), 10, 3 );
+
+		// Check if auto import should be scheduled on plugin load.
+		$this->check_auto_import_schedule();
+	}
+
+	/**
+	 * Check and schedule auto import if enabled.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function check_auto_import_schedule() {
+		$options = get_option( 'humanitix_importer_options', array() );
+
+		if ( ! empty( $options['auto_import'] ) ) {
+			$frequency   = $options['import_frequency'] ?? 'daily';
+			$import_time = $options['import_time'] ?? '00:00';
+
+			// Only schedule if not already scheduled.
+			if ( ! wp_next_scheduled( 'humanitix_auto_import' ) ) {
+				$this->schedule_auto_import( $frequency, $import_time );
+			}
+		}
+	}
+
+	/**
+	 * Handle settings updates to manage cron scheduling.
+	 *
+	 * @since 1.0.0
+	 * @param mixed  $old_value The old option value.
+	 * @param mixed  $new_value The new option value.
+	 * @param string $option The option name.
+	 * @return void
+	 */
+	public function handle_settings_update( $old_value, $new_value, $option ) {
+		$old_auto_import = $old_value['auto_import'] ?? false;
+		$new_auto_import = $new_value['auto_import'] ?? false;
+		$old_frequency   = $old_value['import_frequency'] ?? 'daily';
+		$new_frequency   = $new_value['import_frequency'] ?? 'daily';
+		$old_import_time = $old_value['import_time'] ?? '00:00';
+		$new_import_time = $new_value['import_time'] ?? '00:00';
+
+		// Check if auto import was enabled/disabled or settings changed.
+		if ( $old_auto_import !== $new_auto_import || $old_frequency !== $new_frequency || $old_import_time !== $new_import_time ) {
+			if ( $new_auto_import ) {
+				$this->schedule_auto_import( $new_frequency, $new_import_time );
+			} else {
+				$this->unschedule_auto_import();
+			}
+		}
+	}
+
+	/**
+	 * Schedule the auto import cron job.
+	 *
+	 * @since 1.0.0
+	 * @param string $frequency The import frequency (hourly, daily, weekly).
+	 * @param string $import_time The time to run the import (HH:MM format).
+	 * @return void
+	 */
+	private function schedule_auto_import( $frequency, $import_time ) {
+		// Clear any existing schedule first.
+		$this->unschedule_auto_import();
+
+		// Calculate the next run time based on the specified time.
+		$next_run = $this->calculate_next_run_time( $frequency, $import_time );
+
+		// Schedule the event.
+		wp_schedule_event( $next_run, $frequency, 'humanitix_auto_import' );
+
+		// Log the scheduling.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log(
+				'info',
+				'Auto import scheduled',
+				array(
+					'frequency'   => $frequency,
+					'import_time' => $import_time,
+					'next_run'    => date( 'Y-m-d H:i:s', $next_run ),
+				)
+			);
+		}
+	}
+
+	/**
+	 * Unschedule the auto import cron job.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function unschedule_auto_import() {
+		wp_clear_scheduled_hook( 'humanitix_auto_import' );
+
+		// Log the unscheduling.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log( 'info', 'Auto import unscheduled' );
+		}
+	}
+
+	/**
+	 * Calculate the next run time for the cron job.
+	 *
+	 * @since 1.0.0
+	 * @param string $frequency The import frequency.
+	 * @param string $import_time The time to run (HH:MM format).
+	 * @return int Unix timestamp for the next run.
+	 */
+	private function calculate_next_run_time( $frequency, $import_time ) {
+		$time_parts = explode( ':', $import_time );
+		$hour       = intval( $time_parts[0] );
+		$minute     = intval( $time_parts[1] );
+
+		// Get WordPress timezone.
+		$timezone = wp_timezone();
+
+		// Get current time in local timezone.
+		$now = new \DateTime( 'now', $timezone );
+
+		// Create a DateTime object for today at the specified time in WordPress timezone.
+		$next_run = new \DateTime( 'today ' . $import_time, $timezone );
+
+		// If the time has already passed today, schedule for tomorrow.
+		if ( $next_run <= $now ) {
+			$next_run = new \DateTime( 'tomorrow ' . $import_time, $timezone );
+		}
+
+		// For weekly frequency, adjust to the next occurrence.
+		if ( 'weekly' === $frequency ) {
+			$next_run = new \DateTime( 'next ' . $next_run->format( 'l' ) . ' ' . $import_time, $timezone );
+		}
+
+		// For hourly frequency, calculate the next hour.
+		if ( 'hourly' === $frequency ) {
+			$next_run = new \DateTime( 'now', $timezone );
+			$next_run->setTime( $hour, $minute, 0 );
+
+			// If the time has passed this hour, go to next hour.
+			if ( $next_run <= $now ) {
+				$next_run->modify( '+1 hour' );
+			}
+		}
+
+		// Convert to UTC for WordPress cron (WordPress cron uses UTC).
+		$next_run->setTimezone( new \DateTimeZone( 'UTC' ) );
+
+		return $next_run->getTimestamp();
+	}
+
+	/**
+	 * Run the auto import process.
+	 *
+	 * This method is called by the WordPress cron system.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function run_auto_import() {
+		$start_time = microtime( true );
+
+		// Log the start of scheduled auto import.
+		if ( isset( $this->logger ) ) {
+			$this->logger->log(
+				'info',
+				'Scheduled auto import started',
+				array(
+					'category'       => 'Scheduled',
+					'timestamp'      => current_time( 'mysql' ),
+					'next_scheduled' => wp_next_scheduled( 'humanitix_auto_import' ),
+				)
+			);
+		}
+
+		if ( ! isset( $this->importer ) ) {
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'error',
+					'Scheduled auto import failed: Importer not available',
+					array( 'category' => 'Scheduled' )
+				);
+			}
+			return;
+		}
+
+		try {
+			// Run the import.
+			$result   = $this->importer->import_events();
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
+
+			// Prepare detailed logging information.
+			$imported_count  = $result['imported'] ?? 0;
+			$updated_count   = $result['updated'] ?? 0;
+			$existing_count  = $result['existing'] ?? 0;
+			$error_count     = count( $result['errors'] ?? array() );
+			$total_processed = $imported_count + $updated_count + $existing_count;
+
+			// Determine the appropriate log level and message.
+			if ( $result['success'] ) {
+				if ( 0 === $total_processed ) {
+					// No events found or processed.
+					$log_level   = 'info';
+					$log_message = 'Scheduled auto import completed successfully - No events found to import';
+					$log_context = array(
+						'category'         => 'Scheduled',
+						'duration'         => $duration,
+						'events_processed' => 0,
+						'status'           => 'no_events',
+					);
+				} else {
+					// Events were processed successfully.
+					$log_level   = 'info';
+					$log_message = sprintf(
+						'Scheduled auto import completed successfully - Processed %d events (%d new, %d updated, %d existing)',
+						$total_processed,
+						$imported_count,
+						$updated_count,
+						$existing_count
+					);
+					$log_context = array(
+						'category'         => 'Scheduled',
+						'duration'         => $duration,
+						'events_processed' => $total_processed,
+						'events_imported'  => $imported_count,
+						'events_updated'   => $updated_count,
+						'events_existing'  => $existing_count,
+						'errors'           => $result['errors'] ?? array(),
+						'status'           => 'success',
+					);
+				}
+			} else {
+				// Import failed.
+				$log_level   = 'error';
+				$log_message = sprintf(
+					'Scheduled auto import failed - %s',
+					$result['message'] ?? 'Unknown error'
+				);
+				$log_context = array(
+					'category' => 'Scheduled',
+					'duration' => $duration,
+					'errors'   => $result['errors'] ?? array(),
+					'status'   => 'failed',
+				);
+			}
+
+			// Log the detailed results.
+			if ( isset( $this->logger ) ) {
+				$this->logger->log( $log_level, $log_message, $log_context );
+			}
+
+			// Ensure the next run is properly scheduled after this execution.
+			$this->ensure_next_run_scheduled();
+
+		} catch ( \Exception $e ) {
+			$end_time = microtime( true );
+			$duration = round( $end_time - $start_time, 2 );
+
+			// Log any exceptions with detailed information.
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'error',
+					sprintf( 'Scheduled auto import exception: %s', $e->getMessage() ),
+					array(
+						'category'  => 'Scheduled',
+						'duration'  => $duration,
+						'exception' => $e->getMessage(),
+						'file'      => $e->getFile(),
+						'line'      => $e->getLine(),
+						'trace'     => $e->getTraceAsString(),
+						'status'    => 'exception',
+					)
+				);
+			}
+
+			// Ensure the next run is scheduled even if there was an exception.
+			$this->ensure_next_run_scheduled();
+		}
+	}
+
+	/**
+	 * Ensure the next run is properly scheduled after each execution.
+	 *
+	 * This method checks if the next run is scheduled and reschedules it if needed.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	private function ensure_next_run_scheduled() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		
+		// Only reschedule if auto import is enabled.
+		if ( empty( $options['auto_import'] ) ) {
+			return;
+		}
+
+		$frequency   = $options['import_frequency'] ?? 'daily';
+		$import_time = $options['import_time'] ?? '00:00';
+
+		// Check if the next run is scheduled and if it's in the future.
+		$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
+		
+		// If no next run is scheduled or the scheduled time is in the past, reschedule.
+		if ( ! $next_scheduled || $next_scheduled <= time() ) {
+			$this->schedule_auto_import( $frequency, $import_time );
+			
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'info',
+					'Auto import rescheduled after execution',
+					array(
+						'frequency'   => $frequency,
+						'import_time' => $import_time,
+						'next_run'    => date( 'Y-m-d H:i:s', wp_next_scheduled( 'humanitix_auto_import' ) ),
+					)
+				);
+			}
+		}
+	}
+
+	/**
+	 * Public method to reschedule auto import.
+	 *
+	 * This method can be called from other classes to ensure the auto import is properly scheduled.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function reschedule_auto_import() {
+		$options = get_option( 'humanitix_importer_options', array() );
+		
+		// Only reschedule if auto import is enabled.
+		if ( empty( $options['auto_import'] ) ) {
+			return;
+		}
+
+		$frequency   = $options['import_frequency'] ?? 'daily';
+		$import_time = $options['import_time'] ?? '00:00';
+
+		// Check if the next run is scheduled and if it's in the future.
+		$next_scheduled = wp_next_scheduled( 'humanitix_auto_import' );
+		
+		// If no next run is scheduled or the scheduled time is in the past, reschedule.
+		if ( ! $next_scheduled || $next_scheduled <= time() ) {
+			$this->schedule_auto_import( $frequency, $import_time );
+			
+			if ( isset( $this->logger ) ) {
+				$this->logger->log(
+					'info',
+					'Auto import rescheduled',
+					array(
+						'frequency'   => $frequency,
+						'import_time' => $import_time,
+						'next_run'    => date( 'Y-m-d H:i:s', wp_next_scheduled( 'humanitix_auto_import' ) ),
+					)
+				);
+			}
+		}
 	}
 
 	/**
@@ -380,5 +888,100 @@ class Plugin {
 		// if (version_compare($from_version, '1.1.0', '<')) {.
 		// Add new columns, etc.
 		// }.
+	}
+
+	/**
+	 * Get the template manager instance.
+	 *
+	 * @since 1.0.0
+	 * @return TemplateManager|null The template manager instance or null if not initialized.
+	 */
+	public function get_template_manager() {
+		return $this->template_manager;
+	}
+
+	/**
+	 * Get the archive manager instance.
+	 *
+	 * @since 1.0.0
+	 * @return ArchiveManager|null The archive manager instance or null if not initialized.
+	 */
+	public function get_archive_manager() {
+		return $this->archive_manager;
+	}
+
+	/**
+	 * Get the archive cron handler instance.
+	 *
+	 * @since 1.0.0
+	 * @return ArchiveCronHandler|null The archive cron handler instance or null if not initialized.
+	 */
+	public function get_archive_cron_handler() {
+		return $this->archive_cron_handler;
+	}
+
+	/**
+	 * Get the archive admin interface instance.
+	 *
+	 * @since 1.0.0
+	 * @return ArchiveAdminInterface|null The archive admin interface instance or null if not initialized.
+	 */
+	public function get_archive_admin_interface() {
+		return $this->archive_admin_interface;
+	}
+
+	/**
+	 * Get the log manager instance.
+	 *
+	 * @since 1.0.0
+	 * @return LogManager|null The log manager instance or null if not initialized.
+	 */
+	public function get_log_manager() {
+		return $this->log_manager;
+	}
+
+	/**
+	 * Get the log management interface instance.
+	 *
+	 * @since 1.0.0
+	 * @return LogManagementInterface The log management interface instance.
+	 */
+	public function get_log_management_interface() {
+		return $this->log_management_interface;
+	}
+
+	/**
+	 * Get the TEC integration instance.
+	 *
+	 * @since 1.0.0
+	 * @return TECIntegration The TEC integration instance.
+	 */
+	public function get_tec_integration() {
+		return $this->tec_integration;
+	}
+
+	/**
+	 * Ensure TEC integration is properly set up.
+	 *
+	 * This method hooks into the TEC post type registration to ensure our archive
+	 * manager and template manager are properly initialized and available.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	public function ensure_tec_integration() {
+		if ( ! function_exists( 'tribe_get_option' ) ) {
+			return;
+		}
+
+		// Ensure archive manager is initialized.
+		if ( ! isset( $this->archive_manager ) ) {
+			$this->archive_manager = new ArchiveManager();
+		}
+
+		// Ensure template manager is initialized.
+		if ( ! isset( $this->template_manager ) ) {
+			$this->template_manager = new TemplateManager( $this->logger );
+		}
 	}
 }
