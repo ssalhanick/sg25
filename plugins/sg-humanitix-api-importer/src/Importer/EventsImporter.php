@@ -144,7 +144,7 @@ class EventsImporter {
 				$this->debug_check_stored_humanitix_ids();
 			} catch ( Exception $e ) {
 				// Log the error but don't stop the import process.
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( 'Humanitix EventsImporter: Debug check failed: ' . $e->getMessage() );
 				}
 			}
@@ -697,14 +697,14 @@ class EventsImporter {
 
 			if ( $existing_event ) {
 				// Update existing event.
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( "Humanitix EventsImporter: Found existing event {$existing_event}, updating..." );
 				}
 				$post_id = wp_update_post( array_merge( $mapped_event, array( 'ID' => $existing_event ) ) );
 				$action  = 'updated';
 			} else {
 				// Create new event.
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( 'Humanitix EventsImporter: No existing event found, creating new event...' );
 				}
 				$post_id = wp_insert_post( $mapped_event );
@@ -755,7 +755,7 @@ class EventsImporter {
 				$category_assigned = wp_set_post_terms( $post_id, array( $shows_category_id ), 'tribe_events_cat' );
 				
 				if ( $category_assigned && ! is_wp_error( $category_assigned ) ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( "Humanitix EventsImporter: Successfully assigned shows category to event ID {$post_id}" );
 					}
 					$this->logger->log(
@@ -767,7 +767,7 @@ class EventsImporter {
 						)
 					);
 				} else {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( "Humanitix EventsImporter: Failed to assign shows category to event ID {$post_id}" );
 					}
 					$this->logger->log(
@@ -797,7 +797,7 @@ class EventsImporter {
 				update_post_meta( $post_id, '_humanitix_series_id', $event_data['_humanitix_series_id'] );
 			}
 
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				$debug_info = "Stored humanitix_id '{$humanitix_id}' and fingerprint '{$event_fingerprint}' for post_id {$post_id}";
 				if ( isset( $event_data['_humanitix_date_id'] ) ) {
 					$debug_info .= " (date_id: {$event_data['_humanitix_date_id']})";
@@ -808,7 +808,7 @@ class EventsImporter {
 			// Link venue to event if venue was created/found.
 			if ( $venue_id ) {
 				update_post_meta( $post_id, '_EventVenueID', $venue_id );
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 					error_log( "Humanitix EventsImporter: Linked venue ID {$venue_id} to event {$post_id}" );
 				}
 			}
@@ -892,7 +892,7 @@ class EventsImporter {
 				$category_assigned = wp_set_post_terms( $event_id, array( $shows_category_id ), 'tribe_events_cat' );
 				
 				if ( $category_assigned && ! is_wp_error( $category_assigned ) ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( "Humanitix EventsImporter: Successfully assigned shows category to event ID {$event_id}" );
 					}
 					$this->logger->log(
@@ -904,7 +904,7 @@ class EventsImporter {
 						)
 					);
 				} else {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 						error_log( "Humanitix EventsImporter: Failed to assign shows category to event ID {$event_id}" );
 					}
 					$this->logger->log(
@@ -1064,7 +1064,7 @@ class EventsImporter {
 	 * @return array The mapped event data for TEC.
 	 */
 	private function map_event_fields( $humanitix_event ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Starting map_event_fields for event: ' . ( $humanitix_event['name'] ?? 'Unknown' ) );
 			error_log( 'Humanitix EventsImporter: Venue data in event: ' . wp_json_encode( $humanitix_event['venue'] ?? 'not set' ) );
 		}
@@ -1079,7 +1079,7 @@ class EventsImporter {
 
 		$venue_id = $this->process_venue( $venue_data );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Venue processing result - ID: ' . ( $venue_id ? $venue_id : 'null' ) );
 		}
 
@@ -1175,11 +1175,11 @@ class EventsImporter {
 		// Add venue if available.
 		if ( $venue_id ) {
 			$tec_event_data['Venue'] = array( $venue_id );
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Added venue ID {$venue_id} to event data" );
 				error_log( 'Humanitix EventsImporter: Full TEC event data: ' . wp_json_encode( $tec_event_data ) );
 			}
-		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		} elseif ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: No venue ID available to add to event' );
 		}
 
@@ -1199,11 +1199,11 @@ class EventsImporter {
 			$tec_event_data['_shows_category_id'] = $shows_category_id;
 			
 			// Debug logging
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Storing shows category ID {$shows_category_id} for later assignment" );
 			}
 		} else {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Failed to get shows category ID" );
 			}
 		}
@@ -1222,7 +1222,7 @@ class EventsImporter {
 		$existing_category = get_term_by( 'name', 'shows', 'tribe_events_cat' );
 		
 		if ( $existing_category && ! is_wp_error( $existing_category ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Found existing shows category with ID: {$existing_category->term_id}" );
 			}
 			return $existing_category->term_id;
@@ -1264,12 +1264,12 @@ class EventsImporter {
 	 * @return int|null The venue ID or null if creation failed.
 	 */
 	private function process_venue( $venue_data ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Starting venue processing with data: ' . wp_json_encode( $venue_data ) );
 		}
 
 		if ( empty( $venue_data ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: Empty venue data provided' );
 			}
 			return null;
@@ -1277,7 +1277,7 @@ class EventsImporter {
 
 		$venue_name = $venue_data['name'] ?? 'Unknown Venue';
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( "Humanitix EventsImporter: Processing venue: {$venue_name}" );
 		}
 
@@ -1285,7 +1285,7 @@ class EventsImporter {
 		$existing_venue = $this->find_existing_venue( $venue_name );
 
 		if ( $existing_venue ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Found existing venue ID: {$existing_venue}" );
 			}
 			$this->logger->log(
@@ -1311,12 +1311,12 @@ class EventsImporter {
 			'Website' => $venue_data['website'] ?? '',
 		);
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Creating venue with args: ' . wp_json_encode( $venue_args ) );
 		}
 
 		// Create new venue.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: About to call tribe_create_venue with args: ' . wp_json_encode( $venue_args ) );
 		}
 
@@ -1324,7 +1324,7 @@ class EventsImporter {
 
 		// Fallback: If tribe_create_venue fails, try manual venue creation.
 		if ( ! $venue_id ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: tribe_create_venue failed, trying manual venue creation' );
 			}
 
@@ -1332,13 +1332,15 @@ class EventsImporter {
 		}
 
 		if ( $venue_id ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Successfully created venue with ID: {$venue_id}" );
 
 				// Verify the venue was created properly.
 				$venue_post = get_post( $venue_id );
 				if ( $venue_post ) {
-					error_log( "Humanitix EventsImporter: Venue post created - Title: {$venue_post->post_title}, Type: {$venue_post->post_type}" );
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Venue post created - Title: {$venue_post->post_title}, Type: {$venue_post->post_type}" );
+					}
 
 					// Check venue meta fields.
 					$venue_address = get_post_meta( $venue_id, '_VenueAddress', true );
@@ -1346,9 +1348,13 @@ class EventsImporter {
 					$venue_state   = get_post_meta( $venue_id, '_VenueState', true );
 					$venue_country = get_post_meta( $venue_id, '_VenueCountry', true );
 
-					error_log( "Humanitix EventsImporter: Venue meta fields - Address: {$venue_address}, City: {$venue_city}, State: {$venue_state}, Country: {$venue_country}" );
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Venue meta fields - Address: {$venue_address}, City: {$venue_city}, State: {$venue_state}, Country: {$venue_country}" );
+					}
 				} else {
-					error_log( 'Humanitix EventsImporter: ERROR - Venue post not found after creation!' );
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+						error_log( 'Humanitix EventsImporter: ERROR - Venue post not found after creation!' );
+					}
 				}
 			}
 
@@ -1366,7 +1372,7 @@ class EventsImporter {
 				)
 			);
 		} else {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: Failed to create venue - tribe_create_venue returned false/null' );
 			}
 			$this->logger->log(
@@ -1388,7 +1394,7 @@ class EventsImporter {
 	 * @return array Mapped venue data for TEC.
 	 */
 	private function map_humanitix_venue_data( $humanitix_venue_data ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Mapping venue data from: ' . wp_json_encode( $humanitix_venue_data ) );
 		}
 
@@ -1413,7 +1419,7 @@ class EventsImporter {
 			$mapped_venue['lat_lng'] = $humanitix_venue_data['latLng'];
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Mapped venue data to: ' . wp_json_encode( $mapped_venue ) );
 		}
 
@@ -1427,7 +1433,7 @@ class EventsImporter {
 	 * @return int|false The venue ID or false on failure.
 	 */
 	private function create_venue_manually( $venue_args ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Creating venue manually with args: ' . wp_json_encode( $venue_args ) );
 		}
 
@@ -1442,7 +1448,7 @@ class EventsImporter {
 		$venue_id = wp_insert_post( $venue_post_data );
 
 		if ( $venue_id && ! is_wp_error( $venue_id ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Manually created venue with ID: {$venue_id}" );
 			}
 
@@ -1455,13 +1461,13 @@ class EventsImporter {
 			update_post_meta( $venue_id, '_VenuePhone', $venue_args['Phone'] ?? '' );
 			update_post_meta( $venue_id, '_VenueURL', $venue_args['Website'] ?? '' );
 
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Set venue meta fields for venue ID: {$venue_id}" );
 			}
 
 			return $venue_id;
 		} else {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: Failed to create venue manually' );
 			}
 			return false;
@@ -1730,13 +1736,13 @@ class EventsImporter {
 	 */
 	private function find_existing_event( $humanitix_id ) {
 		if ( empty( $humanitix_id ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: find_existing_event called with empty humanitix_id' );
 			}
 			return false;
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( "Humanitix EventsImporter: Searching for existing event with humanitix_id: {$humanitix_id}" );
 		}
 
@@ -1748,7 +1754,7 @@ class EventsImporter {
 			 ORDER BY post_id DESC"
 		);
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: All stored humanitix IDs: ' . wp_json_encode( $stored_ids ) );
 		}
 
@@ -1766,20 +1772,20 @@ class EventsImporter {
 			'fields'         => 'ids',
 		);
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: WP_Query args: ' . wp_json_encode( $args ) );
 		}
 
 		$query = new \WP_Query( $args );
 		$posts = $query->posts;
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: WP_Query found ' . count( $posts ) . ' posts' );
 		}
 
 		$existing_event_id = ! empty( $posts ) ? $posts[0] : false;
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			if ( $existing_event_id ) {
 				error_log( "Humanitix EventsImporter: Found existing event ID: {$existing_event_id} for humanitix_id: {$humanitix_id}" );
 			} else {
@@ -1940,20 +1946,20 @@ class EventsImporter {
 	 * @return int|null The venue ID or null if processing failed.
 	 */
 	private function process_venue_from_mapped_event( $mapped_event, $event_data ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Starting process_venue_from_mapped_event for event: ' . ( $event_data['name'] ?? 'Unknown' ) );
 		}
 
 		// Try to get venue data from the original event data first.
 		$venue_data = $event_data['venue'] ?? $event_data['eventLocation'] ?? $event_data['location'] ?? array();
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Extracted venue data from original event: ' . wp_json_encode( $venue_data ) );
 		}
 
 		// If no venue data found, return null.
 		if ( empty( $venue_data ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( 'Humanitix EventsImporter: No venue data found in original event' );
 			}
 			return null;
@@ -1967,7 +1973,7 @@ class EventsImporter {
 		// Process venue.
 		$venue_id = $this->process_venue( $venue_data );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Venue processing result from mapped event - ID: ' . ( $venue_id ? $venue_id : 'null' ) );
 		}
 
@@ -1993,7 +1999,7 @@ class EventsImporter {
 			$stored_ids[ $result->post_id ] = $result->meta_value;
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'Humanitix EventsImporter: Currently stored Humanitix IDs: ' . wp_json_encode( $stored_ids ) );
 		}
 
@@ -2266,7 +2272,7 @@ class EventsImporter {
 		$humanitix_id = $event_data['_id'] ?? '';
 		$event_fingerprint = $this->generate_event_fingerprint($event_data);
 
-		if (defined('WP_DEBUG') && WP_DEBUG) {
+		if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 			error_log("Humanitix EventsImporter: Enhanced search for humanitix_id: {$humanitix_id}, fingerprint: {$event_fingerprint}");
 		}
 
@@ -2340,7 +2346,7 @@ class EventsImporter {
 			));
 			
 			if ($existing_event_id) {
-				if (defined('WP_DEBUG') && WP_DEBUG) {
+				if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 					error_log("Humanitix EventsImporter: Found existing recurring event by ID + date_id: {$existing_event_id}");
 				}
 				return (int) $existing_event_id;
@@ -2370,7 +2376,7 @@ class EventsImporter {
 			));
 			
 			if ($existing_event_id) {
-				if (defined('WP_DEBUG') && WP_DEBUG) {
+				if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 					error_log("Humanitix EventsImporter: Found existing recurring event by ID + date_index: {$existing_event_id}");
 				}
 				return (int) $existing_event_id;
@@ -2382,7 +2388,7 @@ class EventsImporter {
 		$existing_event_id = $this->find_existing_event_by_fingerprint($event_fingerprint);
 		
 		if ($existing_event_id) {
-			if (defined('WP_DEBUG') && WP_DEBUG) {
+			if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 				error_log("Humanitix EventsImporter: Found existing recurring event by fingerprint: {$existing_event_id}");
 			}
 		}
@@ -2416,7 +2422,7 @@ class EventsImporter {
 			)
 		);
 
-		if (defined('WP_DEBUG') && WP_DEBUG && $existing_event_id) {
+		if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG && $existing_event_id) {
 			error_log("Humanitix EventsImporter: Found existing event by fingerprint: {$existing_event_id}");
 		}
 
@@ -2494,7 +2500,7 @@ class EventsImporter {
 			}
 		}
 
-		if (defined('WP_DEBUG') && WP_DEBUG && $best_match) {
+		if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG && $best_match) {
 			error_log("Humanitix EventsImporter: Found existing event by fuzzy matching: {$best_match} (score: {$best_score})");
 		}
 
@@ -2520,11 +2526,11 @@ class EventsImporter {
 			// Store the lock value for later verification
 			update_option("humanitix_import_lock_value_{$lock_name}", $lock_value);
 			
-			if (defined('WP_DEBUG') && WP_DEBUG) {
+			if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 				error_log("Humanitix EventsImporter: Import lock acquired: {$lock_name}");
 			}
 		} else {
-			if (defined('WP_DEBUG') && WP_DEBUG) {
+			if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 				error_log("Humanitix EventsImporter: Failed to acquire import lock: {$lock_name}");
 			}
 		}
@@ -2548,7 +2554,7 @@ class EventsImporter {
 			delete_transient($lock_key);
 			delete_option("humanitix_import_lock_value_{$lock_name}");
 			
-			if (defined('WP_DEBUG') && WP_DEBUG) {
+			if (defined('HUMANITIX_DEBUG') && HUMANITIX_DEBUG) {
 				error_log("Humanitix EventsImporter: Import lock released: {$lock_name}");
 			}
 			return true;

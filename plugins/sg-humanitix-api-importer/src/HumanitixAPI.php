@@ -153,8 +153,8 @@ class HumanitixAPI {
 	 * @param string $message The message to log.
 	 */
 	private function log_debug( $message ) {
-		// Only log if WP_DEBUG is enabled.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		// Only log if HUMANITIX_DEBUG is enabled.
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( $message );
 		}
 	}
