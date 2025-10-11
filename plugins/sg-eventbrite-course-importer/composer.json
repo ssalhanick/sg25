@@ -1,0 +1,57 @@
+{
+	"name": "sg/sg-eventbrite-course-importer",
+	"description": "This plugin imports eventbrite events as courses, using the Eventbrite API key.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=8.0"
+	},
+	"require-dev": {
+		"squizlabs/php_codesniffer": "^3.7",
+		"wp-coding-standards/wpcs": "^3.0",
+		"phpcompatibility/phpcompatibility-wp": "^2.1"
+	},
+	"autoload": {
+		"psr-4": {
+			"SG\\EventbriteCourseImporter\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"SG\\EventbriteCourseImporter\\Tests\\": "tests/"
+		}
+	},
+	"scripts": {
+		"post-install-cmd": [
+			"@install-npm-safe",
+			"@build-safe"
+		],
+		"post-update-cmd": [
+			"@install-npm-safe", 
+			"@build-safe"
+		],
+		"install-npm-safe": "npm install --silent || echo 'npm install failed, continuing...'",
+		"build-safe": "npm run prod || echo 'npm build failed, continuing...'",
+		"deploy": [
+			"@composer install --no-dev --optimize-autoloader",
+			"npm ci --silent",
+			"npm run prod"
+		],
+		"build": "npm run prod",
+		"lint": [
+			"@lint:php",
+			"npm run lint-css",
+			"npm run lint"
+		],
+		"lint:php": "vendor\\bin\\phpcs"
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"classmap-authoritative": true,
+		"apcu-autoloader": true,
+		"sort-packages": true,
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
+} 
