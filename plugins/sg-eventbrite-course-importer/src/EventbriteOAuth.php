@@ -183,7 +183,12 @@ class EventbriteOAuth {
 	 */
 	public function refresh_access_token() {
 		if ( empty( $this->refresh_token ) ) {
-			return new \WP_Error( 'no_refresh_token', 'No refresh token available' );
+			$settings_url = admin_url( 'options-general.php?page=sg-eventbrite-settings' );
+			$error_message = sprintf( 
+				'No refresh token available. Please <a href="%s" target="_blank">re-authorize with Eventbrite</a> in the plugin settings.',
+				esc_url( $settings_url )
+			);
+			return new \WP_Error( 'no_refresh_token', $error_message );
 		}
 
 		$url = self::OAUTH_BASE_URL . '/token';

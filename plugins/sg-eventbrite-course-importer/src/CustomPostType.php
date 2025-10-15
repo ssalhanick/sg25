@@ -41,6 +41,7 @@ class CustomPostType {
 		add_action( 'save_post', array( $this, 'save_meta_boxes' ) );
 		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', array( $this, 'add_admin_columns' ) );
 		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', array( $this, 'populate_admin_columns' ), 10, 2 );
+		add_filter( 'template_include', array( $this, 'load_single_course_template' ) );
 	}
 
 	/**
@@ -442,5 +443,21 @@ class CustomPostType {
 				echo $location ? esc_html( $location ) : '—';
 				break;
 		}
+	}
+
+	/**
+	 * Load custom template for single course posts.
+	 *
+	 * @param string $template The template path.
+	 * @return string The modified template path.
+	 */
+	public function load_single_course_template( $template ) {
+		if ( is_singular( self::POST_TYPE ) ) {
+			$custom_template = SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_PATH . '/templates/single-sg_course.php';
+			if ( file_exists( $custom_template ) ) {
+				return $custom_template;
+			}
+		}
+		return $template;
 	}
 }

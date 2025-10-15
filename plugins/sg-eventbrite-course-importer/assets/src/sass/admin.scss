@@ -80,6 +80,17 @@
         background: #fcf0f1;
         border: 1px solid #f0a0a0;
         border-radius: 4px;
+
+        a {
+            color: #d63638;
+            text-decoration: underline;
+            font-weight: 600;
+
+            &:hover {
+                color: #a02626;
+                text-decoration: none;
+            }
+        }
     }
 }
 

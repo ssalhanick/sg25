@@ -242,6 +242,17 @@ class EventbriteAPI {
 	 * @return array|WP_Error Event data or error.
 	 */
 	public function search_events( $query, $args = array() ) {
+		// Extract date filtering parameters (for client-side filtering)
+		$start_date = isset( $args['start_date.range_start'] ) ? $args['start_date.range_start'] : '';
+		$end_date = isset( $args['start_date.range_end'] ) ? $args['start_date.range_end'] : '';
+		
+		// Convert API date format to simple date format for client-side filtering
+		if ( ! empty( $start_date ) ) {
+			$start_date = date( 'Y-m-d', strtotime( $start_date ) );
+		}
+		if ( ! empty( $end_date ) ) {
+			$end_date = date( 'Y-m-d', strtotime( $end_date ) );
+		}
 		// Set default pagination parameters
 		$page = isset( $args['page'] ) ? intval( $args['page'] ) : 1;
 		$per_page = 10;
@@ -250,7 +261,7 @@ class EventbriteAPI {
 		// Start with the most recent events first
 		$all_matching_events = array();
 		$current_page = 1;
-		$max_pages_to_search = 20; // Limit to prevent infinite loops
+		$max_pages_to_search = 50; // Limit to prevent infinite loops (increased to handle 50 events per page)
 		
 		while ( $current_page <= $max_pages_to_search ) {
 			$org_args = array(
@@ -259,6 +270,8 @@ class EventbriteAPI {
 				'order_by' => 'start_desc', // Most recent first
 				'time_filter' => 'all', // Get all events
 			);
+			
+			// Note: Eventbrite API date filtering doesn't work reliably, so we do client-side filtering
 			
 			// Debug: Log the parameters being sent to the API
 			if ( $current_page === 1 ) {
@@ -296,12 +309,51 @@ class EventbriteAPI {
 				
 				// Check if query matches
 				if ( strpos( $search_text, strtolower( $query ) ) !== false ) {
-					$all_matching_events[] = $event;
+					// Debug: Log all events to see what years we have
+					$event_date = isset( $event['start']['utc'] ) ? $event['start']['utc'] : null;
+					if ( $event_date ) {
+						$event_year = date( 'Y', strtotime( $event_date ) );
+						error_log( 'SG Eventbrite: Found event from year: ' . $event_year . ' - ' . $event['name']['text'] );
+					}
+					
+					// Additional client-side date filtering as fallback
+					$include_event = true;
+					
+					if ( $event_date && ( ! empty( $start_date ) || ! empty( $end_date ) ) ) {
+						$event_timestamp = strtotime( $event_date );
+						$event_date_only = date( 'Y-m-d', $event_timestamp );
+						
+						// Debug: Log date filtering
+						error_log( 'SG Eventbrite: Date filtering - Event: ' . $event_date_only . ', Start: ' . $start_date . ', End: ' . $end_date );
+						
+						// Check start date
+						if ( ! empty( $start_date ) && $event_date_only < $start_date ) {
+							$include_event = false;
+							error_log( 'SG Eventbrite: Excluding event - before start date' );
+						}
+						
+						// Check end date
+						if ( ! empty( $end_date ) && $event_date_only > $end_date ) {
+							$include_event = false;
+							error_log( 'SG Eventbrite: Excluding event - after end date' );
+						}
+					}
+					
+					if ( $include_event ) {
+						$all_matching_events[] = $event;
+					}
 				}
 			}
 			
-			// If we have enough events for pagination, we can stop
-			if ( count( $all_matching_events ) >= ( $page * $per_page ) + 50 ) {
+			// Check if there are more pages using the pagination metadata
+			$pagination = $org_events['pagination'] ?? array();
+			$has_more_items = $pagination['has_more_items'] ?? false;
+			
+			error_log( 'SG Eventbrite: Search page ' . $current_page . ' pagination info: ' . print_r( $pagination, true ) );
+			
+			// If there are no more items, we've reached the last page
+			if ( ! $has_more_items ) {
+				error_log( 'SG Eventbrite: No more items available for search, stopping pagination' );
 				break;
 			}
 			

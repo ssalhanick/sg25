@@ -86,7 +86,7 @@ class ImportInterface {
 		wp_enqueue_script(
 			'sg-eventbrite-import-admin',
 			SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_URL . '/assets/build/js/admin.js',
-			array( 'jquery', 'wp-util' ),
+			array( 'jquery' ),
 			SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_VERSION,
 			true
 		);
@@ -112,6 +112,16 @@ class ImportInterface {
 			)
 		);
 		
+		// Debug: Add console logging to check if scripts are loading
+		error_log( 'SG Eventbrite: Scripts being enqueued for hook: ' . $hook );
+		error_log( 'SG Eventbrite: Plugin URL: ' . SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_URL );
+		error_log( 'SG Eventbrite: Plugin Version: ' . SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_VERSION );
+		
+		// Check if script file exists
+		$script_path = SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_URL . '/assets/build/js/admin.js';
+		$script_file = str_replace( SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_URL, plugin_dir_path( __FILE__ ) . '../../', $script_path );
+		error_log( 'SG Eventbrite: Script file path: ' . $script_file );
+		error_log( 'SG Eventbrite: Script file exists: ' . (file_exists( $script_file ) ? 'YES' : 'NO') );
 	}
 
 	/**
@@ -121,6 +131,12 @@ class ImportInterface {
 		$client_id = get_option( 'sg_eventbrite_client_id', '' );
 		$client_secret = get_option( 'sg_eventbrite_client_secret', '' );
 		$organization_id = get_option( 'sg_eventbrite_organization_id', '' );
+		
+		// Debug: Log page rendering
+		error_log( 'SG Eventbrite: render_import_page called' );
+		error_log( 'SG Eventbrite: Client ID: ' . (empty($client_id) ? 'EMPTY' : 'SET') );
+		error_log( 'SG Eventbrite: Client Secret: ' . (empty($client_secret) ? 'EMPTY' : 'SET') );
+		error_log( 'SG Eventbrite: Organization ID: ' . (empty($organization_id) ? 'EMPTY' : $organization_id) );
 		?>
 		<div class="wrap">
 			<h1><?php _e( 'Import from Eventbrite', 'sg-eventbrite-course-importer' ); ?></h1>
@@ -178,7 +194,39 @@ class ImportInterface {
 										<?php _e( 'Search Events', 'sg-eventbrite-course-importer' ); ?>
 									</button>
 								</div>
-								<p class="search-help">
+								
+								<!-- Date Range Filter -->
+								<div class="date-range-container" style="margin-top: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+									<h4 style="margin-top: 0; margin-bottom: 10px;"><?php _e( 'Date Range Filter (Optional)', 'sg-eventbrite-course-importer' ); ?></h4>
+									<div class="date-inputs" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+										<div class="date-input-group">
+											<label for="start-date" style="display: block; font-weight: 600; margin-bottom: 5px;">
+												<?php _e( 'Start Date:', 'sg-eventbrite-course-importer' ); ?>
+											</label>
+											<input type="date" id="start-date" class="date-input" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+										</div>
+										<div class="date-input-group">
+											<label for="end-date" style="display: block; font-weight: 600; margin-bottom: 5px;">
+												<?php _e( 'End Date:', 'sg-eventbrite-course-importer' ); ?>
+											</label>
+											<input type="date" id="end-date" class="date-input" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+										</div>
+										<div class="date-actions" style="margin-top: 20px;">
+											<button type="button" id="clear-dates" class="button button-secondary" style="margin-right: 10px;">
+												<?php _e( 'Clear Dates', 'sg-eventbrite-course-importer' ); ?>
+											</button>
+					<button type="button" id="set-today" class="button button-secondary">
+						<?php _e( 'Today', 'sg-eventbrite-course-importer' ); ?>
+					</button>
+										</div>
+									</div>
+									<p class="date-help" style="margin-top: 10px; margin-bottom: 0; font-size: 13px; color: #666;">
+										<strong><?php _e( 'Date Filter Tips:', 'sg-eventbrite-course-importer' ); ?></strong>
+										<?php _e( 'Leave dates empty to search all events. Use start date only to find events from that date forward. Use both dates to find events within a specific range.', 'sg-eventbrite-course-importer' ); ?>
+									</p>
+								</div>
+								
+								<p class="search-help" style="margin-top: 15px;">
 									<strong><?php _e( 'Search Tips:', 'sg-eventbrite-course-importer' ); ?></strong>
 									<?php _e( 'Use multiple keywords separated by commas (e.g., "workshop, training, online") to find events containing any of those terms.', 'sg-eventbrite-course-importer' ); ?>
 								</p>
@@ -294,6 +342,334 @@ class ImportInterface {
 
 			<?php endif; ?>
 		</div>
+		
+		<script>
+		console.log('SG Eventbrite: Page loaded, checking JavaScript...');
+		console.log('SG Eventbrite: jQuery available:', typeof jQuery !== 'undefined');
+		console.log('SG Eventbrite: sgEventbriteImport available:', typeof sgEventbriteImport !== 'undefined');
+		
+		// Manual fallback if wp_localize_script failed
+		if (typeof sgEventbriteImport === 'undefined') {
+			console.log('SG Eventbrite: Creating manual fallback...');
+			window.sgEventbriteImport = {
+				ajaxUrl: '<?php echo admin_url( 'admin-ajax.php' ); ?>',
+				nonce: '<?php echo wp_create_nonce( 'sg_eventbrite_import_nonce' ); ?>',
+				strings: {
+					testing_connection: 'Testing connection...',
+					connection_success: 'Connection successful!',
+					connection_failed: 'Connection failed. Please check your API credentials.',
+					fetching_events: 'Fetching events...',
+					events_loaded: 'Events loaded successfully',
+					importing_events: 'Importing events...',
+					import_complete: 'Import completed successfully',
+					import_failed: 'Import failed. Please check the logs.',
+					preview_loading: 'Loading preview...',
+					select_events: 'Please select at least one event to import.'
+				}
+			};
+			console.log('SG Eventbrite: Manual fallback created:', window.sgEventbriteImport);
+		}
+		
+		// Test if buttons exist and add manual event handlers
+		console.log('SG Eventbrite: Testing button existence...');
+		console.log('SG Eventbrite: Test connection button exists:', document.getElementById('test-connection') !== null);
+		console.log('SG Eventbrite: Search events button exists:', document.getElementById('search-events') !== null);
+		console.log('SG Eventbrite: Event search input exists:', document.getElementById('event-search') !== null);
+		
+		// Add manual event handlers as fallback
+		jQuery(document).ready(function($) {
+			console.log('SG Eventbrite: jQuery ready, adding manual event handlers...');
+			
+			// Test connection button
+			$('#test-connection').on('click', function() {
+				console.log('SG Eventbrite: Test connection button clicked!');
+				alert('Test connection button clicked! This is working.');
+			});
+			
+			// Search events button
+			$('#search-events').on('click', function() {
+				console.log('SG Eventbrite: Search events button clicked!');
+				var searchQuery = $('#event-search').val().trim();
+				var startDate = $('#start-date').val();
+				var endDate = $('#end-date').val();
+				
+				console.log('SG Eventbrite: Search query:', searchQuery);
+				console.log('SG Eventbrite: Start date:', startDate);
+				console.log('SG Eventbrite: End date:', endDate);
+				
+				// Validate date range
+				if (startDate && endDate && startDate > endDate) {
+					alert('Start date must be before end date!');
+					return;
+				}
+				
+				// Call the actual search function
+				window.searchEventsWithDateRange(searchQuery, startDate, endDate);
+			});
+			
+			// Clear dates button
+			$('#clear-dates').on('click', function() {
+				$('#start-date, #end-date').val('');
+				console.log('SG Eventbrite: Dates cleared');
+			});
+			
+			// Set today button
+			$('#set-today').on('click', function() {
+				var today = new Date();
+				var todayStr = today.getFullYear() + '-' + 
+					String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+					String(today.getDate()).padStart(2, '0');
+				$('#start-date').val(todayStr);
+				$('#end-date').val(todayStr);
+				console.log('SG Eventbrite: Set to today:', todayStr);
+			});
+			
+			console.log('SG Eventbrite: Manual event handlers added');
+		});
+		
+		// Search function with date range support (global scope)
+		window.searchEventsWithDateRange = function(searchQuery, startDate, endDate, page) {
+			page = page || 1; // Default to page 1 if not provided
+			console.log('SG Eventbrite: Starting search with date range... Page:', page);
+			
+			var $container = jQuery('#events-container');
+			var $searchButton = jQuery('#search-events');
+			
+			// Show loading state
+			$container.html('<div class="loading-spinner">Searching events...</div>');
+			$searchButton.prop('disabled', true).text('Searching...');
+			
+			// Prepare AJAX data
+			var ajaxData = {
+				action: 'sg_eventbrite_fetch_events',
+				nonce: sgEventbriteImport.nonce,
+				search: searchQuery || '',
+				page: page
+			};
+			
+			// Add date range if provided
+			if (startDate) {
+				ajaxData.start_date = startDate;
+			}
+			if (endDate) {
+				ajaxData.end_date = endDate;
+			}
+			
+			console.log('SG Eventbrite: AJAX data:', ajaxData);
+			
+			// Make AJAX request
+			jQuery.post(sgEventbriteImport.ajaxUrl, ajaxData)
+				.done(function(response) {
+					console.log('SG Eventbrite: Search response:', response);
+					if (response.success) {
+						renderEvents(response.data.events, response.data.pagination);
+					} else {
+						$container.html('<div class="error">' + response.data.message + '</div>');
+					}
+				})
+				.fail(function(xhr, status, error) {
+					console.error('SG Eventbrite: Search failed:', error);
+					$container.html('<div class="error">Search failed. Please try again.</div>');
+				})
+				.always(function() {
+					$searchButton.prop('disabled', false).text('Search Events');
+				});
+		}
+		
+		// Enhanced event rendering function with pagination
+		function renderEvents(events, pagination) {
+			var $container = jQuery('#events-container');
+			
+			if (!events || events.length === 0) {
+				$container.html('<div class="no-events">No events found matching your criteria.</div>');
+				return;
+			}
+			
+			var html = '<div class="events-list">';
+			events.forEach(function(event) {
+				var eventDate = event.start ? new Date(event.start.utc).toLocaleDateString() : 'TBD';
+				var venue = event.venue ? event.venue.name : 'Location TBD';
+				var price = event.is_free ? 'Free' : (event.ticket_availability ? 'Paid' : 'TBD');
+				
+				html += '<div class="event-item" style="border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 4px;">';
+				html += '<input type="checkbox" class="event-checkbox" value="' + event.id + '" id="event-' + event.id + '" style="margin-right: 10px;">';
+				html += '<div class="event-details" style="display: inline-block; width: calc(100% - 120px);">';
+				html += '<div class="event-title" style="font-weight: bold; margin-bottom: 5px;">' + event.name.text + '</div>';
+				html += '<div class="event-meta" style="color: #666; font-size: 14px;">';
+				html += '<span>Date: ' + eventDate + '</span> | ';
+				html += '<span>Location: ' + venue + '</span> | ';
+				html += '<span>Price: ' + price + '</span>';
+				html += '</div>';
+				html += '</div>';
+				html += '<div class="event-actions" style="float: right;">';
+				html += '<button type="button" class="button button-small preview-event" data-event-id="' + event.id + '">Preview</button>';
+				html += '</div>';
+				html += '<div style="clear: both;"></div>';
+				html += '</div>';
+			});
+			html += '</div>';
+			
+			// Add pagination controls (always show, even for single page)
+			if (pagination) {
+				html += '<div class="events-pagination">';
+				html += '<div class="pagination-info">';
+				html += 'Showing page ' + pagination.page_number + ' of ' + pagination.page_count + ' (Total: ' + pagination.object_count + ' events)';
+				html += '</div>';
+				html += '<div class="pagination-buttons">';
+				
+				// Previous button (always show, disabled if on first page)
+				if (pagination.page_number > 1) {
+					html += '<button type="button" class="button pagination-btn" data-page="' + (pagination.page_number - 1) + '">← Previous</button>';
+				} else {
+					html += '<button type="button" class="button pagination-btn" disabled>← Previous</button>';
+				}
+				
+				// Page numbers
+				var startPage = Math.max(1, pagination.page_number - 2);
+				var endPage = Math.min(pagination.page_count, pagination.page_number + 2);
+				
+				if (startPage > 1) {
+					html += '<button type="button" class="button pagination-btn" data-page="1">1</button>';
+					if (startPage > 2) {
+						html += '<span class="pagination-ellipsis">...</span>';
+					}
+				}
+				
+				for (var i = startPage; i <= endPage; i++) {
+					var activeClass = (i === pagination.page_number) ? ' button-primary' : '';
+					html += '<button type="button" class="button pagination-btn' + activeClass + '" data-page="' + i + '">' + i + '</button>';
+				}
+				
+				if (endPage < pagination.page_count) {
+					if (endPage < pagination.page_count - 1) {
+						html += '<span class="pagination-ellipsis">...</span>';
+					}
+					html += '<button type="button" class="button pagination-btn" data-page="' + pagination.page_count + '">' + pagination.page_count + '</button>';
+				}
+				
+				// Next button (always show, disabled if on last page)
+				if (pagination.page_number < pagination.page_count) {
+					html += '<button type="button" class="button pagination-btn" data-page="' + (pagination.page_number + 1) + '">Next →</button>';
+				} else {
+					html += '<button type="button" class="button pagination-btn" disabled>Next →</button>';
+				}
+				
+				html += '</div>';
+				html += '</div>';
+			}
+			
+			$container.html(html);
+			
+			// Update import button state after rendering events
+			updateImportButtonState();
+			
+			// Add click handlers for pagination buttons
+			$container.find('.pagination-btn').on('click', function() {
+				// Don't process clicks on disabled buttons
+				if (jQuery(this).prop('disabled')) {
+					return;
+				}
+				
+				var page = parseInt(jQuery(this).data('page'));
+				var searchQuery = jQuery('#event-search').val().trim();
+				var startDate = jQuery('#start-date').val();
+				var endDate = jQuery('#end-date').val();
+				
+				console.log('SG Eventbrite: Pagination clicked - Page:', page);
+				console.log('SG Eventbrite: Search query:', searchQuery);
+				console.log('SG Eventbrite: Start date:', startDate);
+				console.log('SG Eventbrite: End date:', endDate);
+				console.log('SG Eventbrite: searchEventsWithDateRange function exists:', typeof window.searchEventsWithDateRange);
+				
+				if (typeof window.searchEventsWithDateRange === 'function') {
+					window.searchEventsWithDateRange(searchQuery, startDate, endDate, page);
+				} else {
+					console.error('SG Eventbrite: searchEventsWithDateRange function not found!');
+				}
+			});
+		}
+		
+		if (typeof sgEventbriteImport !== 'undefined') {
+			console.log('SG Eventbrite: AJAX URL:', sgEventbriteImport.ajaxUrl);
+			console.log('SG Eventbrite: Nonce:', sgEventbriteImport.nonce);
+		}
+		
+		// Function to update import button state based on selected checkboxes
+		function updateImportButtonState() {
+			var selectedCheckboxes = jQuery('.event-checkbox:checked');
+			var importButton = jQuery('#import-selected');
+			
+			if (selectedCheckboxes.length > 0) {
+				importButton.prop('disabled', false);
+				importButton.text('Import Selected (' + selectedCheckboxes.length + ')');
+			} else {
+				importButton.prop('disabled', true);
+				importButton.text('Import Selected');
+			}
+		}
+		
+		// Function to handle import button click
+		function handleImportClick() {
+			var selectedCheckboxes = jQuery('.event-checkbox:checked');
+			var eventIds = [];
+			
+			selectedCheckboxes.each(function() {
+				eventIds.push(jQuery(this).val());
+			});
+			
+			if (eventIds.length === 0) {
+				alert('Please select at least one event to import.');
+				return;
+			}
+			
+			if (!confirm('Are you sure you want to import ' + eventIds.length + ' selected events?')) {
+				return;
+			}
+			
+			// Show loading state
+			var importButton = jQuery('#import-selected');
+			importButton.prop('disabled', true).text('Importing...');
+			
+			// Make AJAX request to import events
+			jQuery.post(sgEventbriteImport.ajaxUrl, {
+				action: 'sg_eventbrite_import_events',
+				nonce: sgEventbriteImport.nonce,
+				event_ids: eventIds
+			})
+			.done(function(response) {
+				console.log('SG Eventbrite: Import response:', response);
+				if (response.success) {
+					alert('Successfully imported ' + response.data.imported_count + ' events!');
+					// Refresh the events list
+					window.searchEventsWithDateRange(
+						jQuery('#event-search').val().trim(),
+						jQuery('#start-date').val(),
+						jQuery('#end-date').val(),
+						1
+					);
+				} else {
+					alert('Import failed: ' + response.data.message);
+				}
+			})
+			.fail(function(xhr, status, error) {
+				console.error('SG Eventbrite: Import failed:', error);
+				alert('Import failed. Please try again.');
+			})
+			.always(function() {
+				importButton.prop('disabled', false).text('Import Selected');
+			});
+		}
+		
+		// Add event delegation for dynamically created checkboxes
+		jQuery(document).on('change', '.event-checkbox', function() {
+			updateImportButtonState();
+		});
+		
+		// Add click handler for import button
+		jQuery(document).on('click', '#import-selected', function() {
+			handleImportClick();
+		});
+		</script>
 
 		<style>
 		.sg-eventbrite-import-container {
@@ -481,6 +857,39 @@ class ImportInterface {
 			font-size: 24px;
 			cursor: pointer;
 		}
+		.events-pagination {
+			margin-top: 20px;
+			padding: 15px;
+			border-top: 1px solid #ddd;
+			background: #f9f9f9;
+		}
+		.pagination-info {
+			text-align: center;
+			margin-bottom: 10px;
+			font-size: 14px;
+			color: #666;
+		}
+		.pagination-buttons {
+			text-align: center;
+			display: flex;
+			justify-content: center;
+			gap: 5px;
+			flex-wrap: wrap;
+		}
+		.pagination-btn {
+			min-width: 40px;
+			padding: 5px 10px;
+		}
+		.pagination-ellipsis {
+			padding: 5px 10px;
+			color: #666;
+		}
+		.pagination-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			background: #f1f1f1;
+			color: #999;
+		}
 		</style>
 		<?php
 	}
@@ -542,8 +951,11 @@ class ImportInterface {
 		$organization_id = get_option( 'sg_eventbrite_organization_id', '' );
 		$search_query = sanitize_text_field( $_POST['search'] ?? '' );
 		$page = intval( $_POST['page'] ?? 1 );
+		$start_date = sanitize_text_field( $_POST['start_date'] ?? '' );
+		$end_date = sanitize_text_field( $_POST['end_date'] ?? '' );
 		
 		error_log( 'SG Eventbrite: Search query: ' . $search_query . ', Page: ' . $page );
+		error_log( 'SG Eventbrite: Start date: ' . $start_date . ', End date: ' . $end_date );
 		
 		// If no search query, let's get all organization events with proper pagination
 		if ( empty( $search_query ) ) {
@@ -553,17 +965,24 @@ class ImportInterface {
 			// Fetch ALL events by getting multiple pages
 			$all_events = array();
 			$current_page = 1;
-			$max_pages = 50; // Safety limit to prevent infinite loops
+			$max_pages = 50; // Safety limit to prevent infinite loops (increased to handle 50 events per page)
 			
 			error_log( 'SG Eventbrite: Fetching all organization events...' );
 			
+			// Prepare API parameters (Eventbrite API date filtering doesn't work reliably)
+			$api_params = array( 
+				'time_filter' => 'all', 
+				'page_size' => 100, // Get 100 events per page
+				'page' => $current_page,
+				'order_by' => 'start_desc' // Most recent first (though API may not respect this)
+			);
+			
+			error_log( 'SG Eventbrite: API parameters: ' . print_r( $api_params, true ) );
+			
 			while ( $current_page <= $max_pages ) {
-				$page_events = $api->get_organization_events( array( 
-					'time_filter' => 'all', 
-					'page_size' => 100, // Get 100 events per page
-					'page' => $current_page,
-					'order_by' => 'start_desc' // Most recent first (though API may not respect this)
-				) );
+				// Update page number for current iteration
+				$api_params['page'] = $current_page;
+				$page_events = $api->get_organization_events( $api_params );
 				
 				if ( is_wp_error( $page_events ) ) {
 					wp_send_json_error( array( 'message' => $page_events->get_error_message() ) );
@@ -578,8 +997,15 @@ class ImportInterface {
 				$all_events = array_merge( $all_events, $events_on_page );
 				error_log( 'SG Eventbrite: Fetched page ' . $current_page . ' with ' . count( $events_on_page ) . ' events. Total so far: ' . count( $all_events ) );
 				
-				// If we got fewer than 100 events, we've reached the last page
-				if ( count( $events_on_page ) < 100 ) {
+				// Check if there are more pages using the pagination metadata
+				$pagination = $page_events['pagination'] ?? array();
+				$has_more_items = $pagination['has_more_items'] ?? false;
+				
+				error_log( 'SG Eventbrite: Page ' . $current_page . ' pagination info: ' . print_r( $pagination, true ) );
+				
+				// If there are no more items, we've reached the last page
+				if ( ! $has_more_items ) {
+					error_log( 'SG Eventbrite: No more items available, stopping pagination' );
 					break;
 				}
 				
@@ -587,6 +1013,12 @@ class ImportInterface {
 			}
 			
 			error_log( 'SG Eventbrite: Fetched ' . count( $all_events ) . ' total events from ' . ($current_page - 1) . ' pages' );
+			
+			// Apply client-side date filtering since Eventbrite API doesn't support it reliably
+			if ( ! empty( $start_date ) || ! empty( $end_date ) ) {
+				$all_events = $this->filter_events_by_date_range( $all_events, $start_date, $end_date );
+				error_log( 'SG Eventbrite: After client-side date filtering: ' . count( $all_events ) . ' events remain' );
+			}
 			
 			// Sort events by date (most recent first) - 2025, 2024, 2023, etc.
 			usort( $all_events, function( $a, $b ) {
@@ -648,7 +1080,16 @@ class ImportInterface {
 				$event_ids = array();
 				
 				foreach ( $keywords as $keyword ) {
-					$result = $api->search_events( $keyword, array( 'page' => 1 ) );
+					// Prepare search parameters with date filtering
+					$search_params = array( 'page' => 1 );
+					if ( ! empty( $start_date ) ) {
+						$search_params['start_date.range_start'] = $start_date . 'T00:00:00Z';
+					}
+					if ( ! empty( $end_date ) ) {
+						$search_params['start_date.range_end'] = $end_date . 'T23:59:59Z';
+					}
+					
+					$result = $api->search_events( $keyword, $search_params );
 					if ( ! is_wp_error( $result ) && ! empty( $result['events'] ) ) {
 						foreach ( $result['events'] as $event ) {
 							// Avoid duplicates by checking event ID
@@ -659,6 +1100,12 @@ class ImportInterface {
 						}
 					}
 				}
+				
+				// Apply client-side date filtering since Eventbrite API doesn't support it reliably
+			if ( ! empty( $start_date ) || ! empty( $end_date ) ) {
+				$all_events = $this->filter_events_by_date_range( $all_events, $start_date, $end_date );
+				error_log( 'SG Eventbrite: After client-side date filtering: ' . count( $all_events ) . ' events remain' );
+			}
 				
 				// Sort combined results by date (most recent first)
 				usort( $all_events, function( $a, $b ) {
@@ -685,8 +1132,16 @@ class ImportInterface {
 					)
 				);
 			} else {
-				// Single keyword search with pagination
-				$result = $api->search_events( $search_query, array( 'page' => $page ) );
+				// Single keyword search with pagination and date filtering
+				$search_params = array( 'page' => $page );
+				if ( ! empty( $start_date ) ) {
+					$search_params['start_date.range_start'] = $start_date . 'T00:00:00Z';
+				}
+				if ( ! empty( $end_date ) ) {
+					$search_params['start_date.range_end'] = $end_date . 'T23:59:59Z';
+				}
+				
+				$result = $api->search_events( $search_query, $search_params );
 			}
 		} else {
 			wp_send_json_error( array( 'message' => __( 'Please enter search keywords', 'sg-eventbrite-course-importer' ) ) );
@@ -784,5 +1239,50 @@ class ImportInterface {
 		}
 
 		wp_send_json_success( array( 'event' => $event, 'course_data' => $course_data ) );
+	}
+	
+	/**
+	 * Filter events by date range (client-side filtering since Eventbrite API doesn't support it reliably).
+	 *
+	 * @param array $events Array of events to filter
+	 * @param string $start_date Start date in YYYY-MM-DD format
+	 * @param string $end_date End date in YYYY-MM-DD format
+	 * @return array Filtered events
+	 */
+	private function filter_events_by_date_range( $events, $start_date, $end_date ) {
+		$filtered_events = array();
+		
+		foreach ( $events as $event ) {
+			$event_date = isset( $event['start']['utc'] ) ? $event['start']['utc'] : null;
+			
+			if ( ! $event_date ) {
+				// If no date, include it (or exclude based on your preference)
+				$filtered_events[] = $event;
+				continue;
+			}
+			
+			$event_timestamp = strtotime( $event_date );
+			$event_date_only = date( 'Y-m-d', $event_timestamp );
+			
+			$include_event = true;
+			
+			// Check start date
+			if ( ! empty( $start_date ) && $event_date_only < $start_date ) {
+				$include_event = false;
+			}
+			
+			// Check end date
+			if ( ! empty( $end_date ) && $event_date_only > $end_date ) {
+				$include_event = false;
+			}
+			
+			if ( $include_event ) {
+				$filtered_events[] = $event;
+			}
+		}
+		
+		error_log( 'SG Eventbrite: Client-side date filtering - Start: ' . $start_date . ', End: ' . $end_date . ', Original: ' . count( $events ) . ', Filtered: ' . count( $filtered_events ) );
+		
+		return $filtered_events;
 	}
 }

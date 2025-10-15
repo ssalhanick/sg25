@@ -119,6 +119,7 @@
                     EventbriteImport.renderEvents(response.data.events);
                 } else {
                     console.log('Error response:', response.data.message);
+                    // Display error message (supports HTML content like links)
                     $container.html('<div class="error">' + response.data.message + '</div>');
                 }
             })
@@ -237,6 +238,7 @@
                 if (response.success) {
                     EventbriteImport.renderPreview(response.data);
                 } else {
+                    // Display error message (supports HTML content like links)
                     $content.html('<div class="error">' + response.data.message + '</div>');
                 }
             })
@@ -369,6 +371,7 @@
                 }
             } else {
                 html += '<h3>Import Failed</h3>';
+                // Display error message (supports HTML content like links)
                 html += '<p>' + (data.message || 'Unknown error occurred') + '</p>';
                 
                 if (data.errors && data.errors.length > 0) {
