@@ -105,7 +105,7 @@ class EventbriteAPI {
 		$defaults = array(
 			'status'         => 'live',
 			'order_by'       => 'start_asc',
-			'expand'         => 'venue,organizer,logo,description',
+			'expand'         => 'venue,organizer,logo,description,summary',
 			'page_size'      => 50,
 			'page'           => 1,
 			'time_filter'    => 'current_future',
@@ -151,18 +151,23 @@ class EventbriteAPI {
 			return new \WP_Error( 'invalid_event_id', __( 'Event ID is required', 'sg-eventbrite-course-importer' ) );
 		}
 
-		$default_expand = array( 'venue', 'organizer', 'logo', 'description', 'ticket_classes' );
+		$default_expand = array( 'venue', 'organizer', 'logo', 'structured_content', 'summary', 'ticket_classes' );
 		$expand = array_merge( $default_expand, $expand );
 
 		$cache_key = 'sg_eventbrite_event_' . $event_id . '_' . md5( serialize( $expand ) );
 		$cached_data = get_transient( $cache_key );
 
 		if ( false !== $cached_data ) {
-			$this->logger->log( "Retrieved event {$event_id} from cache", 'info' );
+			error_log( "SG Eventbrite: Retrieved event {$event_id} from cache" );
 			return $cached_data;
 		}
 
 		$url = add_query_arg( array( 'expand' => implode( ',', $expand ) ), self::API_BASE_URL . '/events/' . $event_id . '/' );
+		
+		// Debug: Log the API request
+		error_log( 'SG Eventbrite: API request URL: ' . $url );
+		error_log( 'SG Eventbrite: Requesting fields: ' . implode( ', ', $expand ) );
+		
 		$response = $this->make_request( $url );
 
 		if ( is_wp_error( $response ) ) {
@@ -189,7 +194,7 @@ class EventbriteAPI {
 		$defaults = array(
 			'status'      => 'live',
 			'order_by'    => 'start_asc',
-			'expand'      => 'venue,organizer,logo,description',
+			'expand'      => 'venue,organizer,logo,description,summary',
 			'page_size'   => 50,
 			'page'        => 1,
 			'time_filter' => 'current_future',
@@ -201,14 +206,15 @@ class EventbriteAPI {
 		$cached_data = get_transient( $cache_key );
 
 		if ( false !== $cached_data ) {
-			$this->logger->log( "Retrieved organization events from cache", 'info' );
+			error_log( "SG Eventbrite: Retrieved organization events from cache" );
 			return $cached_data;
 		}
 
 		$url = add_query_arg( $args, self::API_BASE_URL . '/organizations/' . $this->organization_id . '/events/' );
 		
 		// Debug: Log the URL being called
-		error_log( 'SG Eventbrite: API URL: ' . $url );
+		error_log( 'SG Eventbrite: Organization events API URL: ' . $url );
+		error_log( 'SG Eventbrite: Requesting fields: ' . $args['expand'] );
 		error_log( 'SG Eventbrite: API parameters for get_organization_events: ' . print_r( $args, true ) );
 		
 		$response = $this->make_request( $url );
@@ -225,6 +231,15 @@ class EventbriteAPI {
 				$date = isset( $event['start']['utc'] ) ? $event['start']['utc'] : 'No date';
 				$timestamp = isset( $event['start']['utc'] ) ? strtotime( $event['start']['utc'] ) : 0;
 				error_log( 'SG Eventbrite: ' . ($i+1) . '. "' . $event['name']['text'] . '" - ' . $date . ' (timestamp: ' . $timestamp . ')' );
+			}
+			
+			// Debug: Check if structured content is available
+			$first_event = $response['events'][0];
+			error_log( 'SG Eventbrite: First event fields: ' . implode( ', ', array_keys( $first_event ) ) );
+			if ( isset( $first_event['structured_content'] ) ) {
+				error_log( 'SG Eventbrite: Structured content found in organization events API response' );
+			} else {
+				error_log( 'SG Eventbrite: No structured_content field in organization events API response' );
 			}
 		}
 
@@ -349,11 +364,11 @@ class EventbriteAPI {
 			$pagination = $org_events['pagination'] ?? array();
 			$has_more_items = $pagination['has_more_items'] ?? false;
 			
-			error_log( 'SG Eventbrite: Search page ' . $current_page . ' pagination info: ' . print_r( $pagination, true ) );
+			// Pagination logging removed for cleaner logs
 			
 			// If there are no more items, we've reached the last page
 			if ( ! $has_more_items ) {
-				error_log( 'SG Eventbrite: No more items available for search, stopping pagination' );
+				// No more items available, stopping pagination
 				break;
 			}
 			
@@ -400,6 +415,9 @@ class EventbriteAPI {
 			'page_count' => $total_pages,
 			'has_more_items' => $page < $total_pages,
 		);
+		
+		// Log final count
+		error_log( 'SG Eventbrite: Retrieved ' . $total_events . ' total events from organization' );
 		
 		return array(
 			'events' => $paginated_events,
@@ -478,6 +496,50 @@ class EventbriteAPI {
 	}
 
 	/**
+	 * Get structured content for an event.
+	 *
+	 * @param string $event_id Event ID.
+	 * @return array|WP_Error Structured content data or error.
+	 */
+	public function get_event_structured_content( $event_id ) {
+		if ( empty( $event_id ) ) {
+			return new \WP_Error( 'invalid_event_id', __( 'Event ID is required', 'sg-eventbrite-course-importer' ) );
+		}
+
+		$cache_key = 'sg_eventbrite_structured_content_' . $event_id;
+		$cached_data = get_transient( $cache_key );
+
+		if ( false !== $cached_data ) {
+			error_log( "SG Eventbrite: Retrieved structured content for event {$event_id} from cache" );
+			return $cached_data;
+		}
+
+		$url = self::API_BASE_URL . '/events/' . $event_id . '/structured_content/';
+		
+		// Debug: Log the structured content API request
+		error_log( 'SG Eventbrite: Structured content API URL: ' . $url );
+		
+		$response = $this->make_request( $url );
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		// Debug: Log what we got back from the structured content API
+		error_log( 'SG Eventbrite: Structured content API response fields: ' . implode( ', ', array_keys( $response ) ) );
+		if ( isset( $response['modules'] ) ) {
+			error_log( 'SG Eventbrite: Structured content modules found: ' . count( $response['modules'] ) );
+		} else {
+			error_log( 'SG Eventbrite: No modules field in structured content API response' );
+		}
+
+		// Cache the response for 1 hour
+		set_transient( $cache_key, $response, HOUR_IN_SECONDS );
+
+		return $response;
+	}
+
+	/**
 	 * Get user's organizations.
 	 *
 	 * @return array|WP_Error Organization data or error.
@@ -487,7 +549,7 @@ class EventbriteAPI {
 		$cached_data = get_transient( $cache_key );
 
 		if ( false !== $cached_data ) {
-			$this->logger->log( "Retrieved user organizations from cache", 'info' );
+			error_log( "SG Eventbrite: Retrieved user organizations from cache" );
 			return $cached_data;
 		}
 
@@ -501,6 +563,7 @@ class EventbriteAPI {
 		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
+
 
 		// Cache the response for 1 hour
 		set_transient( $cache_key, $response, HOUR_IN_SECONDS );
@@ -527,6 +590,7 @@ class EventbriteAPI {
 			'user'    => $response,
 		);
 	}
+
 
 	/**
 	 * Get API usage statistics.

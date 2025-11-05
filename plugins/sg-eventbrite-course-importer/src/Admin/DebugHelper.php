@@ -642,8 +642,8 @@ class DebugHelper {
 	 * @return bool Whether to use optimized logging.
 	 */
 	public function should_use_optimized_logging() {
-		// Use optimized logging by default, unless explicitly disabled.
-		return PerformanceConfig::is_optimized_logging_enabled();
+		// Use optimized logging by default for Eventbrite plugin.
+		return true;
 	}
 
 	/**

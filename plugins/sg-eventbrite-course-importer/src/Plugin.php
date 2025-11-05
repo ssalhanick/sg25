@@ -13,6 +13,9 @@ use SG\EventbriteCourseImporter\CustomPostType;
 use SG\EventbriteCourseImporter\EventbriteAPI;
 use SG\EventbriteCourseImporter\Admin\ImportInterface;
 use SG\EventbriteCourseImporter\Admin\SettingsManager;
+use SG\EventbriteCourseImporter\Admin\ACFFieldManager;
+use SG\EventbriteCourseImporter\Admin\Logger;
+use SG\EventbriteCourseImporter\Templates\EventbriteTemplateManager;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -63,6 +66,14 @@ class Plugin  {
 		new CustomPostType();
 		new ImportInterface();
 		new SettingsManager();
+		new ACFFieldManager();
+		
+		// Initialize EventbriteTemplateManager for course templates
+		$logger = new Logger();
+		new EventbriteTemplateManager( $logger );
+
+		// Schedule cron job for early bird expiry check
+		$this->schedule_early_bird_cron();
 
 		// Initialize security utilities.
 		$this->init_security_utilities();
@@ -144,6 +155,62 @@ class Plugin  {
 		);
 
 		return new \WP_REST_Response( $data, 200 );
+	}
+
+	/**
+	 * Schedule cron job for early bird expiry check.
+	 */
+	private function schedule_early_bird_cron() {
+		if ( ! wp_next_scheduled( 'sg_eventbrite_check_early_bird_expiry' ) ) {
+			wp_schedule_event( time(), 'daily', 'sg_eventbrite_check_early_bird_expiry' );
+		}
+		add_action( 'sg_eventbrite_check_early_bird_expiry', array( $this, 'check_early_bird_expiry' ) );
+	}
+
+	/**
+	 * Check for expired early bird tickets and update prices.
+	 */
+	public function check_early_bird_expiry() {
+		$args = array(
+			'post_type'      => 'sg_course',
+			'posts_per_page' => -1,
+			'meta_query'     => array(
+				array(
+					'key'     => '_sg_course_early_bird_expires',
+					'compare' => 'EXISTS',
+				),
+			),
+		);
+
+		$courses = get_posts( $args );
+
+		foreach ( $courses as $course ) {
+			$expires = get_post_meta( $course->ID, '_sg_course_early_bird_expires', true );
+			if ( empty( $expires ) ) {
+				continue;
+			}
+
+			$expires_time = strtotime( $expires );
+			$now = time();
+
+			if ( $now >= $expires_time ) {
+				// Early bird has expired, update to regular price
+				$regular_price = get_post_meta( $course->ID, '_sg_course_regular_price', true );
+				if ( ! empty( $regular_price ) ) {
+					$currency = get_post_meta( $course->ID, '_sg_course_price', true );
+					// Extract currency from display price if available
+					if ( preg_match( '/^([A-Z]{3})\s/', $currency, $matches ) ) {
+						$currency_code = $matches[1];
+						update_post_meta( $course->ID, '_sg_course_price', $currency_code . ' ' . number_format( $regular_price, 2 ) );
+					} else {
+						update_post_meta( $course->ID, '_sg_course_price', number_format( $regular_price, 2 ) );
+					}
+					// Clear early bird meta
+					delete_post_meta( $course->ID, '_sg_course_early_bird_expires' );
+					delete_post_meta( $course->ID, '_sg_course_early_bird_price' );
+				}
+			}
+		}
 	}
 
 	/**

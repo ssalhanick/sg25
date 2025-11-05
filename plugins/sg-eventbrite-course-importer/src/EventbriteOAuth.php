@@ -96,7 +96,7 @@ class EventbriteOAuth {
 	public function __construct( $client_id = null, $client_secret = null ) {
 		$this->client_id = $client_id ? $client_id : get_option( 'sg_eventbrite_client_id', '' );
 		$this->client_secret = $client_secret ? $client_secret : get_option( 'sg_eventbrite_client_secret', '' );
-		$this->redirect_uri = admin_url( 'options-general.php?page=sg-eventbrite-settings&oauth_callback=1' );
+		$this->redirect_uri = admin_url( 'edit.php?post_type=sg_course&page=sg-eventbrite-settings&oauth_callback=1' );
 		$this->logger = new \SG\EventbriteCourseImporter\Admin\Logger();
 
 		// Load stored tokens
@@ -183,7 +183,7 @@ class EventbriteOAuth {
 	 */
 	public function refresh_access_token() {
 		if ( empty( $this->refresh_token ) ) {
-			$settings_url = admin_url( 'options-general.php?page=sg-eventbrite-settings' );
+			$settings_url = admin_url( 'edit.php?post_type=sg_course&page=sg-eventbrite-settings' );
 			$error_message = sprintf( 
 				'No refresh token available. Please <a href="%s" target="_blank">re-authorize with Eventbrite</a> in the plugin settings.',
 				esc_url( $settings_url )

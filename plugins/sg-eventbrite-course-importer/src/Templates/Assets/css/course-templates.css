@@ -1,0 +1,276 @@
+/* Course Template Styles */
+
+.sg-course-container {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 20px;
+	/* Ensure proper theme integration */
+	position: relative;
+	z-index: 1;
+}
+
+/* Theme compatibility - ensure proper spacing */
+.single-sg_course .sg-course-container {
+	margin-top: 2rem;
+	margin-bottom: 2rem;
+}
+
+/* Ensure the template works with different theme layouts */
+body.single-sg_course .site-main {
+	/* Allow theme's main content area to contain our course template */
+	position: relative;
+}
+
+/* Theme header/footer integration */
+.single-sg_course .entry-header,
+.single-sg_course .entry-footer {
+	/* Hide default theme post header/footer if they exist */
+	display: none;
+}
+
+.sg-course-single {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sg-course-header {
+	position: relative;
+}
+
+.sg-course-image img {
+	width: 100%;
+	height: 300px;
+	object-fit: cover;
+}
+
+.sg-course-meta {
+	padding: 30px;
+}
+
+.sg-course-title {
+	margin: 0 0 20px 0;
+	font-size: 2.5em;
+	color: #333;
+}
+
+/* Main Course Information */
+.sg-course-main-info {
+	margin-bottom: 30px;
+}
+
+.sg-course-primary-details {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 20px;
+	margin-bottom: 30px;
+}
+
+.sg-course-detail {
+	display: flex;
+	align-items: flex-start;
+	padding: 20px;
+	background: #fff;
+	border: 1px solid #e1e5e9;
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+	transition: all 0.3s ease;
+}
+
+.sg-course-detail:hover {
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+	transform: translateY(-2px);
+}
+
+.sg-course-detail.primary {
+	border-left: 4px solid #007cba;
+}
+
+.sg-course-detail.secondary {
+	border-left: 4px solid #28a745;
+}
+
+.detail-icon {
+	font-size: 1.5em;
+	margin-right: 15px;
+	margin-top: 2px;
+}
+
+.detail-content {
+	flex: 1;
+}
+
+.detail-content strong {
+	display: block;
+	margin-bottom: 8px;
+	color: #333;
+	font-size: 0.9em;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	font-weight: 600;
+}
+
+.detail-value {
+	color: #555;
+	font-size: 1.1em;
+	font-weight: 500;
+}
+
+/* Course Description */
+.sg-course-description {
+	background: #f8f9fa;
+	padding: 25px;
+	border-radius: 8px;
+	margin-bottom: 30px;
+	border-left: 4px solid #6f42c1;
+}
+
+.sg-course-description h3 {
+	margin: 0 0 15px 0;
+	color: #6f42c1;
+	font-size: 1.3em;
+}
+
+.description-content {
+	font-size: 1.1em;
+	line-height: 1.6;
+	color: #555;
+}
+
+/* Enroll Button */
+.sg-course-enroll {
+	text-align: center;
+	margin-bottom: 30px;
+}
+
+.sg-enroll-button {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 20px 40px;
+	background: linear-gradient(135deg, #ff8000, #ff6b00);
+	color: white;
+	text-decoration: none;
+	border-radius: 12px;
+	box-shadow: 0 4px 15px rgba(255, 128, 0, 0.3);
+	transition: all 0.3s ease;
+	font-weight: bold;
+	min-width: 200px;
+}
+
+.sg-enroll-button:hover {
+	background: linear-gradient(135deg, #e67300, #e55a00);
+	transform: translateY(-2px);
+	box-shadow: 0 6px 20px rgba(255, 128, 0, 0.4);
+	color: white;
+	text-decoration: none;
+}
+
+.enroll-icon {
+	font-size: 2em;
+	margin-bottom: 8px;
+}
+
+.enroll-text {
+	font-size: 1.2em;
+	margin-bottom: 4px;
+}
+
+.enroll-subtext {
+	font-size: 0.9em;
+	opacity: 0.9;
+	font-weight: normal;
+}
+
+/* Additional Information */
+.sg-course-additional-info {
+	background: #f8f9fa;
+	padding: 25px;
+	border-radius: 8px;
+	border-left: 4px solid #17a2b8;
+}
+
+.sg-course-additional-info h3 {
+	margin: 0 0 20px 0;
+	color: #17a2b8;
+	font-size: 1.3em;
+}
+
+.sg-course-details-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+	gap: 15px;
+}
+
+.sg-drop-in-badge {
+	display: inline-block;
+	padding: 5px 10px;
+	background: #28a745;
+	color: white;
+	border-radius: 20px;
+	font-size: 0.8em;
+	font-weight: bold;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.sg-course-content {
+	padding: 0 30px 30px;
+	font-size: 1.1em;
+	line-height: 1.6;
+}
+
+.sg-course-content h2,
+.sg-course-content h3,
+.sg-course-content h4 {
+	color: #333;
+	margin-top: 30px;
+	margin-bottom: 15px;
+}
+
+.sg-course-content p {
+	margin-bottom: 15px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+	.sg-course-container {
+		padding: 10px;
+	}
+	
+	.sg-course-meta {
+		padding: 20px;
+	}
+	
+	.sg-course-title {
+		font-size: 2em;
+	}
+	
+	.sg-course-primary-details {
+		grid-template-columns: 1fr;
+		gap: 15px;
+	}
+	
+	.sg-course-details-grid {
+		grid-template-columns: 1fr;
+	}
+	
+	.sg-course-detail {
+		padding: 15px;
+	}
+	
+	.sg-enroll-button {
+		padding: 15px 30px;
+		min-width: 180px;
+	}
+	
+	.enroll-text {
+		font-size: 1.1em;
+	}
+	
+	.enroll-subtext {
+		font-size: 0.8em;
+	}
+}

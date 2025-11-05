@@ -52,9 +52,11 @@ class SettingsManager {
 	 * Add admin menu page.
 	 */
 	public function add_admin_menu() {
-		add_options_page(
-			__( 'Eventbrite Course Importer Settings', 'sg-eventbrite-course-importer' ),
-			__( 'Eventbrite Importer', 'sg-eventbrite-course-importer' ),
+		// Add settings page under Courses post type
+		add_submenu_page(
+			'edit.php?post_type=sg_course',
+			__( 'Eventbrite Settings', 'sg-eventbrite-course-importer' ),
+			__( 'Eventbrite Settings', 'sg-eventbrite-course-importer' ),
 			'manage_options',
 			'sg-eventbrite-settings',
 			array( $this, 'render_settings_page' )
@@ -296,9 +298,12 @@ class SettingsManager {
 	 * @param string $hook Current admin page hook.
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( 'settings_page_sg-eventbrite-settings' !== $hook ) {
+		// Only log and enqueue scripts on our specific settings page
+		if ( 'sg_course_page_sg-eventbrite-settings' !== $hook ) {
 			return;
 		}
+		
+		error_log( 'SG Eventbrite: Enqueuing admin scripts for hook: ' . $hook );
 
 		wp_enqueue_script( 'jquery' );
 		wp_enqueue_script( 'wp-util' );
@@ -340,15 +345,19 @@ class SettingsManager {
 	public function add_admin_footer_scripts() {
 		// Only add scripts on our settings page
 		$screen = get_current_screen();
-		if ( ! $screen || $screen->id !== 'settings_page_sg-eventbrite-settings' ) {
+		if ( ! $screen || $screen->id !== 'sg_course_page_sg-eventbrite-settings' ) {
 			return;
 		}
 		?>
 		<script type="text/javascript">
+		console.log('SG Eventbrite: Script starting...');
 		jQuery(document).ready(function($) {
+			console.log('SG Eventbrite: jQuery ready');
 			// Debug: Check if button exists
 			console.log('jQuery ready, checking for debug logs button...');
 			console.log('Button exists:', $('#show-debug-logs-btn').length > 0);
+			console.log('Revoke auth button exists:', $('#revoke-auth-btn').length > 0);
+			console.log('Fetch organizations button exists:', $('#fetch-organizations-btn').length > 0);
 			
 			// Fetch Organizations button handler
 			$('#fetch-organizations-btn').on('click', function() {
@@ -367,7 +376,6 @@ class SettingsManager {
 						nonce: sgEventbriteSettings.nonce
 					},
 					success: function(response) {
-						console.log('Fetch organizations response:', response);
 						if (response.success) {
 							// Clear existing options except the first one
 							$select.find('option:not(:first)').remove();
@@ -402,9 +410,7 @@ class SettingsManager {
 						}
 					},
 					error: function(xhr, status, error) {
-						console.log('Fetch organizations AJAX error:', xhr, status, error);
-						console.log('Response text:', xhr.responseText);
-						$('#action-results').html('<div class="notice notice-error"><p>Error fetching organizations: ' + error + '. Check console for details.</p></div>');
+						$('#action-results').html('<div class="notice notice-error"><p>Error fetching organizations: ' + error + '</p></div>');
 					},
 					complete: function() {
 						$button.prop('disabled', false);
@@ -1085,7 +1091,7 @@ class SettingsManager {
 		}
 
 		// Redirect to remove the callback parameters from URL
-		wp_redirect( admin_url( 'options-general.php?page=sg-eventbrite-settings' ) );
+		wp_redirect( admin_url( 'edit.php?post_type=sg_course&page=sg-eventbrite-settings' ) );
 		exit;
 	}
 

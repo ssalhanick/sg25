@@ -108,9 +108,12 @@ class DataMapper {
 		// Start memory monitoring.
 		$start_memory = memory_get_usage( true );
 
-		// Get performance configuration.
-		$performance_config    = new \SG\HumanitixApiImporter\Admin\PerformanceConfig();
-		$optimization_settings = $performance_config::get_data_optimization_settings();
+		// Simple performance settings - no complex configuration needed
+		$optimization_settings = array(
+			'batch_size' => 50,
+			'memory_limit' => 256, // MB
+			'image_download' => true
+		);
 
 		// Log raw Humanitix data when HUMANITIX_DEBUG is enabled.
 		$debug_helper->log_raw_api_data( 'event_mapping', $humanitix_event, 'request' );
@@ -1030,10 +1033,10 @@ class DataMapper {
 			return $existing_attachment;
 		}
 
-		// Check if image download is enabled.
-		$image_download_enabled = \SG\HumanitixApiImporter\Admin\PerformanceConfig::should_enable_image_download();
+		// Simple image download check - always enabled for Eventbrite
+		$image_download_enabled = true;
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( 'DataMapper: Image download enabled: ' . ( $image_download_enabled ? 'true' : 'false' ) );
+			error_log( 'DataMapper: Image download enabled: true' );
 		}
 
 		// For performance, skip image download by default during bulk imports.

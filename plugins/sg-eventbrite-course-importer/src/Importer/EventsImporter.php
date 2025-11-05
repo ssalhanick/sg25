@@ -14,7 +14,6 @@ namespace SG\HumanitixApiImporter\Importer;
 use SG\HumanitixApiImporter\HumanitixAPI;
 use SG\HumanitixApiImporter\Admin\Logger;
 use SG\HumanitixApiImporter\Admin\ErrorCode;
-use SG\HumanitixApiImporter\Admin\PerformanceConfig;
 use SG\HumanitixApiImporter\Importer\DataMapper;
 
 // Ensure ErrorCode class is available.
@@ -22,10 +21,6 @@ if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\ErrorCode' ) ) {
 	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/ErrorCode.php';
 }
 
-// Ensure PerformanceConfig class is available.
-if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\PerformanceConfig' ) ) {
-	require_once SG_HUMANITIX_API_IMPORTER_PLUGIN_PATH . '/src/Admin/PerformanceConfig.php';
-}
 
 // Ensure DebugHelper class is available.
 if ( ! class_exists( 'SG\HumanitixApiImporter\Admin\DebugHelper' ) ) {
@@ -245,9 +240,9 @@ class EventsImporter {
 
 			$debug_helper->log( 'Importer', 'Processing ' . count( $events ) . ' events' );
 
-			// Get dynamic batch size based on memory and event count.
+			// Simple batch size calculation for Eventbrite events
 			$total_events = count( $events );
-			$batch_size   = PerformanceConfig::get_dynamic_batch_size( $total_events );
+			$batch_size   = min( 50, $total_events ); // Simple batch size of 50 or total events, whichever is smaller
 
 			$debug_helper->log( 'Memory', "Using batch size: {$batch_size} for {$total_events} total events" );
 
@@ -322,32 +317,27 @@ class EventsImporter {
 				}
 
 							// Memory management after each batch.
-				$memory_info = PerformanceConfig::get_memory_info();
-				$debug_helper->log( 'Memory', "Batch {$batch_index} complete - Memory: {$memory_info['current_mb']}MB / {$memory_info['limit_mb']}MB" );
+				// Simple memory management after each batch.
+				$current_memory = memory_get_usage( true );
+				$memory_mb = round( $current_memory / 1024 / 1024, 2 );
+				$debug_helper->log( 'Memory', "Batch {$batch_index} complete - Memory: {$memory_mb}MB" );
 
-				if ( ! PerformanceConfig::is_memory_safe() ) {
+				// Simple memory check - force garbage collection if memory usage is high
+				$memory_limit = ini_get( 'memory_limit' );
+				$memory_limit_bytes = is_numeric( $memory_limit ) ? $memory_limit : 256 * 1024 * 1024; // Default 256MB
+				
+				if ( $current_memory > ( $memory_limit_bytes * 0.8 ) ) { // 80% of memory limit
 					$debug_helper->log( 'Memory', 'Memory usage high, forcing garbage collection' );
-					PerformanceConfig::force_garbage_collection();
-
-					// Log memory cleanup when HUMANITIX_DEBUG is enabled.
-					if ( $debug_helper->is_humanitix_debug_enabled() ) {
-						$memory_after = PerformanceConfig::get_memory_info();
-						$debug_helper->log_detailed(
-							'Memory',
-							'Forced garbage collection',
-							array(
-								'batch_index'      => $batch_index + 1,
-								'memory_before_mb' => $memory_info['current_mb'],
-								'memory_after_mb'  => $memory_after['current_mb'],
-								'memory_freed_mb'  => $memory_info['current_mb'] - $memory_after['current_mb'],
-							)
-						);
-					}
+					gc_collect_cycles(); // Simple garbage collection
+					
+					$memory_after = memory_get_usage( true );
+					$memory_after_mb = round( $memory_after / 1024 / 1024, 2 );
+					$debug_helper->log( 'Memory', "Garbage collection complete - Memory: {$memory_after_mb}MB" );
 				}
 
 				// Force garbage collection every 3 batches regardless of memory usage.
 				if ( ( $batch_index + 1 ) % 3 === 0 ) {
-					PerformanceConfig::force_garbage_collection();
+					gc_collect_cycles(); // Simple garbage collection
 					$debug_helper->log( 'Memory', 'Periodic garbage collection performed' );
 				}
 			}

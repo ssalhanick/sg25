@@ -45,6 +45,9 @@ class ImportInterface {
 		add_action( 'wp_ajax_sg_eventbrite_fetch_events', array( $this, 'ajax_fetch_events' ) );
 		add_action( 'wp_ajax_sg_eventbrite_import_events', array( $this, 'ajax_import_events' ) );
 		add_action( 'wp_ajax_sg_eventbrite_preview_event', array( $this, 'ajax_preview_event' ) );
+		add_action( 'wp_ajax_sg_eventbrite_get_events_for_intake', array( $this, 'ajax_get_events_for_intake' ) );
+		add_action( 'wp_ajax_sg_eventbrite_import_with_intake_data', array( $this, 'ajax_import_with_intake_data' ) );
+		add_action( 'wp_ajax_sg_eventbrite_get_categories', array( $this, 'ajax_get_categories' ) );
 	}
 
 	/**
@@ -59,6 +62,15 @@ class ImportInterface {
 			'sg-eventbrite-import',
 			array( $this, 'render_import_page' )
 		);
+		
+		add_submenu_page(
+			'edit.php?post_type=sg_course',
+			__( 'Import Data Entry', 'sg-eventbrite-course-importer' ),
+			__( 'Import Data Entry', 'sg-eventbrite-course-importer' ),
+			'manage_options',
+			'sg-eventbrite-intake-form',
+			array( $this, 'render_intake_form_page' )
+		);
 	}
 
 	/**
@@ -67,7 +79,7 @@ class ImportInterface {
 	 * @param string $hook Current admin page hook.
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( 'sg_course_page_sg-eventbrite-import' !== $hook ) {
+		if ( 'sg_course_page_sg-eventbrite-import' !== $hook && 'sg_course_page_sg-eventbrite-intake-form' !== $hook ) {
 			return;
 		}
 
@@ -145,7 +157,7 @@ class ImportInterface {
 				<div class="notice notice-warning">
 					<p>
 						<?php _e( 'Please configure your Eventbrite API credentials first.', 'sg-eventbrite-course-importer' ); ?>
-						<a href="<?php echo admin_url( 'options-general.php?page=sg-eventbrite-settings' ); ?>" class="button button-secondary">
+						<a href="<?php echo admin_url( 'edit.php?post_type=sg_course&page=sg-eventbrite-settings' ); ?>" class="button button-secondary">
 							<?php _e( 'Go to Settings', 'sg-eventbrite-course-importer' ); ?>
 						</a>
 					</p>
@@ -185,18 +197,8 @@ class ImportInterface {
 						
 						<div class="event-filters">
 							<div class="search-container">
-								<label for="event-search">
-									<?php _e( 'Search Events:', 'sg-eventbrite-course-importer' ); ?>
-								</label>
-								<div class="search-input-group">
-									<input type="text" id="event-search" placeholder="<?php _e( 'Enter keywords (e.g., "workshop", "training", "conference")', 'sg-eventbrite-course-importer' ); ?>" class="search-input" />
-									<button type="button" id="search-events" class="button button-primary search-button">
-										<?php _e( 'Search Events', 'sg-eventbrite-course-importer' ); ?>
-									</button>
-								</div>
-								
 								<!-- Date Range Filter -->
-								<div class="date-range-container" style="margin-top: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+								<div class="date-range-container" style="margin-bottom: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
 									<h4 style="margin-top: 0; margin-bottom: 10px;"><?php _e( 'Date Range Filter (Optional)', 'sg-eventbrite-course-importer' ); ?></h4>
 									<div class="date-inputs" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
 										<div class="date-input-group">
@@ -215,9 +217,9 @@ class ImportInterface {
 											<button type="button" id="clear-dates" class="button button-secondary" style="margin-right: 10px;">
 												<?php _e( 'Clear Dates', 'sg-eventbrite-course-importer' ); ?>
 											</button>
-					<button type="button" id="set-today" class="button button-secondary">
-						<?php _e( 'Today', 'sg-eventbrite-course-importer' ); ?>
-					</button>
+											<button type="button" id="set-today" class="button button-secondary">
+												<?php _e( 'Today', 'sg-eventbrite-course-importer' ); ?>
+											</button>
 										</div>
 									</div>
 									<p class="date-help" style="margin-top: 10px; margin-bottom: 0; font-size: 13px; color: #666;">
@@ -226,73 +228,38 @@ class ImportInterface {
 									</p>
 								</div>
 								
-								<p class="search-help" style="margin-top: 15px;">
-									<strong><?php _e( 'Search Tips:', 'sg-eventbrite-course-importer' ); ?></strong>
-									<?php _e( 'Use multiple keywords separated by commas (e.g., "workshop, training, online") to find events containing any of those terms.', 'sg-eventbrite-course-importer' ); ?>
-								</p>
+								<!-- Keyword Search -->
+								<div class="keyword-search-container" style="margin-bottom: 15px;">
+									<label for="event-search">
+										<?php _e( 'Keyword Search (Optional):', 'sg-eventbrite-course-importer' ); ?>
+									</label>
+									<div class="search-input-group">
+										<input type="text" id="event-search" placeholder="<?php _e( 'Enter keywords (e.g., "workshop", "training", "conference")', 'sg-eventbrite-course-importer' ); ?>" class="search-input" style="width: 100%; max-width: 400px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+									</div>
+									<p class="search-help" style="margin-top: 10px; font-size: 13px; color: #666;">
+										<strong><?php _e( 'Search Tips:', 'sg-eventbrite-course-importer' ); ?></strong>
+										<?php _e( 'Use multiple keywords separated by commas (e.g., "workshop, training, online") to find events containing any of those terms.', 'sg-eventbrite-course-importer' ); ?>
+									</p>
+								</div>
+								
+								<!-- Search Button -->
+								<div class="search-button-container">
+									<button type="button" id="search-events" class="button button-primary search-button">
+										<?php _e( 'Search Events', 'sg-eventbrite-course-importer' ); ?>
+									</button>
+								</div>
 							</div>
 						</div>
 
+						<div id="selection-counter" class="selection-counter" style="margin-bottom: 15px; padding: 10px; background: #f0f0f1; border: 1px solid #ddd; border-radius: 4px; display: none;">
+							<strong><?php _e( 'Selected: ', 'sg-eventbrite-course-importer' ); ?><span id="selected-count">0</span> <?php _e( 'events', 'sg-eventbrite-course-importer' ); ?></strong>
+						</div>
+						
 						<div id="events-container" class="events-container">
 							<div class="no-events-message">
 								<p><?php _e( 'No events loaded yet. Use the search bar above to find events to import.', 'sg-eventbrite-course-importer' ); ?></p>
 							</div>
 						</div>
-					</div>
-
-					<!-- Import Options -->
-					<div class="sg-import-section">
-						<h2><?php _e( 'Import Options', 'sg-eventbrite-course-importer' ); ?></h2>
-						<table class="form-table">
-							<tr>
-								<th scope="row">
-									<label for="update-existing"><?php _e( 'Update Existing Courses', 'sg-eventbrite-course-importer' ); ?></label>
-								</th>
-								<td>
-									<input type="checkbox" id="update-existing" name="update-existing" value="1" checked />
-									<p class="description">
-										<?php _e( 'Update courses that already exist (based on Eventbrite ID).', 'sg-eventbrite-course-importer' ); ?>
-									</p>
-								</td>
-							</tr>
-							<tr>
-								<th scope="row">
-									<label for="import-images"><?php _e( 'Import Images', 'sg-eventbrite-course-importer' ); ?></label>
-								</th>
-								<td>
-									<input type="checkbox" id="import-images" name="import-images" value="1" checked />
-									<p class="description">
-										<?php _e( 'Download and set featured images for imported courses.', 'sg-eventbrite-course-importer' ); ?>
-									</p>
-								</td>
-							</tr>
-							<tr>
-								<th scope="row">
-									<label for="extract-keywords"><?php _e( 'Extract Keywords', 'sg-eventbrite-course-importer' ); ?></label>
-								</th>
-								<td>
-									<input type="checkbox" id="extract-keywords" name="extract-keywords" value="1" checked />
-									<p class="description">
-										<?php _e( 'Extract instructor, course length, and other details from event descriptions.', 'sg-eventbrite-course-importer' ); ?>
-									</p>
-								</td>
-							</tr>
-							<tr>
-								<th scope="row">
-									<label for="import-status"><?php _e( 'Import Status', 'sg-eventbrite-course-importer' ); ?></label>
-								</th>
-								<td>
-									<select id="import-status" name="import-status">
-										<option value="publish"><?php _e( 'Published', 'sg-eventbrite-course-importer' ); ?></option>
-										<option value="draft"><?php _e( 'Draft', 'sg-eventbrite-course-importer' ); ?></option>
-										<option value="private"><?php _e( 'Private', 'sg-eventbrite-course-importer' ); ?></option>
-									</select>
-									<p class="description">
-										<?php _e( 'Set the status for imported courses.', 'sg-eventbrite-course-importer' ); ?>
-									</p>
-								</td>
-							</tr>
-						</table>
 					</div>
 
 					<!-- Import Actions -->
@@ -310,6 +277,76 @@ class ImportInterface {
 						<button type="button" id="deselect-all" class="button button-secondary" style="display: none;">
 							<?php _e( 'Deselect All', 'sg-eventbrite-course-importer' ); ?>
 						</button>
+					</div>
+
+					<!-- Import Options (Collapsible) -->
+					<div class="sg-import-section">
+						<h2 class="sg-import-options-toggle" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 10px;">
+							<span class="dashicons dashicons-arrow-down-alt2" style="font-size: 20px; transition: transform 0.3s; transform: rotate(-90deg);"></span>
+							<span><?php _e( 'Import Options', 'sg-eventbrite-course-importer' ); ?></span>
+						</h2>
+						<div id="import-options-content" class="import-options-content" style="display: none; margin-top: 15px;">
+							<table class="form-table">
+								<tr>
+									<th scope="row">
+										<label for="update-existing"><?php _e( 'Update Existing Courses', 'sg-eventbrite-course-importer' ); ?></label>
+									</th>
+									<td>
+										<input type="checkbox" id="update-existing" name="update-existing" value="1" checked />
+										<p class="description">
+											<?php _e( 'Update courses that already exist (based on Eventbrite ID).', 'sg-eventbrite-course-importer' ); ?>
+										</p>
+									</td>
+								</tr>
+								<tr>
+									<th scope="row">
+										<label for="import-images"><?php _e( 'Import Images', 'sg-eventbrite-course-importer' ); ?></label>
+									</th>
+									<td>
+										<input type="checkbox" id="import-images" name="import-images" value="1" checked />
+										<p class="description">
+											<?php _e( 'Download and set featured images for imported courses.', 'sg-eventbrite-course-importer' ); ?>
+										</p>
+									</td>
+								</tr>
+								<tr>
+									<th scope="row">
+										<label><?php _e( 'Content Processing', 'sg-eventbrite-course-importer' ); ?></label>
+									</th>
+									<td>
+										<p class="description">
+											<?php _e( 'Using Eventbrite structured content API for rich, formatted content with proper HTML structure.', 'sg-eventbrite-course-importer' ); ?>
+										</p>
+									</td>
+								</tr>
+								<tr>
+									<th scope="row">
+										<label for="include-fees"><?php _e( 'Include Eventbrite Fees', 'sg-eventbrite-course-importer' ); ?></label>
+									</th>
+									<td>
+										<input type="checkbox" id="include-fees" name="include-fees" value="1" />
+										<p class="description">
+											<?php _e( 'Include Eventbrite fees in ticket price (if fees are split, base price + fees will be used).', 'sg-eventbrite-course-importer' ); ?>
+										</p>
+									</td>
+								</tr>
+								<tr>
+									<th scope="row">
+										<label for="import-status"><?php _e( 'Import Status', 'sg-eventbrite-course-importer' ); ?></label>
+									</th>
+									<td>
+										<select id="import-status" name="import-status">
+											<option value="publish"><?php _e( 'Published', 'sg-eventbrite-course-importer' ); ?></option>
+											<option value="draft"><?php _e( 'Draft', 'sg-eventbrite-course-importer' ); ?></option>
+											<option value="private"><?php _e( 'Private', 'sg-eventbrite-course-importer' ); ?></option>
+										</select>
+										<p class="description">
+											<?php _e( 'Set the status for imported courses.', 'sg-eventbrite-course-importer' ); ?>
+										</p>
+									</td>
+								</tr>
+							</table>
+						</div>
 					</div>
 
 					<!-- Import Results -->
@@ -407,6 +444,20 @@ class ImportInterface {
 				window.searchEventsWithDateRange(searchQuery, startDate, endDate);
 			});
 			
+			// Collapsible import options toggle
+			$('.sg-import-options-toggle').on('click', function() {
+				var $content = $('#import-options-content');
+				var $icon = $(this).find('.dashicons');
+				
+				if ($content.is(':visible')) {
+					$content.slideUp(300);
+					$icon.css('transform', 'rotate(-90deg)');
+				} else {
+					$content.slideDown(300);
+					$icon.css('transform', 'rotate(0deg)');
+				}
+			});
+			
 			// Clear dates button
 			$('#clear-dates').on('click', function() {
 				$('#start-date, #end-date').val('');
@@ -476,6 +527,41 @@ class ImportInterface {
 				});
 		}
 		
+		// Get selected events from sessionStorage
+		function getSelectedEvents() {
+			try {
+				var stored = sessionStorage.getItem('sg_selected_events');
+				return stored ? JSON.parse(stored) : [];
+			} catch (e) {
+				console.error('SG Eventbrite: Error reading selected events:', e);
+				return [];
+			}
+		}
+		
+		// Save selected events to sessionStorage
+		function saveSelectedEvents(selectedIds) {
+			try {
+				sessionStorage.setItem('sg_selected_events', JSON.stringify(selectedIds));
+				updateSelectionCounter();
+			} catch (e) {
+				console.error('SG Eventbrite: Error saving selected events:', e);
+			}
+		}
+		
+		// Update selection counter display
+		function updateSelectionCounter() {
+			var selectedIds = getSelectedEvents();
+			var $counter = jQuery('#selection-counter');
+			var $count = jQuery('#selected-count');
+			
+			if (selectedIds.length > 0) {
+				$count.text(selectedIds.length);
+				$counter.show();
+			} else {
+				$counter.hide();
+			}
+		}
+		
 		// Enhanced event rendering function with pagination
 		function renderEvents(events, pagination) {
 			var $container = jQuery('#events-container');
@@ -485,14 +571,18 @@ class ImportInterface {
 				return;
 			}
 			
+			// Get currently selected events from sessionStorage
+			var selectedIds = getSelectedEvents();
+			
 			var html = '<div class="events-list">';
 			events.forEach(function(event) {
 				var eventDate = event.start ? new Date(event.start.utc).toLocaleDateString() : 'TBD';
 				var venue = event.venue ? event.venue.name : 'Location TBD';
 				var price = event.is_free ? 'Free' : (event.ticket_availability ? 'Paid' : 'TBD');
+				var isChecked = selectedIds.indexOf(event.id) !== -1 ? 'checked' : '';
 				
 				html += '<div class="event-item" style="border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 4px;">';
-				html += '<input type="checkbox" class="event-checkbox" value="' + event.id + '" id="event-' + event.id + '" style="margin-right: 10px;">';
+				html += '<input type="checkbox" class="event-checkbox" value="' + event.id + '" id="event-' + event.id + '" ' + isChecked + ' style="margin-right: 10px;">';
 				html += '<div class="event-details" style="display: inline-block; width: calc(100% - 120px);">';
 				html += '<div class="event-title" style="font-weight: bold; margin-bottom: 5px;">' + event.name.text + '</div>';
 				html += '<div class="event-meta" style="color: #666; font-size: 14px;">';
@@ -560,7 +650,31 @@ class ImportInterface {
 			
 			$container.html(html);
 			
-			// Update import button state after rendering events
+			// Add checkbox change handlers
+			$container.find('.event-checkbox').on('change', function() {
+				var checkbox = jQuery(this);
+				var eventId = checkbox.val();
+				var selectedIds = getSelectedEvents();
+				
+				if (checkbox.is(':checked')) {
+					// Add to selection if not already present
+					if (selectedIds.indexOf(eventId) === -1) {
+						selectedIds.push(eventId);
+					}
+				} else {
+					// Remove from selection
+					var index = selectedIds.indexOf(eventId);
+					if (index !== -1) {
+						selectedIds.splice(index, 1);
+					}
+				}
+				
+				saveSelectedEvents(selectedIds);
+				updateImportButtonState();
+			});
+			
+			// Update selection counter and import button state after rendering events
+			updateSelectionCounter();
 			updateImportButtonState();
 			
 			// Add click handlers for pagination buttons
@@ -594,14 +708,14 @@ class ImportInterface {
 			console.log('SG Eventbrite: Nonce:', sgEventbriteImport.nonce);
 		}
 		
-		// Function to update import button state based on selected checkboxes
+		// Function to update import button state based on selected events from sessionStorage
 		function updateImportButtonState() {
-			var selectedCheckboxes = jQuery('.event-checkbox:checked');
+			var selectedIds = getSelectedEvents();
 			var importButton = jQuery('#import-selected');
 			
-			if (selectedCheckboxes.length > 0) {
+			if (selectedIds.length > 0) {
 				importButton.prop('disabled', false);
-				importButton.text('Import Selected (' + selectedCheckboxes.length + ')');
+				importButton.text('Import Selected (' + selectedIds.length + ')');
 			} else {
 				importButton.prop('disabled', true);
 				importButton.text('Import Selected');
@@ -610,59 +724,34 @@ class ImportInterface {
 		
 		// Function to handle import button click
 		function handleImportClick() {
-			var selectedCheckboxes = jQuery('.event-checkbox:checked');
-			var eventIds = [];
-			
-			selectedCheckboxes.each(function() {
-				eventIds.push(jQuery(this).val());
-			});
+			var eventIds = getSelectedEvents();
 			
 			if (eventIds.length === 0) {
 				alert('Please select at least one event to import.');
 				return;
 			}
 			
-			if (!confirm('Are you sure you want to import ' + eventIds.length + ' selected events?')) {
-				return;
-			}
+			// Store import options in sessionStorage
+			var importOptions = {
+				update_existing: jQuery('#update-existing').is(':checked'),
+				import_images: jQuery('#import-images').is(':checked'),
+				import_status: jQuery('#import-status').val() || 'publish',
+				include_fees: jQuery('#include-fees').is(':checked')
+			};
+			sessionStorage.setItem('sg_import_options', JSON.stringify(importOptions));
 			
-			// Show loading state
-			var importButton = jQuery('#import-selected');
-			importButton.prop('disabled', true).text('Importing...');
+			// Redirect to intake form page instead of importing directly
+			// Store event IDs in sessionStorage for intake form
+			saveSelectedEvents(eventIds);
 			
-			// Make AJAX request to import events
-			jQuery.post(sgEventbriteImport.ajaxUrl, {
-				action: 'sg_eventbrite_import_events',
-				nonce: sgEventbriteImport.nonce,
-				event_ids: eventIds
-			})
-			.done(function(response) {
-				console.log('SG Eventbrite: Import response:', response);
-				if (response.success) {
-					alert('Successfully imported ' + response.data.imported_count + ' events!');
-					// Refresh the events list
-					window.searchEventsWithDateRange(
-						jQuery('#event-search').val().trim(),
-						jQuery('#start-date').val(),
-						jQuery('#end-date').val(),
-						1
-					);
-				} else {
-					alert('Import failed: ' + response.data.message);
-				}
-			})
-			.fail(function(xhr, status, error) {
-				console.error('SG Eventbrite: Import failed:', error);
-				alert('Import failed. Please try again.');
-			})
-			.always(function() {
-				importButton.prop('disabled', false).text('Import Selected');
-			});
+			// Redirect to intake form page
+			var intakeFormUrl = '<?php echo admin_url( "edit.php?post_type=sg_course&page=sg-eventbrite-intake-form" ); ?>';
+			window.location.href = intakeFormUrl;
 		}
 		
-		// Add event delegation for dynamically created checkboxes
+		// Add event delegation for dynamically created checkboxes (already handled in renderEvents, but keep for compatibility)
 		jQuery(document).on('change', '.event-checkbox', function() {
-			updateImportButtonState();
+			// This is now handled in renderEvents, but kept for compatibility
 		});
 		
 		// Add click handler for import button
@@ -895,6 +984,398 @@ class ImportInterface {
 	}
 
 	/**
+	 * Render intake form page.
+	 */
+	public function render_intake_form_page() {
+		?>
+		<div class="wrap">
+			<h1><?php _e( 'Import Data Entry', 'sg-eventbrite-course-importer' ); ?></h1>
+			
+			<div id="intake-form-container" class="intake-form-container">
+				<div class="loading-message" style="text-align: center; padding: 20px;">
+					<p><?php _e( 'Loading selected events...', 'sg-eventbrite-course-importer' ); ?></p>
+				</div>
+			</div>
+			
+			<div id="intake-form-actions" class="intake-form-actions" style="margin-top: 20px; display: none;">
+				<button type="button" id="back-to-import" class="button button-secondary">
+					<?php _e( '← Back to Event Selection', 'sg-eventbrite-course-importer' ); ?>
+				</button>
+				<button type="button" id="submit-intake-form" class="button button-primary" style="margin-left: 10px;">
+					<?php _e( 'Continue to Import', 'sg-eventbrite-course-importer' ); ?>
+				</button>
+			</div>
+		</div>
+		
+		<script type="text/javascript">
+		jQuery(document).ready(function($) {
+			var selectedEventIds = [];
+			
+			// Get selected event IDs from sessionStorage
+			try {
+				var stored = sessionStorage.getItem('sg_selected_events');
+				if (stored) {
+					selectedEventIds = JSON.parse(stored);
+				}
+			} catch (e) {
+				console.error('Error reading selected events:', e);
+			}
+			
+			if (selectedEventIds.length === 0) {
+				$('#intake-form-container').html('<div class="error"><p><?php _e( 'No events selected. Please go back and select events to import.', 'sg-eventbrite-course-importer' ); ?></p></div>');
+				return;
+			}
+			
+			// Fetch categories first, then events
+			$.post(ajaxurl, {
+				action: 'sg_eventbrite_get_categories',
+				nonce: '<?php echo wp_create_nonce( 'sg_eventbrite_import_nonce' ); ?>'
+			})
+			.done(function(catResponse) {
+				var categories = catResponse.success ? catResponse.data.categories : [];
+				
+				// Fetch event details for selected events
+				$.post(ajaxurl, {
+					action: 'sg_eventbrite_get_events_for_intake',
+					nonce: '<?php echo wp_create_nonce( 'sg_eventbrite_import_nonce' ); ?>',
+					event_ids: selectedEventIds
+				})
+				.done(function(response) {
+					if (response.success && response.data.events) {
+						renderIntakeForm(response.data.events, categories);
+					} else {
+						$('#intake-form-container').html('<div class="error"><p>' + (response.data.message || 'Failed to load events') + '</p></div>');
+					}
+				})
+				.fail(function(xhr, status, error) {
+					console.error('Failed to fetch events:', error);
+					$('#intake-form-container').html('<div class="error"><p>Failed to load events. Please try again.</p></div>');
+				});
+			})
+			.fail(function(xhr, status, error) {
+				console.error('Failed to fetch categories:', error);
+				// Continue without categories - they can be added manually
+				$.post(ajaxurl, {
+					action: 'sg_eventbrite_get_events_for_intake',
+					nonce: '<?php echo wp_create_nonce( 'sg_eventbrite_import_nonce' ); ?>',
+					event_ids: selectedEventIds
+				})
+				.done(function(response) {
+					if (response.success && response.data.events) {
+						renderIntakeForm(response.data.events, []);
+					}
+				});
+			});
+			
+			function renderIntakeForm(events, categories) {
+				// Helper function to escape HTML
+				function escapeHtml(text) {
+					if (!text) return '';
+					var map = {
+						'&': '&amp;',
+						'<': '&lt;',
+						'>': '&gt;',
+						'"': '&quot;',
+						"'": '&#039;'
+					};
+					return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+				}
+				
+				var html = '<form id="course-intake-form">';
+				html += '<p class="description"><?php _e( 'Please fill in the required information for each selected event. Fields marked with * are required.', 'sg-eventbrite-course-importer' ); ?></p>';
+				
+				events.forEach(function(event) {
+					html += '<div class="event-intake-section" style="border: 1px solid #ddd; margin: 20px 0; padding: 20px; border-radius: 4px;">';
+					html += '<h3 style="margin-top: 0;">' + event.name.text + '</h3>';
+					html += '<input type="hidden" name="events[' + event.id + '][event_id]" value="' + event.id + '">';
+					
+					// Instructor field
+					html += '<div class="form-field" style="margin-bottom: 15px;">';
+					html += '<label for="instructor-' + event.id + '"><?php _e( 'Instructor', 'sg-eventbrite-course-importer' ); ?>:</label>';
+					html += '<input type="text" name="events[' + event.id + '][instructor]" id="instructor-' + event.id + '" class="regular-text" placeholder="<?php _e( 'Instructor name', 'sg-eventbrite-course-importer' ); ?>">';
+					html += '</div>';
+					
+					// Day of Week field
+					var eventStartDate = event.start && event.start.utc ? new Date(event.start.utc) : null;
+					var defaultDay = '';
+					if (eventStartDate) {
+						var dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+						defaultDay = dayNames[eventStartDate.getDay()];
+					}
+					html += '<div class="form-field" style="margin-bottom: 15px;">';
+					html += '<label for="day_of_week-' + event.id + '"><?php _e( 'Day of Week', 'sg-eventbrite-course-importer' ); ?>:</label>';
+					html += '<select name="events[' + event.id + '][day_of_week][]" id="day_of_week-' + event.id + '" multiple class="regular-text" style="height: auto;">';
+					html += '<option value="monday"' + (defaultDay === 'monday' ? ' selected' : '') + '><?php _e( 'Monday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '<option value="tuesday"' + (defaultDay === 'tuesday' ? ' selected' : '') + '><?php _e( 'Tuesday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '<option value="wednesday"' + (defaultDay === 'wednesday' ? ' selected' : '') + '><?php _e( 'Wednesday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '<option value="thursday"' + (defaultDay === 'thursday' ? ' selected' : '') + '><?php _e( 'Thursday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '<option value="friday"' + (defaultDay === 'friday' ? ' selected' : '') + '><?php _e( 'Friday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '<option value="saturday"' + (defaultDay === 'saturday' ? ' selected' : '') + '><?php _e( 'Saturday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '<option value="sunday"' + (defaultDay === 'sunday' ? ' selected' : '') + '><?php _e( 'Sunday', 'sg-eventbrite-course-importer' ); ?></option>';
+					html += '</select>';
+					html += '<p class="description"><?php _e( 'Hold Ctrl/Cmd to select multiple days', 'sg-eventbrite-course-importer' ); ?></p>';
+					html += '</div>';
+					
+					// Calculate class length from start and end times
+					var calculatedClassLength = '';
+					if (event.start && event.start.utc && event.end && event.end.utc) {
+						var startDate = new Date(event.start.utc);
+						var endDate = new Date(event.end.utc);
+						var diffMs = endDate - startDate;
+						var diffMins = Math.floor(diffMs / 60000);
+						
+						if (diffMins > 0) {
+							if (diffMins < 60) {
+								calculatedClassLength = diffMins + ' ' + (diffMins === 1 ? 'minute' : 'minutes');
+							} else {
+								var hours = Math.floor(diffMins / 60);
+								var minutes = diffMins % 60;
+								
+								if (minutes === 0) {
+									calculatedClassLength = hours + ' ' + (hours === 1 ? 'hour' : 'hours');
+								} else {
+									calculatedClassLength = hours + ' ' + (hours === 1 ? 'hour' : 'hours');
+									if (minutes > 0) {
+										calculatedClassLength += ' ' + minutes + ' ' + (minutes === 1 ? 'minute' : 'minutes');
+									}
+								}
+							}
+						}
+					}
+					
+					// Class Length field
+					html += '<div class="form-field" style="margin-bottom: 15px;">';
+					html += '<label for="class_length-' + event.id + '"><?php _e( 'Class Length', 'sg-eventbrite-course-importer' ); ?>:</label>';
+					html += '<input type="text" name="events[' + event.id + '][class_length]" id="class_length-' + event.id + '" class="regular-text" placeholder="<?php _e( 'e.g., 2 hours', 'sg-eventbrite-course-importer' ); ?>" value="' + escapeHtml(calculatedClassLength) + '">';
+					html += '</div>';
+					
+					// Course Length field
+					html += '<div class="form-field" style="margin-bottom: 15px;">';
+					html += '<label for="course_length-' + event.id + '"><?php _e( 'Course Length', 'sg-eventbrite-course-importer' ); ?>:</label>';
+					html += '<input type="text" name="events[' + event.id + '][course_length]" id="course_length-' + event.id + '" class="regular-text" placeholder="<?php _e( 'e.g., 7 weeks', 'sg-eventbrite-course-importer' ); ?>">';
+					html += '</div>';
+					
+					// Course Categories field
+					html += '<div class="form-field" style="margin-bottom: 15px;">';
+					html += '<label for="categories-' + event.id + '"><?php _e( 'Course Categories', 'sg-eventbrite-course-importer' ); ?>:</label>';
+					html += '<select name="events[' + event.id + '][categories][]" id="categories-' + event.id + '" multiple class="regular-text" style="height: auto; min-height: 100px;">';
+					categories.forEach(function(category) {
+						html += '<option value="' + category.id + '">' + category.name + '</option>';
+					});
+					html += '</select>';
+					html += '<p class="description"><?php _e( 'Hold Ctrl/Cmd to select multiple categories', 'sg-eventbrite-course-importer' ); ?></p>';
+					html += '</div>';
+					
+					// Course Tags field
+					html += '<div class="form-field" style="margin-bottom: 15px;">';
+					html += '<label for="tags-' + event.id + '"><?php _e( 'Course Tags', 'sg-eventbrite-course-importer' ); ?>:</label>';
+					html += '<input type="text" name="events[' + event.id + '][tags]" id="tags-' + event.id + '" class="regular-text" placeholder="<?php _e( 'Enter tags separated by commas', 'sg-eventbrite-course-importer' ); ?>">';
+					html += '<p class="description"><?php _e( 'Enter tags separated by commas (e.g., beginner, online, workshop, drop-in class)', 'sg-eventbrite-course-importer' ); ?></p>';
+					html += '</div>';
+					
+					// Ticket Class Settings (collapsible)
+					html += '<div class="ticket-class-section" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">';
+					html += '<div class="ticket-class-toggle" style="cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">';
+					html += '<h4 style="margin: 0;"><?php _e( 'Ticket Class Settings', 'sg-eventbrite-course-importer' ); ?></h4>';
+					html += '<span class="dashicons dashicons-arrow-down" style="transform: rotate(-90deg); transition: transform 0.3s;"></span>';
+					html += '</div>';
+					html += '<div class="ticket-class-content" style="display: none; margin-top: 15px;">';
+					
+					// Ticket Class Selection
+					var ticketClasses = event.ticket_classes || [];
+					if (ticketClasses.length > 0) {
+						html += '<div class="form-field" style="margin-bottom: 15px;">';
+						html += '<label for="ticket_class_id-' + event.id + '"><?php _e( 'Select Ticket Class', 'sg-eventbrite-course-importer' ); ?>:</label>';
+						html += '<select name="events[' + event.id + '][ticket_class_id]" id="ticket_class_id-' + event.id + '" class="regular-text ticket-class-selector">';
+						html += '<option value=""><?php _e( '-- Select a ticket class --', 'sg-eventbrite-course-importer' ); ?></option>';
+						
+						ticketClasses.forEach(function(ticketClass) {
+							var ticketId = ticketClass.id || '';
+							var ticketName = ticketClass.name || '';
+							var ticketCost = ticketClass.cost && ticketClass.cost.value ? (ticketClass.cost.value / 100).toFixed(2) : '0.00';
+							var currency = ticketClass.cost && ticketClass.cost.currency ? ticketClass.cost.currency : 'USD';
+							
+							// Get sales_end - check multiple possible structures
+							var salesEnd = '';
+							if (ticketClass.sales_end) {
+								if (ticketClass.sales_end.utc) {
+									salesEnd = ticketClass.sales_end.utc;
+								} else if (typeof ticketClass.sales_end === 'string') {
+									salesEnd = ticketClass.sales_end;
+								}
+								// Debug: log the structure if we can't find it
+								if (!salesEnd && console && console.log) {
+									console.log('Ticket class sales_end structure:', ticketClass.sales_end);
+								}
+							}
+							
+							// Get sales_start
+							var salesStart = '';
+							if (ticketClass.sales_start) {
+								if (ticketClass.sales_start.utc) {
+									salesStart = ticketClass.sales_start.utc;
+								} else if (typeof ticketClass.sales_start === 'string') {
+									salesStart = ticketClass.sales_start;
+								}
+							}
+							
+							html += '<option value="' + ticketId + '" data-name="' + escapeHtml(ticketName) + '" data-price="' + ticketCost + '" data-currency="' + currency + '" data-sales-start="' + salesStart + '" data-sales-end="' + salesEnd + '">' + escapeHtml(ticketName) + ' (' + currency + ' ' + ticketCost + ')</option>';
+						});
+						html += '</select>';
+						html += '</div>';
+						
+						// Editable Ticket Class Fields (shown when a ticket class is selected)
+						html += '<div class="ticket-class-fields" id="ticket-class-fields-' + event.id + '" style="display: none;">';
+						html += '<div class="form-field" style="margin-bottom: 15px;">';
+						html += '<label for="ticket_class_name-' + event.id + '"><?php _e( 'Ticket Class Name', 'sg-eventbrite-course-importer' ); ?>:</label>';
+						html += '<input type="text" name="events[' + event.id + '][ticket_class_name]" id="ticket_class_name-' + event.id + '" class="regular-text">';
+						html += '</div>';
+						html += '<div class="form-field" style="margin-bottom: 15px;">';
+						html += '<label for="ticket_price-' + event.id + '"><?php _e( 'Sale Price', 'sg-eventbrite-course-importer' ); ?>:</label>';
+						html += '<input type="number" name="events[' + event.id + '][ticket_price]" id="ticket_price-' + event.id + '" class="regular-text" step="0.01" min="0">';
+						html += '<p class="description"><?php _e( 'Price in the currency shown below', 'sg-eventbrite-course-importer' ); ?></p>';
+						html += '</div>';
+						html += '<div class="form-field" style="margin-bottom: 15px;">';
+						html += '<label for="ticket_expiration-' + event.id + '"><?php _e( 'Expiration Date', 'sg-eventbrite-course-importer' ); ?>:</label>';
+						html += '<input type="datetime-local" name="events[' + event.id + '][ticket_expiration]" id="ticket_expiration-' + event.id + '" class="regular-text">';
+						html += '<p class="description"><?php _e( 'When ticket sales end for this class', 'sg-eventbrite-course-importer' ); ?></p>';
+						html += '</div>';
+						html += '</div>';
+					} else {
+						html += '<p class="description"><?php _e( 'No ticket classes found for this event.', 'sg-eventbrite-course-importer' ); ?></p>';
+					}
+					
+					html += '</div>'; // ticket-class-content
+					html += '</div>'; // ticket-class-section
+					
+					html += '</div>';
+				});
+				
+				html += '</form>';
+				
+				$('#intake-form-container').html(html);
+				$('#intake-form-actions').show();
+				
+				// Add event handlers for ticket class sections
+				// Toggle collapsible sections
+				$('.ticket-class-toggle').on('click', function() {
+					var $content = $(this).siblings('.ticket-class-content');
+					var $icon = $(this).find('.dashicons');
+					
+					if ($content.is(':visible')) {
+						$content.slideUp(300);
+						$icon.css('transform', 'rotate(-90deg)');
+					} else {
+						$content.slideDown(300);
+						$icon.css('transform', 'rotate(0deg)');
+					}
+				});
+				
+				// Handle ticket class selection
+				$('.ticket-class-selector').on('change', function() {
+					var $select = $(this);
+					var eventId = $select.attr('id').replace('ticket_class_id-', '');
+					var $fields = $('#ticket-class-fields-' + eventId);
+					var selectedOption = $select.find('option:selected');
+					
+					if (selectedOption.val()) {
+						// Show fields and pre-fill with data
+						$fields.show();
+						$('#ticket_class_name-' + eventId).val(selectedOption.data('name') || '');
+						$('#ticket_price-' + eventId).val(selectedOption.data('price') || '0.00');
+						
+						// Format datetime-local input from UTC
+						var salesEnd = selectedOption.data('sales-end');
+						if (salesEnd) {
+							try {
+								// Parse UTC datetime string
+								var date = new Date(salesEnd);
+								// Check if date is valid
+								if (!isNaN(date.getTime())) {
+									// Convert to local time for datetime-local input
+									var year = date.getFullYear();
+									var month = String(date.getMonth() + 1).padStart(2, '0');
+									var day = String(date.getDate()).padStart(2, '0');
+									var hours = String(date.getHours()).padStart(2, '0');
+									var minutes = String(date.getMinutes()).padStart(2, '0');
+									$('#ticket_expiration-' + eventId).val(year + '-' + month + '-' + day + 'T' + hours + ':' + minutes);
+								} else {
+									console.warn('Invalid sales_end date:', salesEnd);
+								}
+							} catch (e) {
+								console.error('Error parsing sales_end date:', salesEnd, e);
+							}
+						} else {
+							console.warn('No sales_end data found for selected ticket class');
+						}
+					} else {
+						$fields.hide();
+					}
+				});
+			}
+			
+			// Back button handler
+			$('#back-to-import').on('click', function() {
+				window.location.href = '<?php echo admin_url( 'edit.php?post_type=sg_course&page=sg-eventbrite-import' ); ?>';
+			});
+			
+			// Submit form handler
+			$('#submit-intake-form').on('click', function() {
+				var formData = $('#course-intake-form').serialize();
+				var $button = $(this);
+				
+				// Get import options from sessionStorage
+				var importOptions = {
+					update_existing: false,
+					import_images: false,
+					import_status: 'publish'
+				};
+				try {
+					var stored = sessionStorage.getItem('sg_import_options');
+					if (stored) {
+						importOptions = JSON.parse(stored);
+					}
+				} catch (e) {
+					console.error('Error reading import options:', e);
+				}
+				
+				$button.prop('disabled', true).text('<?php _e( 'Importing...', 'sg-eventbrite-course-importer' ); ?>');
+				
+				$.post(ajaxurl, {
+					action: 'sg_eventbrite_import_with_intake_data',
+					nonce: '<?php echo wp_create_nonce( 'sg_eventbrite_import_nonce' ); ?>',
+					form_data: formData,
+					event_ids: selectedEventIds,
+					update_existing: importOptions.update_existing ? 1 : 0,
+					import_images: importOptions.import_images ? 1 : 0,
+					import_status: importOptions.import_status,
+					include_fees: importOptions.include_fees ? 1 : 0
+				})
+				.done(function(response) {
+					if (response.success) {
+						alert('<?php _e( 'Successfully imported', 'sg-eventbrite-course-importer' ); ?> ' + response.data.imported_count + ' <?php _e( 'events!', 'sg-eventbrite-course-importer' ); ?>');
+						// Clear sessionStorage
+						sessionStorage.removeItem('sg_selected_events');
+						sessionStorage.removeItem('sg_import_options');
+						// Redirect to courses list
+						window.location.href = '<?php echo admin_url( 'edit.php?post_type=sg_course' ); ?>';
+					} else {
+						alert('<?php _e( 'Import failed:', 'sg-eventbrite-course-importer' ); ?> ' + (response.data.message || 'Unknown error'));
+						$button.prop('disabled', false).text('<?php _e( 'Continue to Import', 'sg-eventbrite-course-importer' ); ?>');
+					}
+				})
+				.fail(function(xhr, status, error) {
+					console.error('Import failed:', error);
+					alert('<?php _e( 'Import failed. Please try again.', 'sg-eventbrite-course-importer' ); ?>');
+					$button.prop('disabled', false).text('<?php _e( 'Continue to Import', 'sg-eventbrite-course-importer' ); ?>');
+				});
+			});
+		});
+		</script>
+		<?php
+	}
+
+	/**
 	 * AJAX handler for testing API connection.
 	 */
 	public function ajax_test_connection() {
@@ -1001,11 +1482,11 @@ class ImportInterface {
 				$pagination = $page_events['pagination'] ?? array();
 				$has_more_items = $pagination['has_more_items'] ?? false;
 				
-				error_log( 'SG Eventbrite: Page ' . $current_page . ' pagination info: ' . print_r( $pagination, true ) );
+				// Pagination logging removed for cleaner logs
 				
 				// If there are no more items, we've reached the last page
 				if ( ! $has_more_items ) {
-					error_log( 'SG Eventbrite: No more items available, stopping pagination' );
+					// No more items available, stopping pagination
 					break;
 				}
 				
@@ -1171,7 +1652,7 @@ class ImportInterface {
 		$options = array(
 			'update_existing'  => ! empty( $_POST['update_existing'] ),
 			'import_images'    => ! empty( $_POST['import_images'] ),
-			'extract_keywords' => ! empty( $_POST['extract_keywords'] ),
+			'extract_keywords' => false, // No longer used - always using intake form
 			'status'           => sanitize_text_field( $_POST['import_status'] ?? 'publish' ),
 		);
 
@@ -1232,7 +1713,7 @@ class ImportInterface {
 		$reflection = new \ReflectionClass( $importer );
 		$method = $reflection->getMethod( 'map_event_to_course' );
 		$method->setAccessible( true );
-		$course_data = $method->invoke( $importer, $event, array( 'extract_keywords' => true ) );
+		$course_data = $method->invoke( $importer, $event, array( 'extract_keywords' => false ) );
 
 		if ( is_wp_error( $course_data ) ) {
 			wp_send_json_error( array( 'message' => $course_data->get_error_message() ) );
@@ -1284,5 +1765,109 @@ class ImportInterface {
 		error_log( 'SG Eventbrite: Client-side date filtering - Start: ' . $start_date . ', End: ' . $end_date . ', Original: ' . count( $events ) . ', Filtered: ' . count( $filtered_events ) );
 		
 		return $filtered_events;
+	}
+
+	/**
+	 * AJAX handler for getting events for intake form.
+	 */
+	public function ajax_get_events_for_intake() {
+		check_ajax_referer( 'sg_eventbrite_import_nonce', 'nonce' );
+
+		$event_ids = array_map( 'sanitize_text_field', $_POST['event_ids'] ?? array() );
+
+		if ( empty( $event_ids ) ) {
+			wp_send_json_error( array( 'message' => __( 'No event IDs provided', 'sg-eventbrite-course-importer' ) ) );
+		}
+
+		$client_id = get_option( 'sg_eventbrite_client_id', '' );
+		$client_secret = get_option( 'sg_eventbrite_client_secret', '' );
+		$organization_id = get_option( 'sg_eventbrite_organization_id', '' );
+
+		if ( empty( $client_id ) || empty( $client_secret ) || empty( $organization_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'OAuth credentials not configured', 'sg-eventbrite-course-importer' ) ) );
+		}
+
+		$oauth = new \SG\EventbriteCourseImporter\EventbriteOAuth( $client_id, $client_secret );
+		$api = new EventbriteAPI( $oauth, $organization_id );
+
+		$events = array();
+		foreach ( $event_ids as $event_id ) {
+			$event = $api->get_event( $event_id );
+			if ( ! is_wp_error( $event ) ) {
+				$events[] = $event;
+			}
+		}
+
+		wp_send_json_success( array( 'events' => $events ) );
+	}
+
+	/**
+	 * AJAX handler for getting course categories.
+	 */
+	public function ajax_get_categories() {
+		check_ajax_referer( 'sg_eventbrite_import_nonce', 'nonce' );
+
+		$categories = get_terms( array(
+			'taxonomy'   => 'sg_course_category',
+			'hide_empty' => false,
+		) );
+
+		if ( is_wp_error( $categories ) ) {
+			wp_send_json_error( array( 'message' => $categories->get_error_message() ) );
+		}
+
+		$formatted_categories = array();
+		foreach ( $categories as $category ) {
+			$formatted_categories[] = array(
+				'id'   => $category->term_id,
+				'name' => $category->name,
+			);
+		}
+
+		wp_send_json_success( array( 'categories' => $formatted_categories ) );
+	}
+
+	/**
+	 * AJAX handler for importing events with intake form data.
+	 */
+	public function ajax_import_with_intake_data() {
+		check_ajax_referer( 'sg_eventbrite_import_nonce', 'nonce' );
+
+		$event_ids = array_map( 'sanitize_text_field', $_POST['event_ids'] ?? array() );
+		parse_str( $_POST['form_data'] ?? '', $form_data );
+
+		if ( empty( $event_ids ) ) {
+			wp_send_json_error( array( 'message' => __( 'No events selected for import', 'sg-eventbrite-course-importer' ) ) );
+		}
+
+		$client_id = get_option( 'sg_eventbrite_client_id', '' );
+		$client_secret = get_option( 'sg_eventbrite_client_secret', '' );
+		$organization_id = get_option( 'sg_eventbrite_organization_id', '' );
+
+		if ( empty( $client_id ) || empty( $client_secret ) || empty( $organization_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'OAuth credentials not configured', 'sg-eventbrite-course-importer' ) ) );
+		}
+
+		$oauth = new \SG\EventbriteCourseImporter\EventbriteOAuth( $client_id, $client_secret );
+		$api = new EventbriteAPI( $oauth, $organization_id );
+		$importer = new EventbriteImporter( $api );
+
+		// Get import options from form
+		$options = array(
+			'update_existing'  => ! empty( $_POST['update_existing'] ),
+			'import_images'    => ! empty( $_POST['import_images'] ),
+			'extract_keywords' => false, // No longer used - always using intake form
+			'status'           => sanitize_text_field( $_POST['import_status'] ?? 'publish' ),
+			'include_fees'     => ! empty( $_POST['include_fees'] ),
+			'intake_data'      => $form_data['events'] ?? array(),
+		);
+
+		$result = $importer->import_events( $event_ids, $options );
+
+		if ( $result['success'] ) {
+			wp_send_json_success( $result );
+		} else {
+			wp_send_json_error( $result );
+		}
 	}
 }

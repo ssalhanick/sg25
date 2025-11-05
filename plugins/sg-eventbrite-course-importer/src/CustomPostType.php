@@ -41,7 +41,7 @@ class CustomPostType {
 		add_action( 'save_post', array( $this, 'save_meta_boxes' ) );
 		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', array( $this, 'add_admin_columns' ) );
 		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', array( $this, 'populate_admin_columns' ), 10, 2 );
-		add_filter( 'template_include', array( $this, 'load_single_course_template' ) );
+		// Template loading is handled by TemplateManager
 	}
 
 	/**
@@ -205,7 +205,6 @@ class CustomPostType {
 		$instructor = get_post_meta( $post->ID, '_sg_course_instructor', true );
 		$class_length = get_post_meta( $post->ID, '_sg_course_class_length', true );
 		$course_length = get_post_meta( $post->ID, '_sg_course_course_length', true );
-		$drop_in_class = get_post_meta( $post->ID, '_sg_course_drop_in_class', true );
 		$day_of_week = get_post_meta( $post->ID, '_sg_course_day_of_week', true );
 		?>
 		<table class="form-table">
@@ -251,10 +250,10 @@ class CustomPostType {
 			</tr>
 			<tr>
 				<th scope="row">
-					<label for="sg_course_class_length"><?php _e( 'Class Length (hours)', 'sg-eventbrite-course-importer' ); ?></label>
+					<label for="sg_course_class_length"><?php _e( 'Class Length', 'sg-eventbrite-course-importer' ); ?></label>
 				</th>
 				<td>
-					<input type="number" id="sg_course_class_length" name="sg_course_class_length" value="<?php echo esc_attr( $class_length ); ?>" class="small-text" step="0.5" min="0" />
+					<input type="text" id="sg_course_class_length" name="sg_course_class_length" value="<?php echo esc_attr( $class_length ); ?>" class="regular-text" placeholder="e.g., 2 hours, 90 minutes" />
 				</td>
 			</tr>
 			<tr>
@@ -280,17 +279,6 @@ class CustomPostType {
 						<option value="Saturday" <?php selected( $day_of_week, 'Saturday' ); ?>><?php _e( 'Saturday', 'sg-eventbrite-course-importer' ); ?></option>
 						<option value="Sunday" <?php selected( $day_of_week, 'Sunday' ); ?>><?php _e( 'Sunday', 'sg-eventbrite-course-importer' ); ?></option>
 					</select>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row">
-					<label for="sg_course_drop_in_class"><?php _e( 'Drop-in Class', 'sg-eventbrite-course-importer' ); ?></label>
-				</th>
-				<td>
-					<label>
-						<input type="checkbox" id="sg_course_drop_in_class" name="sg_course_drop_in_class" value="1" <?php checked( $drop_in_class, '1' ); ?> />
-						<?php _e( 'This is a drop-in class', 'sg-eventbrite-course-importer' ); ?>
-					</label>
 				</td>
 			</tr>
 		</table>
@@ -385,9 +373,6 @@ class CustomPostType {
 			}
 		}
 
-		// Handle checkbox
-		$drop_in_class = isset( $_POST['sg_course_drop_in_class'] ) ? '1' : '0';
-		update_post_meta( $post_id, '_sg_course_drop_in_class', $drop_in_class );
 	}
 
 	/**
@@ -445,19 +430,4 @@ class CustomPostType {
 		}
 	}
 
-	/**
-	 * Load custom template for single course posts.
-	 *
-	 * @param string $template The template path.
-	 * @return string The modified template path.
-	 */
-	public function load_single_course_template( $template ) {
-		if ( is_singular( self::POST_TYPE ) ) {
-			$custom_template = SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_PATH . '/templates/single-sg_course.php';
-			if ( file_exists( $custom_template ) ) {
-				return $custom_template;
-			}
-		}
-		return $template;
-	}
 }

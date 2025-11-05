@@ -7,7 +7,7 @@
  * Plugin Name:       Eventbrite Course Importer
  * Plugin URI:        https://example.com
  * Description:       This plugin imports eventbrite events as courses, using the Eventbrite API key.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.5
  * Requires PHP:      8.0+
  * Author:            Web Development Team
@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_FILE', __FILE__ );
 define( 'SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_PATH', untrailingslashit( plugin_dir_path( __FILE__ ) ) );
 define( 'SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_URL', untrailingslashit( plugin_dir_url( __FILE__ ) ) );
-define( 'SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_VERSION', '1.0.0' );
+define( 'SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_VERSION', '1.1.0' );
 
 // Composer autoloader.
 if ( file_exists( SG_EVENTBRITE_COURSE_IMPORTER_PLUGIN_PATH . '/vendor/autoload.php' ) ) {
