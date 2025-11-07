@@ -9,7 +9,7 @@
  * Description:       This plugin imports eventbrite events as courses, using the Eventbrite API key.
  * Version:           1.1.0
  * Requires at least: 6.5
- * Requires PHP:      8.0+
+ * Requires PHP:      7.4+
  * Author:            Web Development Team
  * Author URI:        https://example.com
  * License:           GPL v2 or later
