@@ -406,16 +406,20 @@ class EventbriteImporter {
 		// Get pricing information
 		$intake_data = $options['intake_data'][ $event_id ] ?? array();
 		$include_fees = $options['include_fees'] ?? false;
+		$split_fees = $options['split_fees'] ?? false;
 		$selected_ticket_class_id = $intake_data['ticket_class_id'] ?? '';
 		$custom_ticket_data = array(
 			'name'       => $intake_data['ticket_class_name'] ?? '',
 			'price'      => $intake_data['ticket_price'] ?? '',
 			'expiration' => $intake_data['ticket_expiration'] ?? '',
 		);
-		$pricing = $this->extract_pricing( $ticket_classes, $include_fees, $selected_ticket_class_id, $custom_ticket_data );
+		$pricing = $this->extract_pricing( $ticket_classes, $include_fees, $split_fees, $selected_ticket_class_id, $custom_ticket_data );
 		
 		// Detect early bird tickets
-		$early_bird_data = $this->detect_early_bird_ticket( $ticket_classes, $include_fees );
+		$early_bird_data = $this->detect_early_bird_ticket( $ticket_classes, $include_fees, $split_fees );
+
+		// Compute overall sales window (earliest start, latest end) from all ticket classes
+		$sales_window = $this->compute_overall_sales_window( $ticket_classes );
 
 		// Build location string
 		$location = $this->build_location_string( $venue );
@@ -442,6 +446,8 @@ class EventbriteImporter {
 				'_sg_course_ticket_price_total' => $pricing['total_price'],
 				'_sg_course_ticket_expiration' => $pricing['ticket_expiration'],
 				'_sg_course_ticket_sales_start' => $pricing['ticket_sales_start'],
+				'_sg_course_sales_start_overall' => $sales_window['start'] ?? '',
+				'_sg_course_sales_end_overall' => $sales_window['end'] ?? '',
 				'_sg_course_location'          => $location,
 				'_sg_course_eventbrite_id'     => $event_id,
 				'_sg_course_eventbrite_url'    => $event['url'] ?? '',
@@ -460,10 +466,22 @@ class EventbriteImporter {
 		);
 		
 		// Add early bird data to meta if found
+		error_log( "SG Eventbrite: Early bird detection for event {$event_id} - found: " . ( $early_bird_data['found'] ? 'YES' : 'NO' ) );
 		if ( ! empty( $early_bird_data['found'] ) ) {
+			error_log( "SG Eventbrite: Early bird price: " . $early_bird_data['price'] );
+			error_log( "SG Eventbrite: Early bird expires: " . $early_bird_data['expires'] );
+			error_log( "SG Eventbrite: Regular price (total_price): " . $pricing['total_price'] );
+			error_log( "SG Eventbrite: Current display_price: " . $pricing['display_price'] );
+			
 			$course_data['meta']['_sg_course_early_bird_price'] = $early_bird_data['price'];
 			$course_data['meta']['_sg_course_early_bird_expires'] = $early_bird_data['expires'];
 			$course_data['meta']['_sg_course_regular_price'] = $pricing['total_price'];
+			
+			// Update display price to show early bird price initially
+			$course_data['meta']['_sg_course_price'] = '$' . number_format( floatval( $early_bird_data['price'] ), 2 );
+			error_log( "SG Eventbrite: Updated display price to early bird: " . $course_data['meta']['_sg_course_price'] );
+		} else {
+			error_log( "SG Eventbrite: No early bird found - ticket classes count: " . count( $ticket_classes ) );
 		}
 
 		return $course_data;
@@ -804,11 +822,12 @@ class EventbriteImporter {
 	 *
 	 * @param array  $ticket_classes Ticket classes data.
 	 * @param bool   $include_fees Whether to include fees in price.
+	 * @param bool   $split_fees Whether to split fees display (base + fees separately).
 	 * @param string $selected_ticket_class_id Selected ticket class ID from intake form.
 	 * @param array  $custom_ticket_data Custom ticket data from intake form.
 	 * @return array Pricing information.
 	 */
-	private function extract_pricing( $ticket_classes, $include_fees = false, $selected_ticket_class_id = '', $custom_ticket_data = array() ) {
+	private function extract_pricing( $ticket_classes, $include_fees = false, $split_fees = false, $selected_ticket_class_id = '', $custom_ticket_data = array() ) {
 		$pricing = array(
 			'display_price'     => 'Free',
 			'base_price'         => 0,
@@ -854,27 +873,55 @@ class EventbriteImporter {
 
 		if ( $base_price > 0 ) {
 			$total_price = $base_price;
+			$fee_amount = 0;
 			
-			// Handle fees based on include_fees setting and ticket class fee structure
+			// Handle fees based on include_fees and split_fees settings and ticket class fee structure
 			$include_fee = $ticket['include_fee'] ?? false;
-			$split_fee = $ticket['split_fee'] ?? false;
+			$ticket_split_fee = $ticket['split_fee'] ?? false;
 			
-			if ( $include_fees && $split_fee ) {
-				// Fees are split - add actual_cost + actual_fee
-				$actual_cost = isset( $ticket['actual_cost'] ) ? ( $ticket['actual_cost']['value'] / 100 ) : $base_price;
-				$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
-				$total_price = $actual_cost + $actual_fee;
-			} elseif ( $include_fee && ! $split_fee ) {
-				// Fees already included in cost.value
-				$total_price = $base_price;
+			if ( $include_fees ) {
+				// User wants to include fees in the price
+				if ( $split_fees || $ticket_split_fee ) {
+					// User wants split fees OR ticket has split_fee flag - calculate base + fees separately
+					$actual_cost = isset( $ticket['actual_cost'] ) ? ( $ticket['actual_cost']['value'] / 100 ) : $base_price;
+					$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
+					$total_price = $actual_cost + $actual_fee;
+					$fee_amount = $actual_fee;
+				} elseif ( $include_fee && ! $ticket_split_fee ) {
+					// Fees already included in cost.value (Eventbrite's include_fee flag)
+					$total_price = $base_price;
+					$fee_amount = 0; // Fees are included, not separate
+				} else {
+					// Ticket doesn't have include_fee flag, but user wants fees
+					// Try to get actual_cost if available, otherwise use base_price
+					if ( isset( $ticket['actual_cost'] ) ) {
+						$actual_cost = $ticket['actual_cost']['value'] / 100;
+						$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
+						$total_price = $actual_cost + $actual_fee;
+						$fee_amount = $actual_fee;
+					} else {
+						// Fallback: use base price (fees may already be included)
+						$total_price = $base_price;
+						$fee_amount = 0;
+					}
+				}
 			} else {
-				// Don't include fees - use base price only
+				// User doesn't want to include fees - use base price only
 				$total_price = $base_price;
+				$fee_amount = 0;
 			}
 
-			$pricing['display_price'] = $currency . ' ' . number_format( $total_price, 2 );
+			// Format display price based on split_fees setting
+			if ( $split_fees && $fee_amount > 0 ) {
+				// Show as "Base Price + Fee Amount = Total"
+				$pricing['display_price'] = '$' . number_format( $base_price, 2 ) . ' + $' . number_format( $fee_amount, 2 ) . ' = $' . number_format( $total_price, 2 );
+			} else {
+				// Show as single total price
+				$pricing['display_price'] = '$' . number_format( $total_price, 2 );
+			}
 			$pricing['base_price'] = $base_price;
 			$pricing['total_price'] = $total_price;
+			$pricing['fee_amount'] = $fee_amount;
 			$pricing['currency'] = $currency;
 			$pricing['free'] = false;
 			
@@ -926,16 +973,26 @@ class EventbriteImporter {
 	 *
 	 * @param array $ticket_classes Ticket classes data.
 	 * @param bool  $include_fees Whether to include fees in price calculation.
+	 * @param bool  $split_fees Whether fees are split (affects price calculation).
 	 * @return array Early bird data with 'found', 'price', and 'expires' keys.
 	 */
-	private function detect_early_bird_ticket( $ticket_classes, $include_fees = false ) {
+	private function detect_early_bird_ticket( $ticket_classes, $include_fees = false, $split_fees = false ) {
 		$result = array(
 			'found'   => false,
 			'price'   => 0,
 			'expires' => '',
 		);
 
-		if ( empty( $ticket_classes ) || count( $ticket_classes ) < 2 ) {
+		if ( empty( $ticket_classes ) ) {
+			error_log( 'SG Eventbrite: detect_early_bird_ticket - No ticket classes provided' );
+			return $result;
+		}
+
+		$ticket_count = count( $ticket_classes );
+		error_log( "SG Eventbrite: detect_early_bird_ticket - Ticket classes count: {$ticket_count}, include_fees: " . ( $include_fees ? 'YES' : 'NO' ) );
+
+		if ( $ticket_count < 2 ) {
+			error_log( 'SG Eventbrite: detect_early_bird_ticket - Need at least 2 ticket classes to compare, only found: ' . $ticket_count );
 			return $result; // Need at least 2 ticket classes to compare
 		}
 
@@ -963,11 +1020,22 @@ class EventbriteImporter {
 			$price = $base_price;
 
 			if ( $include_fees ) {
-				$split_fee = $ticket['split_fee'] ?? false;
-				if ( $split_fee ) {
+				$ticket_split_fee = $ticket['split_fee'] ?? false;
+				if ( $split_fees || $ticket_split_fee ) {
+					// User wants split fees OR ticket has split_fee flag
 					$actual_cost = isset( $ticket['actual_cost'] ) ? ( $ticket['actual_cost']['value'] / 100 ) : $base_price;
 					$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
 					$price = $actual_cost + $actual_fee;
+				} elseif ( $ticket['include_fee'] ?? false ) {
+					// Fees already included in base price
+					$price = $base_price;
+				} else {
+					// Try to get actual_cost if available
+					if ( isset( $ticket['actual_cost'] ) ) {
+						$actual_cost = $ticket['actual_cost']['value'] / 100;
+						$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
+						$price = $actual_cost + $actual_fee;
+					}
 				}
 			}
 
@@ -975,8 +1043,11 @@ class EventbriteImporter {
 			if ( $lowest_price === null || $price < $lowest_price ) {
 				$lowest_price = $price;
 				$lowest_ticket = $ticket;
+				error_log( "SG Eventbrite: New lowest price found: {$price} (ticket: " . ( $ticket['name'] ?? 'unnamed' ) . ")" );
 			}
 		}
+
+		error_log( "SG Eventbrite: Lowest price after first pass: " . ( $lowest_price ?? 'null' ) );
 
 		// Check if there's a higher priced ticket (meaning we found an early bird)
 		if ( $lowest_ticket ) {
@@ -994,24 +1065,122 @@ class EventbriteImporter {
 				$price = $base_price;
 
 				if ( $include_fees ) {
-					$split_fee = $ticket['split_fee'] ?? false;
-					if ( $split_fee ) {
+					$ticket_split_fee = $ticket['split_fee'] ?? false;
+					if ( $split_fees || $ticket_split_fee ) {
+						// User wants split fees OR ticket has split_fee flag
 						$actual_cost = isset( $ticket['actual_cost'] ) ? ( $ticket['actual_cost']['value'] / 100 ) : $base_price;
 						$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
 						$price = $actual_cost + $actual_fee;
+					} elseif ( $ticket['include_fee'] ?? false ) {
+						// Fees already included in base price
+						$price = $base_price;
+					} else {
+						// Try to get actual_cost if available
+						if ( isset( $ticket['actual_cost'] ) ) {
+							$actual_cost = $ticket['actual_cost']['value'] / 100;
+							$actual_fee = isset( $ticket['actual_fee'] ) ? ( $ticket['actual_fee']['value'] / 100 ) : 0;
+							$price = $actual_cost + $actual_fee;
+						}
 					}
 				}
 
 				// If we find a higher priced ticket, we have an early bird
 				if ( $price > $lowest_price ) {
+					error_log( "SG Eventbrite: Early bird detected! Lower price: {$lowest_price}, Higher price: {$price}" );
 					$result['found'] = true;
 					$result['price'] = $lowest_price;
 					if ( isset( $lowest_ticket['sales_end'] ) && isset( $lowest_ticket['sales_end']['utc'] ) ) {
 						$result['expires'] = $lowest_ticket['sales_end']['utc'];
+						error_log( "SG Eventbrite: Early bird expires: " . $result['expires'] );
+					} elseif ( isset( $lowest_ticket['sales_end'] ) && is_string( $lowest_ticket['sales_end'] ) ) {
+						$result['expires'] = $lowest_ticket['sales_end'];
+						error_log( "SG Eventbrite: Early bird expires (string): " . $result['expires'] );
+					} else {
+						error_log( 'SG Eventbrite: Warning - No sales_end found for early bird ticket' );
 					}
 					break;
 				}
 			}
+		} else {
+			error_log( 'SG Eventbrite: No lowest ticket found - cannot detect early bird' );
+		}
+
+		if ( ! $result['found'] ) {
+			error_log( 'SG Eventbrite: No early bird ticket found after comparison' );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Compute overall sales window (earliest start, latest end) from all ticket classes.
+	 *
+	 * @param array $ticket_classes Array of ticket class data from Eventbrite API.
+	 * @return array Array with 'start' and 'end' keys containing UTC datetime strings.
+	 */
+	private function compute_overall_sales_window( $ticket_classes ) {
+		$result = array(
+			'start' => '',
+			'end'   => '',
+		);
+
+		if ( empty( $ticket_classes ) || ! is_array( $ticket_classes ) ) {
+			return $result;
+		}
+
+		$earliest_start = null;
+		$latest_end = null;
+
+		foreach ( $ticket_classes as $ticket ) {
+			// Get sales start
+			if ( isset( $ticket['sales_start'] ) ) {
+				$sales_start = null;
+				if ( isset( $ticket['sales_start']['utc'] ) ) {
+					$sales_start = $ticket['sales_start']['utc'];
+				} elseif ( is_string( $ticket['sales_start'] ) ) {
+					$sales_start = $ticket['sales_start'];
+				}
+
+				if ( $sales_start ) {
+					try {
+						$start_dt = new \DateTime( $sales_start, new \DateTimeZone( 'UTC' ) );
+						if ( ! $earliest_start || $start_dt < $earliest_start ) {
+							$earliest_start = $start_dt;
+						}
+					} catch ( \Exception $e ) {
+						error_log( 'SG Eventbrite: Error parsing sales_start: ' . $e->getMessage() );
+					}
+				}
+			}
+
+			// Get sales end
+			if ( isset( $ticket['sales_end'] ) ) {
+				$sales_end = null;
+				if ( isset( $ticket['sales_end']['utc'] ) ) {
+					$sales_end = $ticket['sales_end']['utc'];
+				} elseif ( is_string( $ticket['sales_end'] ) ) {
+					$sales_end = $ticket['sales_end'];
+				}
+
+				if ( $sales_end ) {
+					try {
+						$end_dt = new \DateTime( $sales_end, new \DateTimeZone( 'UTC' ) );
+						if ( ! $latest_end || $end_dt > $latest_end ) {
+							$latest_end = $end_dt;
+						}
+					} catch ( \Exception $e ) {
+						error_log( 'SG Eventbrite: Error parsing sales_end: ' . $e->getMessage() );
+					}
+				}
+			}
+		}
+
+		if ( $earliest_start ) {
+			$result['start'] = $earliest_start->format( 'Y-m-d\TH:i:s\Z' );
+		}
+
+		if ( $latest_end ) {
+			$result['end'] = $latest_end->format( 'Y-m-d\TH:i:s\Z' );
 		}
 
 		return $result;
@@ -1025,37 +1194,48 @@ class EventbriteImporter {
 	 */
 	public static function get_dynamic_price( $post_id ) {
 		$early_bird_expires = get_post_meta( $post_id, '_sg_course_early_bird_expires', true );
+		error_log( "SG Eventbrite: get_dynamic_price for post {$post_id} - early_bird_expires: " . ( $early_bird_expires ? $early_bird_expires : 'not set' ) );
 		
 		if ( ! empty( $early_bird_expires ) ) {
-			$expires_time = strtotime( $early_bird_expires );
-			$now = time();
+			// Parse expiration date more reliably
+			$expires_time = false;
+			try {
+				// Try parsing as ISO 8601 with timezone
+				$expires_dt = new \DateTime( $early_bird_expires, new \DateTimeZone( 'UTC' ) );
+				$expires_time = $expires_dt->getTimestamp();
+			} catch ( \Exception $e ) {
+				// Fallback to strtotime
+				$expires_time = strtotime( $early_bird_expires );
+				error_log( "SG Eventbrite: Error parsing expiration date, using strtotime: " . $e->getMessage() );
+			}
 			
-			if ( $now < $expires_time ) {
+			$now = time();
+			error_log( "SG Eventbrite: Expires time: {$expires_time}, Now: {$now}, Difference: " . ( $expires_time ? ( $expires_time - $now ) : 'invalid' ) . " seconds" );
+			
+			if ( $expires_time && $now < $expires_time ) {
 				// Early bird is still active
 				$early_bird_price = get_post_meta( $post_id, '_sg_course_early_bird_price', true );
-				$currency = get_post_meta( $post_id, '_sg_course_price', true );
-				// Extract currency from display price if available
-				$currency_code = 'USD';
-				if ( preg_match( '/^([A-Z]{3})\s/', $currency, $matches ) ) {
-					$currency_code = $matches[1];
+				error_log( "SG Eventbrite: Early bird is active - price: " . ( $early_bird_price ? $early_bird_price : 'not set' ) );
+				if ( ! empty( $early_bird_price ) ) {
+					// Display as $XXX (USD symbol style)
+					return '$' . number_format( floatval( $early_bird_price ), 2 );
 				}
-				return $currency_code . ' ' . number_format( floatval( $early_bird_price ), 2 );
 			} else {
 				// Early bird has expired, return regular price
+				error_log( "SG Eventbrite: Early bird has expired" );
 				$regular_price = get_post_meta( $post_id, '_sg_course_regular_price', true );
 				if ( ! empty( $regular_price ) ) {
-					$currency = get_post_meta( $post_id, '_sg_course_price', true );
-					$currency_code = 'USD';
-					if ( preg_match( '/^([A-Z]{3})\s/', $currency, $matches ) ) {
-						$currency_code = $matches[1];
-					}
-					return $currency_code . ' ' . number_format( floatval( $regular_price ), 2 );
+					error_log( "SG Eventbrite: Returning regular price: {$regular_price}" );
+					// Display as $XXX (USD symbol style)
+					return '$' . number_format( floatval( $regular_price ), 2 );
 				}
 			}
 		}
 		
 		// No early bird, return stored price
-		return get_post_meta( $post_id, '_sg_course_price', true );
+		$stored_price = get_post_meta( $post_id, '_sg_course_price', true );
+		error_log( "SG Eventbrite: No early bird - returning stored price: " . ( $stored_price ? $stored_price : 'not set' ) );
+		return $stored_price;
 	}
 
 	/**

@@ -27,6 +27,7 @@ const entry = {
 	'admin-style': path.resolve(__dirname, 'assets/src/sass/admin.scss'),
 	'editor-style': path.resolve(__dirname, 'assets/src/sass/editor.scss'),
 	'frontend-style': path.resolve(__dirname, 'assets/src/sass/frontend.scss'),
+    'course-templates': path.resolve(__dirname, 'assets/src/sass/course-templates.sass'),
 };
 
 const output = {
@@ -39,7 +40,7 @@ const output = {
  * Note: argv.mode will return 'development' or 'production'.
  */
 const plugins = (argv) => {
-	const pluginsList = [
+    const pluginsList = [
 		new CleanWebpackPlugin({
 			cleanStaleWebpackAssets: ('production' === argv.mode) // Automatically remove all unused webpack assets on rebuild, when set to true in production. ( https://www.npmjs.com/package/clean-webpack-plugin#options-and-defaults-optional )
 		}),
@@ -66,7 +67,23 @@ const plugins = (argv) => {
 		new DependencyExtractionWebpackPlugin({
 			injectPolyfill: true,
 			combineAssets: true,
-		})
+		}),
+
+        // Copy compiled course-templates.css into the template assets directory
+        new CopyPlugin({
+            patterns: [
+                {
+                    from: path.resolve(__dirname, 'assets/build/css/course-templates.css'),
+                    to: path.resolve(__dirname, 'src/Templates/Assets/css/course-templates.css'),
+                    noErrorOnMissing: true,
+                },
+                {
+                    from: path.resolve(__dirname, 'assets/build/css/course-templates.css.map'),
+                    to: path.resolve(__dirname, 'src/Templates/Assets/css/course-templates.css.map'),
+                    noErrorOnMissing: true,
+                }
+            ]
+        })
 	];
 
 	// Only add analyzer when ANALYZE env variable is true

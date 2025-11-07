@@ -166,29 +166,7 @@ class ImportInterface {
 
 				<div class="sg-eventbrite-import-container">
 					<!-- API Connection Test -->
-					<div class="sg-import-section">
-						<h2><?php _e( 'API Connection', 'sg-eventbrite-course-importer' ); ?></h2>
-						<p><?php _e( 'Test your Eventbrite API connection before importing events.', 'sg-eventbrite-course-importer' ); ?></p>
-						
-						<?php
-						// Check OAuth status
-						$oauth = new \SG\EventbriteCourseImporter\EventbriteOAuth( $client_id, $client_secret );
-						$is_authenticated = $oauth->is_authenticated();
-						?>
-						
-						<div class="connection-status-indicator">
-							<?php if ( $is_authenticated ) : ?>
-								<span class="status-indicator success">✓ <?php _e( 'Authenticated with Eventbrite', 'sg-eventbrite-course-importer' ); ?></span>
-							<?php else : ?>
-								<span class="status-indicator error">✗ <?php _e( 'Not authenticated - Please authorize in Settings', 'sg-eventbrite-course-importer' ); ?></span>
-							<?php endif; ?>
-						</div>
-						
-						<button type="button" id="test-connection" class="button button-secondary">
-							<?php _e( 'Test API Connection', 'sg-eventbrite-course-importer' ); ?>
-						</button>
-						<div id="connection-status" class="connection-status"></div>
-					</div>
+					
 
 					<!-- Event Selection -->
 					<div class="sg-import-section">
@@ -279,6 +257,26 @@ class ImportInterface {
 						</button>
 					</div>
 
+					<div class="sg-import-section">
+						<h2><?php _e( 'API Connection', 'sg-eventbrite-course-importer' ); ?></h2>
+						<p><?php _e( 'Test your Eventbrite API connection before importing events.', 'sg-eventbrite-course-importer' ); ?></p>
+						
+						<?php
+						// Check OAuth status
+						$oauth = new \SG\EventbriteCourseImporter\EventbriteOAuth( $client_id, $client_secret );
+						$is_authenticated = $oauth->is_authenticated();
+						?>
+						
+						<div class="connection-status-indicator">
+							<?php if ( $is_authenticated ) : ?>
+								<span class="status-indicator success">✓ <?php _e( 'Authenticated with Eventbrite', 'sg-eventbrite-course-importer' ); ?></span>
+							<?php else : ?>
+								<span class="status-indicator error">✗ <?php _e( 'Not authenticated - Please authorize in Settings', 'sg-eventbrite-course-importer' ); ?></span>
+							<?php endif; ?>
+						</div>
+						
+					</div>
+
 					<!-- Import Options (Collapsible) -->
 					<div class="sg-import-section">
 						<h2 class="sg-import-options-toggle" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 10px;">
@@ -324,9 +322,20 @@ class ImportInterface {
 										<label for="include-fees"><?php _e( 'Include Eventbrite Fees', 'sg-eventbrite-course-importer' ); ?></label>
 									</th>
 									<td>
-										<input type="checkbox" id="include-fees" name="include-fees" value="1" />
+										<input type="checkbox" id="include-fees" name="include-fees" value="1" checked="checked" />
 										<p class="description">
-											<?php _e( 'Include Eventbrite fees in ticket price (if fees are split, base price + fees will be used).', 'sg-eventbrite-course-importer' ); ?>
+											<?php _e( 'Include Eventbrite fees in ticket price.', 'sg-eventbrite-course-importer' ); ?>
+										</p>
+									</td>
+								</tr>
+								<tr id="split-fees-row" style="display: none;">
+									<th scope="row">
+										<label for="split-fees"><?php _e( 'Split Fees Display', 'sg-eventbrite-course-importer' ); ?></label>
+									</th>
+									<td>
+										<input type="checkbox" id="split-fees" name="split-fees" value="1" />
+										<p class="description">
+											<?php _e( 'If checked, fees will be shown separately (base price + fees). If unchecked, fees will be included in the displayed price.', 'sg-eventbrite-course-importer' ); ?>
 										</p>
 									</td>
 								</tr>
@@ -416,6 +425,23 @@ class ImportInterface {
 		// Add manual event handlers as fallback
 		jQuery(document).ready(function($) {
 			console.log('SG Eventbrite: jQuery ready, adding manual event handlers...');
+			
+			// Show/hide split fees option based on include fees checkbox
+			function toggleSplitFeesRow() {
+				if ($('#include-fees').is(':checked')) {
+					$('#split-fees-row').slideDown();
+				} else {
+					$('#split-fees-row').slideUp();
+				}
+			}
+			
+			// Initialize on page load
+			toggleSplitFeesRow();
+			
+			// Toggle when include-fees checkbox changes
+			$('#include-fees').on('change', function() {
+				toggleSplitFeesRow();
+			});
 			
 			// Test connection button
 			$('#test-connection').on('click', function() {
@@ -736,7 +762,8 @@ class ImportInterface {
 				update_existing: jQuery('#update-existing').is(':checked'),
 				import_images: jQuery('#import-images').is(':checked'),
 				import_status: jQuery('#import-status').val() || 'publish',
-				include_fees: jQuery('#include-fees').is(':checked')
+				include_fees: jQuery('#include-fees').is(':checked'),
+				split_fees: jQuery('#split-fees').is(':checked')
 			};
 			sessionStorage.setItem('sg_import_options', JSON.stringify(importOptions));
 			
@@ -1155,15 +1182,24 @@ class ImportInterface {
 					html += '<input type="text" name="events[' + event.id + '][course_length]" id="course_length-' + event.id + '" class="regular-text" placeholder="<?php _e( 'e.g., 7 weeks', 'sg-eventbrite-course-importer' ); ?>">';
 					html += '</div>';
 					
-					// Course Categories field
+					// Course Categories field - check if category slug appears in event title
+					var eventTitle = (event.name && event.name.text) ? event.name.text.toLowerCase() : '';
+					var preSelectedCategories = [];
+					categories.forEach(function(category) {
+						if (category.slug && eventTitle.indexOf(category.slug.toLowerCase()) !== -1) {
+							preSelectedCategories.push(category.id);
+						}
+					});
+					
 					html += '<div class="form-field" style="margin-bottom: 15px;">';
 					html += '<label for="categories-' + event.id + '"><?php _e( 'Course Categories', 'sg-eventbrite-course-importer' ); ?>:</label>';
 					html += '<select name="events[' + event.id + '][categories][]" id="categories-' + event.id + '" multiple class="regular-text" style="height: auto; min-height: 100px;">';
 					categories.forEach(function(category) {
-						html += '<option value="' + category.id + '">' + category.name + '</option>';
+						var isSelected = preSelectedCategories.indexOf(category.id) !== -1;
+						html += '<option value="' + category.id + '"' + (isSelected ? ' selected' : '') + '>' + category.name + '</option>';
 					});
 					html += '</select>';
-					html += '<p class="description"><?php _e( 'Hold Ctrl/Cmd to select multiple categories', 'sg-eventbrite-course-importer' ); ?></p>';
+					html += '<p class="description"><?php _e( 'Hold Ctrl/Cmd to select multiple categories. Categories matching the event title are pre-selected.', 'sg-eventbrite-course-importer' ); ?></p>';
 					html += '</div>';
 					
 					// Course Tags field
@@ -1349,7 +1385,8 @@ class ImportInterface {
 					update_existing: importOptions.update_existing ? 1 : 0,
 					import_images: importOptions.import_images ? 1 : 0,
 					import_status: importOptions.import_status,
-					include_fees: importOptions.include_fees ? 1 : 0
+					include_fees: importOptions.include_fees ? 1 : 0,
+					split_fees: importOptions.split_fees ? 1 : 0
 				})
 				.done(function(response) {
 					if (response.success) {
@@ -1821,6 +1858,7 @@ class ImportInterface {
 			$formatted_categories[] = array(
 				'id'   => $category->term_id,
 				'name' => $category->name,
+				'slug' => $category->slug,
 			);
 		}
 
@@ -1859,6 +1897,7 @@ class ImportInterface {
 			'extract_keywords' => false, // No longer used - always using intake form
 			'status'           => sanitize_text_field( $_POST['import_status'] ?? 'publish' ),
 			'include_fees'     => ! empty( $_POST['include_fees'] ),
+			'split_fees'       => ! empty( $_POST['split_fees'] ),
 			'intake_data'      => $form_data['events'] ?? array(),
 		);
 

@@ -29,6 +29,7 @@ class ACFFieldManager {
 	 */
 	public function __construct() {
 		add_action( 'acf/init', array( $this, 'register_field_group' ) );
+		add_action( 'acf/init', array( $this, 'register_block_fields' ) );
 	}
 
 	/**
@@ -208,6 +209,80 @@ class ACFFieldManager {
 				'first_day'         => 1,
 			),
 		);
+	}
+
+	/**
+	 * Register ACF fields for blocks.
+	 */
+	public function register_block_fields() {
+		if ( ! function_exists( 'acf_add_local_field_group' ) ) {
+			return;
+		}
+
+		// Fields for enrolling course detection block
+		acf_add_local_field_group( array(
+			'key'                   => 'group_sg_enrolling_course_detection',
+			'title'                 => __( 'Enrolling Course Detection Block', 'sg-eventbrite-course-importer' ),
+			'fields'                => array(
+				array(
+					'key'               => 'field_display_mode',
+					'label'             => __( 'Display Mode', 'sg-eventbrite-course-importer' ),
+					'name'              => 'display_mode',
+					'type'              => 'select',
+					'instructions'      => __( 'Choose how to display enrolling courses.', 'sg-eventbrite-course-importer' ),
+					'required'          => 0,
+					'choices'           => array(
+						'count' => __( 'Count Only', 'sg-eventbrite-course-importer' ),
+						'list'  => __( 'List Courses', 'sg-eventbrite-course-importer' ),
+					),
+					'default_value'     => 'count',
+					'allow_null'        => 0,
+					'multiple'          => 0,
+				),
+				array(
+					'key'               => 'field_show_sales_window',
+					'label'             => __( 'Show Sales Window', 'sg-eventbrite-course-importer' ),
+					'name'              => 'show_sales_window',
+					'type'              => 'true_false',
+					'instructions'      => __( 'Display the sales window dates for each course (only applies to list mode).', 'sg-eventbrite-course-importer' ),
+					'required'          => 0,
+					'default_value'     => 0,
+					'conditional_logic' => array(
+						array(
+							array(
+								'field'    => 'field_display_mode',
+								'operator' => '==',
+								'value'    => 'list',
+							),
+						),
+					),
+				),
+				array(
+					'key'               => 'field_empty_message',
+					'label'             => __( 'Empty Message', 'sg-eventbrite-course-importer' ),
+					'name'              => 'empty_message',
+					'type'              => 'text',
+					'instructions'      => __( 'Message to display when no courses are enrolling.', 'sg-eventbrite-course-importer' ),
+					'required'          => 0,
+					'default_value'     => __( 'No courses are currently enrolling.', 'sg-eventbrite-course-importer' ),
+					'placeholder'       => __( 'No courses are currently enrolling.', 'sg-eventbrite-course-importer' ),
+				),
+			),
+			'location'              => array(
+				array(
+					array(
+						'param'    => 'block',
+						'operator' => '==',
+						'value'    => 'acf/enrolling-course-detection',
+					),
+				),
+			),
+			'menu_order'            => 0,
+			'position'              => 'normal',
+			'style'                 => 'default',
+			'label_placement'       => 'top',
+			'instruction_placement' => 'label',
+		) );
 	}
 }
 

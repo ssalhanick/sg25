@@ -16,6 +16,7 @@ use SG\EventbriteCourseImporter\Admin\SettingsManager;
 use SG\EventbriteCourseImporter\Admin\ACFFieldManager;
 use SG\EventbriteCourseImporter\Admin\Logger;
 use SG\EventbriteCourseImporter\Templates\EventbriteTemplateManager;
+use SG\EventbriteCourseImporter\PublishPressFutureIntegration;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -67,6 +68,9 @@ class Plugin  {
 		new ImportInterface();
 		new SettingsManager();
 		new ACFFieldManager();
+		
+		// Initialize PublishPress Future integration
+		new PublishPressFutureIntegration();
 		
 		// Initialize EventbriteTemplateManager for course templates
 		$logger = new Logger();
