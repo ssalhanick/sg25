@@ -456,6 +456,11 @@ class DataMapper {
 		$max_string_length     = $optimization_settings['max_string_length'];
 
 		foreach ( $ticket_types as $ticket ) {
+			// Skip deleted tickets
+			if ( isset( $ticket['deleted'] ) && $ticket['deleted'] === true ) {
+				continue;
+			}
+
 			if ( ! isset( $ticket['disabled'] ) || ! $ticket['disabled'] ) {
 				$quantity           = isset( $ticket['quantity'] ) ? intval( $ticket['quantity'] ) : 0;
 				$total_capacity    += $quantity;

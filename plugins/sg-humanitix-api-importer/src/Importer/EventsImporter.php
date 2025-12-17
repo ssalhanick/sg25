@@ -482,6 +482,26 @@ class EventsImporter {
 
 			$debug_helper->log_event_processing( $event_name, $humanitix_id, $event_data, 'process' );
 
+			// Check if event should be skipped (unpublished, all dates deleted, etc.)
+			if ( $this->should_skip_event( $event_data ) ) {
+				$this->logger->log(
+					'info',
+					'Skipped event import',
+					array(
+						'event_name'   => $event_name,
+						'humanitix_id' => $humanitix_id,
+						'reason'       => 'Event is unpublished or all dates/tickets are deleted',
+					)
+				);
+				return array(
+					'success'  => false,
+					'message'  => 'Event skipped: unpublished or deleted',
+					'skipped'  => true,
+					'post_id'  => null,
+					'action'   => 'skipped',
+				);
+			}
+
 			// Check if this is a recurring event with multiple dates
 			$dates = $event_data['dates'] ?? array();
 			
@@ -540,6 +560,14 @@ class EventsImporter {
 		$created_events = array();
 
 		foreach ( $dates as $date_index => $date_data ) {
+			// Skip deleted dates
+			if ( isset( $date_data['deleted'] ) && $date_data['deleted'] === true ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Skipping deleted date at index {$date_index}" );
+				}
+				continue;
+			}
+
 			$date_id = $date_data['_id'] ?? "date_{$date_index}";
 			
 			$debug_helper->log( 'Importer', "Processing date " . ( $date_index + 1 ) . " of " . count( $dates ) . " (ID: {$date_id})" );
@@ -2558,6 +2586,52 @@ class EventsImporter {
 		}
 
 		return $best_match;
+	}
+
+	/**
+	 * Check if event should be skipped based on status fields.
+	 *
+	 * @param array $event_data Humanitix event data.
+	 * @return bool True if event should be skipped, false otherwise.
+	 */
+	private function should_skip_event( $event_data ) {
+		// Check if event is unpublished (primary check)
+		if ( isset( $event_data['published'] ) && $event_data['published'] === false ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Skipping unpublished event: " . ( $event_data['name'] ?? 'Unknown' ) );
+			}
+			return true;
+		}
+
+		// Check if all dates are deleted (for recurring events)
+		if ( isset( $event_data['dates'] ) && is_array( $event_data['dates'] ) ) {
+			$active_dates = array_filter( $event_data['dates'], function( $date ) {
+				return ! ( isset( $date['deleted'] ) && $date['deleted'] === true );
+			});
+			
+			if ( empty( $active_dates ) ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Skipping event with all dates deleted: " . ( $event_data['name'] ?? 'Unknown' ) );
+				}
+				return true;
+			}
+		}
+
+		// Check if all ticket types are deleted
+		if ( isset( $event_data['ticketTypes'] ) && is_array( $event_data['ticketTypes'] ) ) {
+			$active_tickets = array_filter( $event_data['ticketTypes'], function( $ticket ) {
+				return ! ( isset( $ticket['deleted'] ) && $ticket['deleted'] === true );
+			});
+			
+			if ( empty( $active_tickets ) ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Skipping event with all tickets deleted: " . ( $event_data['name'] ?? 'Unknown' ) );
+				}
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
