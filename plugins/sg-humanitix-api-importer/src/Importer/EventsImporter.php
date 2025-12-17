@@ -482,6 +482,26 @@ class EventsImporter {
 
 			$debug_helper->log_event_processing( $event_name, $humanitix_id, $event_data, 'process' );
 
+			// Check if event should be skipped (unpublished, all dates deleted, etc.)
+			if ( $this->should_skip_event( $event_data ) ) {
+				$this->logger->log(
+					'info',
+					'Skipped event import',
+					array(
+						'event_name'   => $event_name,
+						'humanitix_id' => $humanitix_id,
+						'reason'       => 'Event is unpublished or all dates/tickets are deleted',
+					)
+				);
+				return array(
+					'success'  => false,
+					'message'  => 'Event skipped: unpublished or deleted',
+					'skipped'  => true,
+					'post_id'  => null,
+					'action'   => 'skipped',
+				);
+			}
+
 			// Check if this is a recurring event with multiple dates
 			$dates = $event_data['dates'] ?? array();
 			
@@ -540,6 +560,14 @@ class EventsImporter {
 		$created_events = array();
 
 		foreach ( $dates as $date_index => $date_data ) {
+			// Skip deleted dates
+			if ( isset( $date_data['deleted'] ) && $date_data['deleted'] === true ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Skipping deleted date at index {$date_index}" );
+				}
+				continue;
+			}
+
 			$date_id = $date_data['_id'] ?? "date_{$date_index}";
 			
 			$debug_helper->log( 'Importer', "Processing date " . ( $date_index + 1 ) . " of " . count( $dates ) . " (ID: {$date_id})" );
@@ -670,7 +698,30 @@ class EventsImporter {
 
 			// Use DataMapper to convert Humanitix format to TEC format.
 			$mapper       = new DataMapper();
-			$mapped_event = $mapper->map_event( $event_data );
+			
+			// Wrap mapping in try-catch to handle image processing errors gracefully
+			try {
+				$mapped_event = $mapper->map_event( $event_data );
+			} catch ( \Exception $e ) {
+				// Log the error but continue - image processing failures shouldn't stop import
+				$debug_helper->log_critical_error(
+					'DataMapper',
+					'Exception during event mapping (continuing anyway): ' . $e->getMessage(),
+					array(
+						'event_name'   => $event_name,
+						'humanitix_id' => $humanitix_id,
+						'exception'    => $e->getMessage(),
+					)
+				);
+				// Try to continue with basic mapping - remove thumbnail_id if it caused the issue
+				$mapped_event = $mapper->map_event( $event_data );
+				if ( isset( $mapped_event['meta_input']['_thumbnail_id'] ) ) {
+					unset( $mapped_event['meta_input']['_thumbnail_id'] );
+					if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+						error_log( "Humanitix EventsImporter: Removed thumbnail_id due to processing error, continuing import" );
+					}
+				}
+			}
 
 			if ( empty( $mapped_event ) ) {
 				$error_code = ErrorCode::IMPORT_MAPPING_FAILED;
@@ -1742,6 +1793,9 @@ class EventsImporter {
 			return false;
 		}
 
+		// Clean the ID to ensure no whitespace/encoding issues
+		$humanitix_id = trim( $humanitix_id );
+
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( "Humanitix EventsImporter: Searching for existing event with humanitix_id: {$humanitix_id}" );
 		}
@@ -1758,9 +1812,10 @@ class EventsImporter {
 			error_log( 'Humanitix EventsImporter: All stored humanitix IDs: ' . wp_json_encode( $stored_ids ) );
 		}
 
+		// Try WP_Query first
 		$args = array(
 			'post_type'      => 'tribe_events',
-			'post_status'    => 'any',
+			'post_status'    => 'any', // Include all statuses
 			'meta_query'     => array(
 				array(
 					'key'     => '_humanitix_event_id',
@@ -1770,6 +1825,9 @@ class EventsImporter {
 			),
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
+			'no_found_rows'  => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
 		);
 
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
@@ -1783,17 +1841,40 @@ class EventsImporter {
 			error_log( 'Humanitix EventsImporter: WP_Query found ' . count( $posts ) . ' posts' );
 		}
 
-		$existing_event_id = ! empty( $posts ) ? $posts[0] : false;
-
-		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
-			if ( $existing_event_id ) {
+		if ( ! empty( $posts ) ) {
+			$existing_event_id = (int) $posts[0];
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 				error_log( "Humanitix EventsImporter: Found existing event ID: {$existing_event_id} for humanitix_id: {$humanitix_id}" );
-			} else {
-				error_log( "Humanitix EventsImporter: No existing event found for humanitix_id: {$humanitix_id}" );
 			}
+			return $existing_event_id;
 		}
 
-		return $existing_event_id;
+		// Fallback: Direct SQL query if WP_Query fails (handles edge cases like orphaned meta, cache issues, etc.)
+		$post_id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT p.ID 
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+			 WHERE p.post_type = 'tribe_events'
+			 AND p.post_status != 'trash'
+			 AND pm.meta_key = '_humanitix_event_id'
+			 AND pm.meta_value = %s
+			 LIMIT 1",
+			$humanitix_id
+		) );
+
+		if ( $post_id ) {
+			$existing_event_id = (int) $post_id;
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Found existing event via SQL fallback ID: {$existing_event_id} for humanitix_id: {$humanitix_id}" );
+			}
+			return $existing_event_id;
+		}
+
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+			error_log( "Humanitix EventsImporter: No existing event found for humanitix_id: {$humanitix_id}" );
+		}
+
+		return false;
 	}
 
 	/**
@@ -2505,6 +2586,52 @@ class EventsImporter {
 		}
 
 		return $best_match;
+	}
+
+	/**
+	 * Check if event should be skipped based on status fields.
+	 *
+	 * @param array $event_data Humanitix event data.
+	 * @return bool True if event should be skipped, false otherwise.
+	 */
+	private function should_skip_event( $event_data ) {
+		// Check if event is unpublished (primary check)
+		if ( isset( $event_data['published'] ) && $event_data['published'] === false ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( "Humanitix EventsImporter: Skipping unpublished event: " . ( $event_data['name'] ?? 'Unknown' ) );
+			}
+			return true;
+		}
+
+		// Check if all dates are deleted (for recurring events)
+		if ( isset( $event_data['dates'] ) && is_array( $event_data['dates'] ) ) {
+			$active_dates = array_filter( $event_data['dates'], function( $date ) {
+				return ! ( isset( $date['deleted'] ) && $date['deleted'] === true );
+			});
+			
+			if ( empty( $active_dates ) ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Skipping event with all dates deleted: " . ( $event_data['name'] ?? 'Unknown' ) );
+				}
+				return true;
+			}
+		}
+
+		// Check if all ticket types are deleted
+		if ( isset( $event_data['ticketTypes'] ) && is_array( $event_data['ticketTypes'] ) ) {
+			$active_tickets = array_filter( $event_data['ticketTypes'], function( $ticket ) {
+				return ! ( isset( $ticket['deleted'] ) && $ticket['deleted'] === true );
+			});
+			
+			if ( empty( $active_tickets ) ) {
+				if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+					error_log( "Humanitix EventsImporter: Skipping event with all tickets deleted: " . ( $event_data['name'] ?? 'Unknown' ) );
+				}
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
