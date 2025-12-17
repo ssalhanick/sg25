@@ -17,6 +17,7 @@ use SG\EventbriteCourseImporter\Admin\ACFFieldManager;
 use SG\EventbriteCourseImporter\Admin\Logger;
 use SG\EventbriteCourseImporter\Templates\EventbriteTemplateManager;
 use SG\EventbriteCourseImporter\PublishPressFutureIntegration;
+use SG\EventbriteCourseImporter\CLI\CourseLevelBackfillCommand;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -81,6 +82,11 @@ class Plugin  {
 
 		// Initialize security utilities.
 		$this->init_security_utilities();
+
+		// Register WP-CLI commands if available.
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			\WP_CLI::add_command( 'sg-course level-backfill', CourseLevelBackfillCommand::class );
+		}
 	}
 
 		/**

@@ -11,6 +11,8 @@
 
 namespace SG\EventbriteCourseImporter;
 
+use SG\EventbriteCourseImporter\Utils\CourseLevelHelper;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
@@ -297,12 +299,12 @@ class EventbriteImporter {
 			$class_length = sanitize_text_field( $intake_data['class_length'] ?? '' );
 			$course_length = sanitize_text_field( $intake_data['course_length'] ?? '' );
 		} else {
-			// Extract keywords from description if enabled
-			$extracted_data = array();
-			if ( $options['extract_keywords'] ) {
-				$extracted_data = $this->extract_keywords_from_description( $description );
-			}
-			
+		// Extract keywords from description if enabled
+		$extracted_data = array();
+		if ( $options['extract_keywords'] ) {
+			$extracted_data = $this->extract_keywords_from_description( $description );
+		}
+
 			$instructor = $extracted_data['instructor'] ?? '';
 			$course_length = $extracted_data['course_length'] ?? '';
 		}
@@ -395,12 +397,12 @@ class EventbriteImporter {
 
 		// Calculate day of week if not provided from intake form
 		if ( empty( $day_of_week ) ) {
-			$day_of_week = $start_datetime->format( 'l' );
+		$day_of_week = $start_datetime->format( 'l' );
 		}
 
 		// Calculate class length from start and end times if not provided from intake form
 		if ( empty( $class_length ) && $start_datetime && $end_datetime ) {
-			$class_length = $this->calculate_class_length( $start_datetime, $end_datetime );
+		$class_length = $this->calculate_class_length( $start_datetime, $end_datetime );
 		}
 
 		// Get pricing information
@@ -464,6 +466,16 @@ class EventbriteImporter {
 				'_sg_course_eventbrite_status' => $event['status'] ?? '',
 			),
 		);
+
+		$level_data = CourseLevelHelper::parse_level_from_title( $name );
+		$course_data['meta']['_sg_course_level_number'] = $level_data['number'];
+		$course_data['meta']['_sg_course_level_label']  = $level_data['label'];
+
+		if ( CourseLevelHelper::is_default_level_number( $level_data['number'] ) ) {
+			error_log( "SG Eventbrite: Event {$event_id} - No explicit level detected in title." );
+		} else {
+			error_log( "SG Eventbrite: Event {$event_id} - Detected level {$level_data['number']} ({$level_data['label']})." );
+		}
 		
 		// Add early bird data to meta if found
 		error_log( "SG Eventbrite: Early bird detection for event {$event_id} - found: " . ( $early_bird_data['found'] ? 'YES' : 'NO' ) );
@@ -860,7 +872,7 @@ class EventbriteImporter {
 		}
 
 		$cost = $ticket['cost'] ?? array();
-		$currency = $cost['currency'] ?? 'USD';
+			$currency = $cost['currency'] ?? 'USD';
 		
 		// Use custom ticket data if provided
 		if ( ! empty( $custom_ticket_data['price'] ) ) {
@@ -1350,13 +1362,13 @@ class EventbriteImporter {
 			wp_set_post_terms( $post_id, $category_ids, 'sg_course_category' );
 		} else {
 			// Fallback: Set categories based on Eventbrite categories
-			$categories = $event['category_id'] ?? '';
-			if ( $categories ) {
-				// You can map Eventbrite categories to your custom categories here
-				// For now, we'll create a generic category
-				$term = wp_insert_term( 'Imported Course', 'sg_course_category' );
-				if ( ! is_wp_error( $term ) ) {
-					wp_set_post_terms( $post_id, array( $term['term_id'] ), 'sg_course_category' );
+		$categories = $event['category_id'] ?? '';
+		if ( $categories ) {
+			// You can map Eventbrite categories to your custom categories here
+			// For now, we'll create a generic category
+			$term = wp_insert_term( 'Imported Course', 'sg_course_category' );
+			if ( ! is_wp_error( $term ) ) {
+				wp_set_post_terms( $post_id, array( $term['term_id'] ), 'sg_course_category' );
 				}
 			}
 		}
@@ -1372,11 +1384,11 @@ class EventbriteImporter {
 			}
 		} else {
 			// Fallback: Set tags based on Eventbrite subcategories or keywords
-			$subcategories = $event['subcategory_id'] ?? '';
-			if ( $subcategories ) {
-				$term = wp_insert_term( 'Eventbrite Import', 'sg_course_tag' );
-				if ( ! is_wp_error( $term ) ) {
-					wp_set_post_terms( $post_id, array( $term['term_id'] ), 'sg_course_tag' );
+		$subcategories = $event['subcategory_id'] ?? '';
+		if ( $subcategories ) {
+			$term = wp_insert_term( 'Eventbrite Import', 'sg_course_tag' );
+			if ( ! is_wp_error( $term ) ) {
+				wp_set_post_terms( $post_id, array( $term['term_id'] ), 'sg_course_tag' );
 				}
 			}
 		}
