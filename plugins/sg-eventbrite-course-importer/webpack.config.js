@@ -28,6 +28,7 @@ const entry = {
 	'editor-style': path.resolve(__dirname, 'assets/src/sass/editor.scss'),
 	'frontend-style': path.resolve(__dirname, 'assets/src/sass/frontend.scss'),
     'course-templates': path.resolve(__dirname, 'assets/src/sass/course-templates.sass'),
+    'course-archives': path.resolve(__dirname, 'assets/src/sass/course-archives.sass'),
 };
 
 const output = {
@@ -80,6 +81,16 @@ const plugins = (argv) => {
                 {
                     from: path.resolve(__dirname, 'assets/build/css/course-templates.css.map'),
                     to: path.resolve(__dirname, 'src/Templates/Assets/css/course-templates.css.map'),
+                    noErrorOnMissing: true,
+                },
+                {
+                    from: path.resolve(__dirname, 'assets/build/css/course-archives.css'),
+                    to: path.resolve(__dirname, 'src/Templates/Assets/css/course-archives.css'),
+                    noErrorOnMissing: true,
+                },
+                {
+                    from: path.resolve(__dirname, 'assets/build/css/course-archives.css.map'),
+                    to: path.resolve(__dirname, 'src/Templates/Assets/css/course-archives.css.map'),
                     noErrorOnMissing: true,
                 }
             ]
