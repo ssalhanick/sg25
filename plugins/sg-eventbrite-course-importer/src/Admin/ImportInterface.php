@@ -602,25 +602,21 @@ class ImportInterface {
 			
 			var html = '<div class="events-list">';
 			events.forEach(function(event) {
-				var eventDate = event.start ? new Date(event.start.utc).toLocaleDateString() : 'TBD';
-				var venue = event.venue ? event.venue.name : 'Location TBD';
-				var price = event.is_free ? 'Free' : (event.ticket_availability ? 'Paid' : 'TBD');
+				var eventDateTime = 'TBD';
+				if (event.start && event.start.utc) {
+					var dateObj = new Date(event.start.utc);
+					eventDateTime = dateObj.toLocaleDateString() + ' at ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+				}
 				var isChecked = selectedIds.indexOf(event.id) !== -1 ? 'checked' : '';
 				
 				html += '<div class="event-item" style="border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 4px;">';
 				html += '<input type="checkbox" class="event-checkbox" value="' + event.id + '" id="event-' + event.id + '" ' + isChecked + ' style="margin-right: 10px;">';
-				html += '<div class="event-details" style="display: inline-block; width: calc(100% - 120px);">';
+				html += '<div class="event-details" style="display: inline-block; width: calc(100% - 30px);">';
 				html += '<div class="event-title" style="font-weight: bold; margin-bottom: 5px;">' + event.name.text + '</div>';
 				html += '<div class="event-meta" style="color: #666; font-size: 14px;">';
-				html += '<span>Date: ' + eventDate + '</span> | ';
-				html += '<span>Location: ' + venue + '</span> | ';
-				html += '<span>Price: ' + price + '</span>';
+				html += '<span>Date & Time: ' + eventDateTime + '</span>';
 				html += '</div>';
 				html += '</div>';
-				html += '<div class="event-actions" style="float: right;">';
-				html += '<button type="button" class="button button-small preview-event" data-event-id="' + event.id + '">Preview</button>';
-				html += '</div>';
-				html += '<div style="clear: both;"></div>';
 				html += '</div>';
 			});
 			html += '</div>';
