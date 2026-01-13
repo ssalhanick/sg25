@@ -456,6 +456,11 @@ class DataMapper {
 		$max_string_length     = $optimization_settings['max_string_length'];
 
 		foreach ( $ticket_types as $ticket ) {
+			// Skip deleted tickets
+			if ( isset( $ticket['deleted'] ) && $ticket['deleted'] === true ) {
+				continue;
+			}
+
 			if ( ! isset( $ticket['disabled'] ) || ! $ticket['disabled'] ) {
 				$quantity           = isset( $ticket['quantity'] ) ? intval( $ticket['quantity'] ) : 0;
 				$total_capacity    += $quantity;
@@ -1047,11 +1052,19 @@ class DataMapper {
 			return false;
 		}
 
-		// Download and attach image.
+		// Download and attach image with error handling.
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Downloading and attaching image' );
 		}
-		$attachment_id = $this->download_and_attach_image( $image_url );
+		
+		try {
+			$attachment_id = $this->download_and_attach_image( $image_url );
+		} catch ( \Exception $e ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( 'DataMapper: Exception during image download: ' . $e->getMessage() . ' (URL: ' . $image_url . ')' );
+			}
+			$attachment_id = false;
+		}
 
 		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
 			error_log( 'DataMapper: Download result - attachment ID: ' . ( $attachment_id ? $attachment_id : 'false' ) );
@@ -1089,15 +1102,32 @@ class DataMapper {
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function download_and_attach_image( $image_url ) {
+		if ( empty( $image_url ) ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( 'DataMapper: download_and_attach_image called with empty URL' );
+			}
+			return false;
+		}
+
+		// Set timeout for image downloads (default 30 seconds, filterable)
+		$timeout = apply_filters( 'humanitix_image_download_timeout', 30 );
+
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+			error_log( "DataMapper: Downloading image with timeout: {$timeout}s - {$image_url}" );
+		}
+
 		// Include WordPress media functions.
 		require_once ABSPATH . 'wp-admin/includes/media.php';
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 
-		// Download the image.
-		$tmp = download_url( $image_url );
+		// Download the image with timeout.
+		$tmp = download_url( $image_url, $timeout );
 
 		if ( is_wp_error( $tmp ) ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( 'DataMapper: Failed to download image: ' . $tmp->get_error_message() . ' (URL: ' . $image_url . ')' );
+			}
 			return false;
 		}
 
@@ -1118,11 +1148,18 @@ class DataMapper {
 		wp_delete_file( $tmp );
 
 		if ( is_wp_error( $id ) ) {
+			if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+				error_log( 'DataMapper: Failed to attach image: ' . $id->get_error_message() . ' (URL: ' . $image_url . ')' );
+			}
 			return false;
 		}
 
 		// Store the original URL for future reference.
 		update_post_meta( $id, '_humanitix_image_url', $image_url );
+
+		if ( defined( 'HUMANITIX_DEBUG' ) && HUMANITIX_DEBUG ) {
+			error_log( "DataMapper: Successfully downloaded and attached image ID: {$id} (URL: {$image_url})" );
+		}
 
 		return $id;
 	}
