@@ -99,6 +99,11 @@ access_log
 plugins/events-calendar-pro/
 plugins/the-events-calendar/
 plugins/plugin-scaffolding/
+plugins/akismet/
+plugins/formidable/
+plugins/post-expirator/
+plugins/wordpress-importer/
+
 
 # Themes to Ignore
 themes/sg-twentytwenty-child/
